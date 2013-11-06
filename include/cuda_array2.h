@@ -28,6 +28,7 @@
 #include <string>
 #include "check_bounds.h"
 #include "error.h"
+#include "cuda_types.h"
 
 
 
@@ -40,17 +41,6 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true){
             exit(code);
     }
 }
-
-
-
-// Define complex type
-typedef cufftDoubleComplex cmplx_t;
-typedef double real_t;
-// Constants
-
-const int cuda_blockdim_nx = 1;
-const int cuda_blockdim_my = 64;
-const double PI = atan(1.0) * 4.0;
 
 
 // Define a class for the template parameter T that goes into cuda_array
@@ -70,7 +60,7 @@ class ca_val
 {
     public:
         __host__ __device__ ca_val() {} ;
-        __host__ __device__ inline void set(real_t);
+        __host__ __device__ inline void set(cuda::real_t);
         __host__ __device__ inline T get() const {return x;};
     private:
         T x;
@@ -78,20 +68,20 @@ class ca_val
 
 
 template<>
-inline void ca_val<real_t> :: set(real_t a)
+inline void ca_val<cuda::real_t> :: set(cuda::real_t a)
 {
     x = a;
 }
 
 
 template<>
-inline void ca_val<cmplx_t> :: set(real_t a)
+inline void ca_val<cuda::cmplx_t> :: set(cuda::real_t a)
 {
     x = make_cuDoubleComplex(a, -a);
 }
 
-template class ca_val<real_t>;
-template class ca_val<cmplx_t>;
+template class ca_val<cuda::real_t>;
+template class ca_val<cuda::cmplx_t>;
 
 
 template <class T>
@@ -110,9 +100,12 @@ class cuda_array{
         void enumerate_array_t(const int);
 
         // Operators
-        cuda_array& operator=(const cuda_array<T>&);
-        cuda_array& operator=(const T&);
-        cuda_array& set_all(const T&);
+        cuda_array<T>& operator=(const cuda_array<T>&);
+        cuda_array<T>& operator=(const T&);
+
+        cuda_array<T>& operator+=(const cuda_array<T>&);
+        cuda_array<T>& operator+=(const T&);
+        cuda_array<T>& set_all(const T&);
         // Access operator to host array
         T& operator()(unsigned int, unsigned int, unsigned int);
         T operator()(unsigned int, unsigned int, unsigned int) const;
@@ -172,6 +165,8 @@ class cuda_array{
         inline unsigned int get_my() const {return My;};
         inline unsigned int get_tlevs() const {return tlevs;};
         inline int address(unsigned int n, unsigned int m) const {return (n * My + m);};
+        inline dim3 get_grid() const {return grid;};
+        inline dim3 get_block() const {return block;};
 
         // Pointer to host copy of device data
         inline T* get_array_h() const {return array_h;};
@@ -179,7 +174,7 @@ class cuda_array{
 
         // Pointer to device data
         inline T* get_array_d() const {return array_d;};
-        inline T* get_array_d(unsigned int t) const {return array_d_t[t];};
+        inline T* get_array_d(unsigned int t) const {return array_d_t_host[t];};
 
     private:
         // Size of data array. Host data
@@ -199,6 +194,8 @@ class cuda_array{
         T* array_d;
         // Pointer to each time stage
         T** array_d_t;
+        T** array_d_t_host;
+
 
         // Storage copy of device data on host
         T* array_h;
