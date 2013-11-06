@@ -13,12 +13,25 @@ using namespace std;
 
 int main(void)
 {
-	cuda_array<double> arr1(16, 16, 1);
-	cuda_array<double> arr2(16, 16, 1);
+	cuda_array<double> arr1(3, 16, 16);
+	//cuda_array<double> arr2(1, 16, 16);
 
-	arr1 = 16.0;
-	arr2 = 32.0;
+	cout << "arr1: Nx = " << arr1.get_nx() << ", My = " << arr1.get_my() << ", tlevs = " << arr1.get_tlevs() << "\n";
+	arr1.set_all(59.4);
+	arr1.copy_device_to_host();
+	cout << "arr1=\n" << arr1 << "\n";
 
+	arr1.enumerate_array_t(0);
+	arr1.copy_device_to_host();
+	cout << "arr1=\n" << arr1 << "\n";
+
+	arr1.advance();
+
+	arr1.enumerate_array_t(0);
+	arr1.copy_device_to_host();
+	cout << "arr1 =\n" << arr1 << "\n";
+	//arr1 = 16.0;
+	//arr2 = 32.0;
 }
 
 
