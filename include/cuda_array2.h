@@ -69,23 +69,23 @@ template<class T>
 class ca_val
 {
     public:
-        __host__ __device__ ca_val(T a) : x(a) {};
-        __host__ __device__ void set(real_t);
-        __host__ __device__ T get() const {return x;};
+        __host__ __device__ ca_val() {} ;
+        __host__ __device__ inline void set(real_t);
+        __host__ __device__ inline T get() const {return x;};
     private:
         T x;
 };
 
 
 template<>
-void ca_val<real_t> :: set(real_t a)
+inline void ca_val<real_t> :: set(real_t a)
 {
     x = a;
 }
 
 
 template<>
-void ca_val<cmplx_t> :: set(real_t a)
+inline void ca_val<cmplx_t> :: set(real_t a)
 {
     x = make_cuDoubleComplex(a, -a);
 }
@@ -131,7 +131,6 @@ class cuda_array{
             const unsigned int my = src.get_my();
             //src.copy_device_to_host();
             os << std::setw(10);
-            os << "Dumping array. size: " << tl << ", " << nx << ", " << my <<"\n";
             for(unsigned int t = 0; t < tl; t++)
             {
                 os << "t: " << t << "\n";
@@ -139,7 +138,7 @@ class cuda_array{
                 {
                     for(unsigned int m = 0; m < my; m++)
                     {
-                        os << std::setw(8) << std::setprecision(6);
+                        os << std::setw(6) << std::setprecision(4);
                         os << src.cout_wrapper(src(t,n,m)) << "\t";
                     }
                 os << "\n";
@@ -174,9 +173,13 @@ class cuda_array{
         inline unsigned int get_tlevs() const {return tlevs;};
         inline int address(unsigned int n, unsigned int m) const {return (n * My + m);};
 
+        // Pointer to host copy of device data
         inline T* get_array_h() const {return array_h;};
         inline T* get_array_h(unsigned int t) const {return array_h_t[t];};
 
+        // Pointer to device data
+        inline T* get_array_d() const {return array_d;};
+        inline T* get_array_d(unsigned int t) const {return array_d_t[t];};
 
     private:
         // Size of data array. Host data

@@ -13,7 +13,10 @@ using namespace std;
 
 int main(void)
 {
-	cuda_array<double> arr1(3, 16, 16);
+    const int Nx = 16;
+    const int My = 16;
+    const int tlevs = 3;
+	cuda_array<double> arr1(tlevs, Nx, My);
 	//cuda_array<double> arr2(1, 16, 16);
 
 	cout << "arr1: Nx = " << arr1.get_nx() << ", My = " << arr1.get_my() << ", tlevs = " << arr1.get_tlevs() << "\n";

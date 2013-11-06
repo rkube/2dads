@@ -14,9 +14,7 @@
 
 using namespace std;
 
-
-
-// Template kernels
+/*
 __global__ void d_enumerate_d(double* array, int Nx, int My)
 {
     const int col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -37,9 +35,26 @@ __global__ void d_enumerate_c(cmplx_t* array, int Nx, int My)
     if (index < Nx * My)
         array[index] = make_cuDoubleComplex(double(index), -double(index));
 }
+*/
+
+// Template kernel for d_enumerate_d and d_enumerate_c using the ca_val class
+template <typename T>
+__global__ void d_enumerate(T* array, int Nx, int My)
+{
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int index = row * (My) + col;
+
+    if (index < Nx * My)
+    {
+        ca_val<T> val;
+        val.set(double(index));
+        array[index] = val.get();
+    }
+}
 
 
-
+/*
 __global__ void d_enumerate_t_d(double** array_t, int t, int Nx, int My)
 {
 	const int col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -55,14 +70,34 @@ __global__ void d_enumerate_t_d(double** array_t, int t, int Nx, int My)
 
 __global__ void d_enumerate_t_c(cmplx_t** array_t, int t, int Nx, int My)
 {
-    const int col = blockIdx.y + blockDim.y + threadIdx.y;
-    const int row = blockIdx.x + blockDim.x + threadIdx.x;
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
     const int index = row * My + col;
 
 	if (blockIdx.x + threadIdx.x + threadIdx.y == 0)
 		printf("blockIdx.x = %d: enumerating at t = %d, at %p(device)\n", blockIdx.x, t, array_t[t]);
 	if (index < Nx * My)
 		array_t[t][index] = make_cuDoubleComplex(double(index), -double(index));
+}
+*/
+
+// Template version of d_enumerate_t_x
+template <typename T>
+__global__ void d_enumerate_t(T** array_t, int t, int Nx, int My)
+{
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int index = row * My + col;
+
+	if (blockIdx.x + threadIdx.x + threadIdx.y == 0)
+		printf("blockIdx.x = %d: enumerating at t = %d, at %p(device)\n", blockIdx.x, t, array_t[t]);
+    //printf("blockIdx.x = %d, blockDim.x = %d, threadIdx.x = %d,  blockIdy.y = %d, blockDim.y = %d, threadIdy.y = %d ,index = %d\n", blockIdx.x, blockDim.x, threadIdx.x,   blockIdx.y, blockDim.y, threadIdx.y, index);
+	if (index < Nx * My)
+    {
+        ca_val<T> val;
+        val.set(double(index));
+		array_t[t][index] = val.get();
+    }
 }
 
 
@@ -72,14 +107,28 @@ __global__ void d_set_constant_t(T** array_t, T val, int t, int Nx, int My)
 	const int col = blockIdx.y * blockDim.y + threadIdx.y;
 	const int row = blockIdx.x * blockDim.x + threadIdx.x;
 	const int index = row * My + col;
-	if( index < Nx * My)
+	if (index < Nx * My)
 		array_t[t][index] = val;
 }
 
 
 template <typename T>
+__global__ void d_zero_tlev(T** array_t, int t, int Nx, int My)
+{
+	const int col = blockIdx.y * blockDim.y + threadIdx.y;
+	const int row = blockIdx.x * blockDim.x + threadIdx.x;
+	const int index = row * My + col;
+	if (index < Nx * My)
+    {
+        ca_val<T> val;
+        val.set(double(0.0));
+		array_t[t][index] = val.get();
+    }
+}
+
+
+template <typename T>
 __global__ void d_alloc_array_d_t(T** array_d_t, T* array, int tlevs, int Nx, int My)
-//__global__ void d_alloc_array_d_t(double** array_d_t, double* array, int Nx, int My, int tlevs)
 {
 	if (threadIdx.x < tlevs)
 	{
@@ -95,32 +144,32 @@ __global__ void d_advance(T** array_t, int tlevs)
 	T* tmp = array_t[tlevs - 1];
 	unsigned int t = 0;
 
+    /*
 	printf("Before:\n");
 	for(t = tlevs - 1; t > 0; t--)
 		printf("array_t[%d] at %p\n", t, array_t[t]);
 	printf("array_t[0] at %p\n", array_t[0]);
-
+    */
 	for(t = tlevs - 1; t > 0; t--)
-	{
 		array_t[t] = array_t[t - 1];
-	}
 	array_t[0] = tmp;
 
+    /*
 	printf("After:\n");
 	for(t = tlevs - 1; t > 0; t--)
 		printf("array_t[%d] at %p\n", t, array_t[t]);
 	printf("array_t[0] at %p\n", array_t[0]);
+    */
 }
 
 
-
+/*
 __global__ void d_test_alloc(double** array_t, int tlevs)
 {
 	for(int t = 0; t < tlevs; t++)
 		printf("array_d_t[%d] at %p\n", t, array_t[t]);
-
 }
-
+*/
 
 template <typename T>
 __global__ void test_alloc(T** array_t, int tlevs)
@@ -148,7 +197,7 @@ cuda_array<T> :: cuda_array(unsigned int t, unsigned int nx, unsigned int my) :
     cout << "blockDim=(" << block.x << ", " << block.y << ", " << block.z << ")\n";
     cout << "gridDim=(" << grid.x << ", " << grid.y << ", " << grid.z << ")\n";
 
-    cout << "Array size: " << Nx << "," << My << "," << tlevs << "\n";
+    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
@@ -187,13 +236,14 @@ cuda_array<T> :: ~cuda_array(){
 
 // Access functions for private members
 
+/*
 template <>
 void cuda_array<real_t> :: enumerate_array(const int t)
 {
     // Call enumeration kernel
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array(const int): out of bounds\n"));
-	d_enumerate_d<<<grid, block>>>(array_d, Nx, My);
+	d_enumerate<<<grid, block>>>(array_d, Nx, My);
 	cudaDeviceSynchronize();
 }
 
@@ -202,17 +252,26 @@ void cuda_array<cmplx_t> :: enumerate_array(const int t)
 {
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array(const int): out of bounds\n"));
-	d_enumerate_c<<<grid, block>>>(array_d, Nx, My);
+	d_enumerate<<<grid, block>>>(array_d, Nx, My);
+	cudaDeviceSynchronize();
+}
+*/
+template <typename T>
+void cuda_array<T> :: enumerate_array(const int t)
+{
+	if (!bounds(t, Nx-1, My-1))
+		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array(const int): out of bounds\n"));
+	d_enumerate<<<grid, block>>>(array_d, Nx, My);
 	cudaDeviceSynchronize();
 }
 
-
+/*
 template <>
 void cuda_array<real_t> :: enumerate_array_t(const int t)
 {
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array_t(const int): out of bounds\n"));
-	d_enumerate_t_d<<<grid, block >>>(array_d_t, t, Nx, My);
+	d_enumerate_t<<<grid, block >>>(array_d_t, t, Nx, My);
 	cudaDeviceSynchronize();
 }
 
@@ -221,10 +280,19 @@ void cuda_array<cmplx_t> :: enumerate_array_t(const int t)
 {
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array_t(const int): out of bounds\n"));
-	d_enumerate_t_c<<<grid, block >>>(array_d_t, t, Nx, My);
+	d_enumerate_t<<<grid, block >>>(array_d_t, t, Nx, My);
 	cudaDeviceSynchronize();
 }
+*/
 
+template <typename T>
+void cuda_array<T> :: enumerate_array_t(const int t)
+{
+	if (!bounds(t, Nx-1, My-1))
+		throw out_of_bounds_err(string("T& cuda_array<T> :: enumerate_array_t(const int): out of bounds\n"));
+	d_enumerate_t<<<grid, block >>>(array_d_t, t, Nx, My);
+	cudaDeviceSynchronize();
+}
 
 // Operators
 template <class T>
@@ -284,7 +352,8 @@ void cuda_array<T> :: advance()
 	//Advance array_d_t pointer on device
 	d_advance<<<1, 1>>>(array_d_t, tlevs);
 	cudaDeviceSynchronize();
-	d_set_constant_t<<<grid, block>>>(array_d_t, double(0.0), tlevs - 1, Nx, My);
+	//d_set_constant_t<<<grid, block>>>(array_d_t, double(0.0), tlevs - 1, Nx, My);
+    d_zero_tlev<<<grid, block>>>(array_d_t, tlevs - 1, Nx, My); 
 }
 
 

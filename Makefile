@@ -20,9 +20,9 @@ all: cuda_array2 test_array2
 #test_array: cuda_array
 #	$(CC) $(CFLAGS) -o test_array test_array.cpp obj/cuda_array.o $(IFLAGS) $(LFLAGS)
 #
-#test_dfts: cuda_array
-#	$(CC) $(CFLAGS) -o test_dfts test_dfts.cpp obj/cuda_array.o $(IFLAGS) $(LFLAGS)
-#
+test_dft: cuda_array2
+	$(CC) $(CFLAGS) -o test_dft test_dft.cpp obj/cuda_array2.o $(IFLAGS) $(LFLAGS)
+
 cuda_array2:
 #	$(CC) $(CFLAGS) -c -o obj/cuda_array.o cuda_array.cpp $(IFLAGS) $(LFLAGS)
 	$(CUDACC) $(CUDACFLAGS) -c -o obj/cuda_array2.o cuda_array2.cu 
