@@ -1,11 +1,14 @@
 include ../Makefile.inc
 
-.PHONY: test_array2 test_arrayc test_slab test_init test_dft
+.PHONY: test_array2 test_arrayc test_slab test_init test_dft test_arith
 
-all: test_array2 test_arrayc test_slab test_init test_dft
+all: test_array2 test_arrayc test_slab test_init test_dft test_arith
 
 test_array2: 
 	$(CC) $(CFLAGS) -o test_array2 $(OBJ_DIR)/cuda_array2.o test_array2.cpp $(IFLAGS) $(LFLAGS) 
+
+test_arith:
+	$(CC) $(CFLAGS) -o test_arith $(OBJ_DIR)/cuda_array2.o test_arith.cpp $(IFLAGS) $(LFLAGS)
 
 test_arrayc: 
 	$(CC) $(CFLAGS) -o test_arrayc $(OBJ_DIR)/cuda_array2.o test_arrayc.cpp $(IFLAGS) $(LFLAGS)
@@ -22,4 +25,4 @@ test_dft:
 
 
 clean:
-	rm test_array2 test_arrayc test_slab test_init
+	rm test_array2 test_arrayc test_slab test_init test_arith

@@ -21,7 +21,7 @@ int main(void)
 
 	cout << "arr1: Nx = " << arr1.get_nx() << ", My = " << arr1.get_my() << ", tlevs = " << arr1.get_tlevs() << "\n";
 
-	arr1.set_all(59.4);
+	arr1 = 59.4;
 	arr1.copy_device_to_host();
 	cout << "arr1=\n" << arr1 << "\n";
 

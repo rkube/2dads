@@ -19,7 +19,8 @@
 using namespace std;
 
 //class out_of_bounds_err : public exception{
-class out_of_bounds_err : public exception{
+class out_of_bounds_err : public exception
+{
     public:
         /// Error code encoded as a string
         out_of_bounds_err(const string err) : error(err) {};
@@ -32,7 +33,8 @@ class out_of_bounds_err : public exception{
 
 /// Memory error in operators
 
-class operator_err : public exception{
+class operator_err : public exception
+{
     public:
         operator_err(const string err) : error(err) {};
         ~operator_err() throw() {};
@@ -43,7 +45,8 @@ class operator_err : public exception{
 };
 
 /// Invalid size for array construction
-class invalid_size : public exception{
+class invalid_size : public exception
+{
     public:
         /// Write error message 
         invalid_size(const string err) : error(err) {};
@@ -69,10 +72,23 @@ class config_error : public exception{
 };
 
 /// Errors from the diagnostic unit
-class diagnostics_error : public exception{
+class diagnostics_error : public exception
+{
     public:
         diagnostics_error(const string err) : error(err) {};
         ~diagnostics_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+    private:
+        string error;
+};
+
+/// GPU call errorss
+class gpu_error : public exception
+{
+    public:
+        gpu_error(const string err) : error(err) {};
+        ~gpu_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
     private:

@@ -22,7 +22,7 @@ int main(void)
 
     vector<double> initc = {0.0, 2.0};
     cuda_array<cuda::real_t> arr(tlevs, Nx, My);
-    arr.set_all(0.0);
+    arr = 0.0;
     cout << "xleft=" << xleft << ", delta_x=" << delta_x << ", Nx=" << Nx << "\n";
     cout << "ylo=" << ylo << ", delta_y=" << delta_y << ", Ny=" << My << "\n";
     cout << "arr =\n" << arr << "\n";

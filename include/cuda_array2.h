@@ -6,7 +6,6 @@
  */
 
 
-
 #ifndef CUDA_ARRAY2_H_
 #define CUDA_ARRAY2_H_
 
@@ -31,14 +30,15 @@
 #include "cuda_types.h"
 
 
-
 // Error checking macro for cuda calls
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true){
-    if (code != cudaSuccess) {
-        std::cerr << "GPUassert: " << cudaGetErrorString(code) << "\t file: " << file << ", line: " << line << "\n";
-        if (abort)
-            exit(code);
+inline void gpuAssert(cudaError_t code, const char *file, int line)
+{ 
+    if (code != cudaSuccess) 
+    {
+        stringstream err_str;
+        err_str << "GPUassert: " << cudaGetErrorString(code) << "\t file: " << file << ", line: " << line << "\n";
+        throw gpu_error(err_str.str());
     }
 }
 
@@ -61,6 +61,7 @@ class ca_val
     public:
         __host__ __device__ ca_val() {} ;
         __host__ __device__ inline void set(cuda::real_t);
+        __host__ __device__ inline void set(cuda::cmplx_t);
         __host__ __device__ inline T get() const {return x;};
     private:
         T x;
@@ -75,9 +76,22 @@ inline void ca_val<cuda::real_t> :: set(cuda::real_t a)
 
 
 template<>
+inline void ca_val<cuda::real_t> :: set(cuda::cmplx_t a)
+{
+    x = a.x;
+}
+
+
+template<>
 inline void ca_val<cuda::cmplx_t> :: set(cuda::real_t a)
 {
-    x = make_cuDoubleComplex(a, -a);
+    x = make_cuDoubleComplex(a, a);
+}
+
+template<>
+inline void ca_val<cuda::cmplx_t> :: set(cuda::cmplx_t a)
+{
+    x = a;
 }
 
 template class ca_val<cuda::real_t>;
@@ -105,6 +119,14 @@ class cuda_array{
 
         cuda_array<T>& operator+=(const cuda_array<T>&);
         cuda_array<T>& operator+=(const T&);
+
+        cuda_array<T>& operator-=(const cuda_array<T>&);
+        cuda_array<T>& operator-=(const T&);
+
+        cuda_array<T>& operator*=(const cuda_array<T>&);
+        cuda_array<T>& operator*=(const T&);
+
+        // Similar to operatnr=, but operates on all time levels
         cuda_array<T>& set_all(const T&);
         // Access operator to host array
         T& operator()(unsigned int, unsigned int, unsigned int);
@@ -115,15 +137,15 @@ class cuda_array{
         //string dump_to_str();
         string cout_wrapper(const T &val) const;
 
-
         // Copy device memory to host and print to stdout
-        friend std::ostream& operator<<(std::ostream& os, const cuda_array<T>& src)
+        friend std::ostream& operator<<(std::ostream& os, cuda_array<T>& src)
         {
             const unsigned int tl = src.get_tlevs();
             const unsigned int nx = src.get_nx();
             const unsigned int my = src.get_my();
-            //src.copy_device_to_host();
+            src.copy_device_to_host();
             os << std::setw(10);
+            os << "\n";
             for(unsigned int t = 0; t < tl; t++)
             {
                 os << "t: " << t << "\n";
@@ -142,6 +164,7 @@ class cuda_array{
         }
 
         void copy_device_to_host();
+        void copy_device_to_host(unsigned int);
 
         // Transfer from host to device
         void copy_host_to_device();
@@ -153,12 +176,6 @@ class cuda_array{
         void copy(unsigned int, const cuda_array<T>&, unsigned int);
         void move(unsigned int, unsigned int);
         void normalize();
-
-        // Initialize device data
-        //void init_arr_d_sine();
-
-        // Functions that initialize host data
-        //void init_arr_h(T&);
 
         // Access to private members
         inline unsigned int get_nx() const {return Nx;};
@@ -174,6 +191,7 @@ class cuda_array{
 
         // Pointer to device data
         inline T* get_array_d() const {return array_d;};
+        inline T** get_array_d_t() const {return array_d_t;};
         inline T* get_array_d(unsigned int t) const {return array_d_t_host[t];};
 
     private:
@@ -196,11 +214,9 @@ class cuda_array{
         T** array_d_t;
         T** array_d_t_host;
 
-
         // Storage copy of device data on host
         T* array_h;
         T** array_h_t;
 };
-
 
 #endif /* CUDA_ARRAY2_H_ */

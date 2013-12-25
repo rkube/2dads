@@ -23,7 +23,6 @@ cuda_array2:
 initialize:
 	$(CUDACC) $(CUDACFLAGS) -c -o obj/initialize.o initialize.cu $(IFLAGS)
 
-
 slab_config:
 	$(CC) $(CFLAGS) -c -o obj/slab_config.o slab_config.cpp $(IFLAGS)
 

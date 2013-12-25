@@ -39,8 +39,8 @@ int main(void)
     cout << "Estimated size: " << dft_size << " bytes\n";
 
     // Initialize 
-    arr_r.set_all(0.0);
-    arr_c.set_all(make_cuDoubleComplex(0.0, 0.0));
+    arr_r = 0.0;
+    arr_c = make_cuDoubleComplex(0.0, 0.0);
     vector<double> initc = {2.0, 0.0};
     init_simple_sine(&arr_r, initc, delta_x, delta_y, xleft, ylo); 
     arr_r.copy_device_to_host();
