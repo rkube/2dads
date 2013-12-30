@@ -260,7 +260,7 @@ slab_config :: slab_config() :
 		theta_rhs = twodads::rhs_t::theta_rhs_hwmod;
     
     else if ( theta_rhs_str.compare(string("theta_rhs_null")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_null;
+		theta_rhs = twodads::rhs_t::rhs_null;
     
     else if ( theta_rhs_str.compare(string("theta_rhs_ic")) == 0) 
 		theta_rhs = twodads::rhs_t::theta_rhs_ic;
@@ -276,7 +276,7 @@ slab_config :: slab_config() :
     else if ( omega_rhs_str.compare(string("omega_rhs_hw_mod")) == 0) 
 		omega_rhs = twodads::rhs_t::omega_rhs_hw;
     else if ( omega_rhs_str.compare(string("omega_rhs_null")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_null;
+		omega_rhs = twodads::rhs_t::rhs_null;
     else if ( omega_rhs_str.compare(string("omega_rhs_ic")) == 0) 
         omega_rhs = twodads::rhs_t::omega_rhs_ic;
     else 

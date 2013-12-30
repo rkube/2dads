@@ -33,8 +33,9 @@ namespace twodads {
                            init_both_random_k, init_omega_exp_k, init_omega_dlayer, init_const_k,
                            init_simple_sine, init_theta_mode, init_theta_const, init_file};
 
-    enum class rhs_t {theta_rhs_lin, theta_rhs_log, theta_rhs_hw, theta_rhs_hwmod, theta_rhs_null, theta_rhs_ic, theta_rhs_NA,
-                      omega_rhs_std, omega_rhs_hw, omega_rhs_hwmod, omega_rhs_ic, omega_rhs_null, omega_rhs_NA};
+    enum class rhs_t {theta_rhs_lin, theta_rhs_log, theta_rhs_hw, theta_rhs_hwmod, theta_rhs_ic, theta_rhs_NA,
+                      omega_rhs_std, omega_rhs_hw, omega_rhs_hwmod, omega_rhs_ic, omega_rhs_NA,
+                      rhs_null};
 
     // Diagnostic functions
     enum class diagnostic_t {diag_blobs, diag_energy, diag_probes};

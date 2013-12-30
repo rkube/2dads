@@ -11,6 +11,30 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     dft_is_initialized(init_dft())
 {
     cout << "slab_cuda :: slab_cuda(config my_config)\n";
+
+    // Setting RHS pointer
+    switch(config.get_theta_rhs_type())
+    {
+        case twodads::rhs_t::theta_rhs_lin:
+            theta_rhs_fun = &slab_cuda::theta_rhs_lin;
+            break;
+        case twodads::rhs_t::theta_rhs_log:
+            theta_rhs_fun = &slab_cuda::theta_rhs_log;
+            break;
+        case twodads::rhs_t::theta_rhs_hw:
+            // Not implemented yet
+            break;
+        case twodads::rhs_t::theta_rhs_hwmod:
+            // Not implemented yet
+            break;
+        case twodads::rhs_t::theta_rhs_ic:
+            //Not implemented yet
+            break;
+        case twodads::rhs_t::rhs_null:
+            theta_rhs_fun = &slab_cuda::rhs_null;
+            break;
+    }
+
 }
 
 
@@ -57,15 +81,17 @@ bool slab_cuda :: init_dft()
     err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z);
     if (err != 0)
     {
-        cerr << "Error planning D2Z DFT: " << err << "\n";
-        return (false);
+        stringstream err_str;
+        err_str << "Error planning D2Z DFT: " << err << "\n";
+        throw gpu_error(err_str.str());
     }
 
     err = cufftPlan2d(&plan_c2r, Nx, My, CUFFT_Z2D);
     if (err != 0)
     {
-        cerr << "Error planning Z2D DFT: " << err << "\n";
-        return(false);
+        stringstream err_str;
+        err_str << "Error planning D2Z DFT: " << err << "\n";
+        throw gpu_error(err_str.str());
     }
 
     return(true);
@@ -87,11 +113,23 @@ void slab_cuda :: test_slab_config()
 void slab_cuda :: advance()
 {
     cout << "slab_cuda :: advance()\n";
+    theta_hat.advance();
+    //omega_hat.advance();
 }
 
-void slab_cuda :: rhs_fun()
+void slab_cuda :: theta_rhs_lin()
 {
-    cout << "slab_cuda :: rhs_fun()\n";
+    cout << "Not implemented yet: slab_cuda :: theta_rhs_lin()\n";
+}
+
+void slab_cuda :: theta_rhs_log()
+{
+    cout << "Not implemented yet: slab_cuda :: theta_rhs_log()\n";
+}
+
+void slab_cuda :: rhs_null()
+{
+    cout << "Not implemented yet: slab_cuda :: rhs_null()\n";
 }
 
 void slab_cuda :: integrate_stiff(twodads::dyn_field_t field, uint tlev)
@@ -102,6 +140,7 @@ void slab_cuda :: integrate_stiff(twodads::dyn_field_t field, uint tlev)
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t)
 {
     cufftResult err;
+    cout << "dft_r2c\n";
     cuda_array<cuda::real_t>* arr_r = get_field_by_name(fname_r);
     cuda_array<cuda::cmplx_t>* arr_c = get_field_by_name(fname_c);
     err = cufftExecD2Z(plan_r2c, arr_r -> get_array_d(), arr_c -> get_array_d(t));
@@ -144,6 +183,8 @@ void slab_cuda :: initialize()
             break;
         case twodads::init_fun_t::init_theta_gaussian:
             cout << "Initizlizing theta gaussian\n";
+            //init_gaussian(&theta, config.get_initc(), config.get_deltax(),
+            //        config.get_deltay(), config.get_xleft(), config.get_ylow());
             break;
         case twodads::init_fun_t::init_omega_random_k:
             cout << "init_omega_random_k\n";
@@ -162,13 +203,18 @@ void slab_cuda :: initialize()
             break;
         case twodads::init_fun_t::init_const_k:
             cout << "init_const_k\n";
-            init_simple_sine(&theta, config.get_initc(), config.get_deltax(),
-                    config.get_deltay(), config.get_xleft(), config.get_ylow());
-            //omega = 0.0;
-            
             break;
         case twodads::init_fun_t::init_simple_sine:
             cout << "init_simple_sine\n";
+            init_simple_sine(&theta, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+            // Initialize omega, strmf with const. But this is done in the
+            // cuda_array constructor
+
+            // DFT of initial condition
+            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
+            //omega_hat.set_all(0.0);
+            //strmf_hat.set_all(0.0);
             break;
         case twodads::init_fun_t::init_theta_mode:
             cout << "init_theta_mode\n";

@@ -10,20 +10,23 @@
  */
 
 #include <iostream>
+//#include "include/common_kernel.h"
 #include "include/cuda_array2.h"
 
 using namespace std;
 
-__device__ int d_get_col(void)
+
+__device__ int d_get_col()
 {
-    return (blockIdx.y * blockDim.y + threadIdx.y);
+    return (blockIdx.y * blockDim.y + threadIdx.y);    
 }
 
 
-__device__ int d_get_row(void)
+__device__ int d_get_row()
 {
     return (blockIdx.x * blockDim.x + threadIdx.x);
 }
+
 
 // Template kernel for d_enumerate_d and d_enumerate_c using the ca_val class
 template <typename T>
@@ -46,15 +49,12 @@ __global__ void d_enumerate(T* array, int Nx, int My)
 template <typename T>
 __global__ void d_enumerate_t(T** array_t, int t, int Nx, int My)
 {
-    //const int col = blockIdx.y * blockDim.y + threadIdx.y;
-    //const int row = blockIdx.x * blockDim.x + threadIdx.x;
     const int col = d_get_col();
     const int row = d_get_row();
     const int index = row * My + col;
 
 	if (blockIdx.x + threadIdx.x + threadIdx.y == 0)
 		printf("blockIdx.x = %d: enumerating at t = %d, at %p(device)\n", blockIdx.x, t, array_t[t]);
-    //printf("blockIdx.x = %d, blockDim.x = %d, threadIdx.x = %d,  blockIdy.y = %d, blockDim.y = %d, threadIdy.y = %d ,index = %d\n", blockIdx.x, blockDim.x, threadIdx.x,   blockIdx.y, blockDim.y, threadIdx.y, index);
 	if (index < Nx * My)
     {
         ca_val<T> val;
@@ -65,15 +65,13 @@ __global__ void d_enumerate_t(T** array_t, int t, int Nx, int My)
 
 
 template <typename T>
-__global__ void d_set_constant_t(T** array_t, T val, int t, int Nx, int My)
+__global__ void d_set_constant_t(T** array_t, ca_val<T> val, int t, int Nx, int My)
 {
-	//const int col = blockIdx.y * blockDim.y + threadIdx.y;
-	//const int row = blockIdx.x * blockDim.x + threadIdx.x;
     const int col = d_get_col();
     const int row = d_get_row();
 	const int index = row * My + col;
 	if (index < Nx * My)
-		array_t[t][index] = val;
+		array_t[t][index] = val.get();
 }
 
 
@@ -93,23 +91,20 @@ __global__ void d_advance(T** array_t, int tlevs)
 {
 	T* tmp = array_t[tlevs - 1];
 	unsigned int t = 0;
-
     
-	printf("Before:\n");
-	for(t = tlevs - 1; t > 0; t--)
-		printf("array_t[%d] at %p\n", t, array_t[t]);
-	printf("array_t[0] at %p\n", array_t[0]);
+	//printf("Before:\n");
+	//for(t = tlevs - 1; t > 0; t--)
+	//	printf("array_t[%d] at %p\n", t, array_t[t]);
+	//printf("array_t[0] at %p\n", array_t[0]);
     
 	for(t = tlevs - 1; t > 0; t--)
 		array_t[t] = array_t[t - 1];
 	array_t[0] = tmp;
 
-    
-	printf("After:\n");
-	for(t = tlevs - 1; t > 0; t--)
-		printf("array_t[%d] at %p\n", t, array_t[t]);
-	printf("array_t[0] at %p\n", array_t[0]);
-    
+	//printf("After:\n");
+	//for(t = tlevs - 1; t > 0; t--)
+	//	printf("array_t[%d] at %p\n", t, array_t[t]);
+	//printf("array_t[0] at %p\n", array_t[0]);
 }
 
 
@@ -121,71 +116,147 @@ __global__ void test_alloc(T** array_t, int tlevs)
 }
 
 
-// Add two arrays, real data, one given time level
-__global__ void d_add_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
+// Add two arrays: real data, specify time level for RHS
+__global__ 
+void d_add_arr_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = lhs[tlev][idx] + rhs[tlev][idx];
+        lhs[0][idx] = lhs[tlev][idx] + rhs[tlev][idx];
 }
 
 
-// Add two arrays: complex data, specified time levels
-__global__ void d_add_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
+// Add two arrays: complex data, specify time levels for RHS
+__global__ 
+void d_add_arr_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = cuCadd(lhs[tlev][idx], rhs[tlev][idx]);
+        lhs[0][idx] = cuCadd(lhs[tlev][idx], rhs[tlev][idx]);
 }
 
 
-// Subtract two arrays: real data, specified time levels
-__global__ void d_sub_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
+// Add scalar, real
+__global__ 
+void d_add_scalar(cuda::real_t** lhs, cuda::real_t rhs, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = lhs[tlev][idx] - rhs[tlev][idx];
+        lhs[0][idx] += rhs;
 }
 
-
-// Subtract two arrays: Complex data, specified time level
-__global__ void d_sub_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
+// Add scalar, cmplx
+__global__ 
+void d_add_scalar(cuda::cmplx_t** lhs, cuda::cmplx_t rhs, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = cuCsub(lhs[tlev][idx], rhs[tlev][idx]);
+        lhs[0][idx] = cuCadd(lhs[0][idx], rhs);
 }
 
 
-// Multiply two arrays: real data, specified time level
-__global__ void d_mul_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
+// Subtract array: real data, specify time level for RHS
+__global__ 
+void d_sub_arr_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = lhs[tlev][idx] * rhs[tlev][idx];
+        lhs[0][idx] = lhs[0][idx] - rhs[tlev][idx];
 }
 
 
-// Multiply two arrays: Complex data, specified time level
-__global__ void d_mul_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
+// Subtract array: Complex data, specify time level for RHS
+__global__ 
+void d_sub_arr_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
     const int idx = row * My + col;
     if ((col < My) && (row < Nx))
-        lhs[tlev][idx] = cuCmul(lhs[tlev][idx], rhs[tlev][idx]);
+        lhs[0][idx] = cuCsub(lhs[0][idx], rhs[tlev][idx]);
 }
 
+
+// Multiply by array: real data, specify time level for RHS
+__global__ 
+void d_mul_arr_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = lhs[0][idx] * rhs[tlev][idx];
+}
+
+
+// Multiply by array: Complex data, specify time level for RHS
+__global__ 
+void d_mul_arr_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = cuCmul(lhs[0][idx], rhs[tlev][idx]);
+}
+
+
+// Multiply by scalar: real data 
+__global__ 
+void d_mul_scalar(cuda::real_t** lhs, cuda::real_t rhs, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = lhs[0][idx] * rhs;
+}
+
+
+// Multiply by scalar: Complex data, specified time level
+__global__ 
+void d_mul_scalar(cuda::cmplx_t** lhs, cuda::cmplx_t rhs, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = cuCmul(lhs[0][idx], rhs);
+}
+
+
+// Divide by array: real data, specify time level for RHS
+__global__
+void d_div_arr_t(cuda::real_t** lhs, cuda::real_t** rhs, int tlev, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = lhs[0][idx] / rhs[tlev][idx];
+}
+
+
+// Divide by array: complex data, specify time level for RHS
+__global__
+void d_div_arr_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs, int tlev, int Nx, int My)
+{
+    const int col = d_get_col();
+    const int row = d_get_row();
+    const int idx = row * My + col;
+    if ((col < My) && (row < Nx))
+        lhs[0][idx] = cuCdiv(lhs[0][idx], rhs[tlev][idx]);
+}
 
 
 // Default constructor
@@ -195,16 +266,19 @@ cuda_array<T> :: cuda_array(unsigned int t, unsigned int nx, unsigned int my) :
     array_d(NULL), array_d_t(NULL),
     array_h(NULL), array_h_t(NULL)
 {
+    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
+    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
+    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
     // Determine grid size for kernel launch
     block = dim3(cuda::cuda_blockdim_nx, cuda::cuda_blockdim_my);
     // Testing, use 64 threads in y direction. Thus blockDim.y = 1
     // blockDim.x is the x, one block for each row
-    grid = dim3(Nx, 1);
-    grid_full = dim3(tlevs * Nx, 1);
-    cout << "blockDim=(" << block.x << ", " << block.y << ", " << block.z << ")\n";
-    cout << "gridDim=(" << grid.x << ", " << grid.y << ", " << grid.z << ")\n";
+    // Round integer division for grid.y, see: http://stackoverflow.com/questions/2422712/c-rounding-integer-division-instead-of-truncating
+    grid = dim3(Nx, (My + (cuda::cuda_blockdim_my - 1)) / cuda::cuda_blockdim_my);
 
-    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
+    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
+    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
+
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
@@ -234,6 +308,21 @@ cuda_array<T> :: cuda_array(unsigned int t, unsigned int nx, unsigned int my) :
 
     cout << "Testing allocation of array_d_t:\n";
     test_alloc<<<1, 1>>>(array_d_t, tlevs);
+    set_all(0.0);
+}
+
+
+// copy constructor
+template <class T>
+cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
+    tlevs(rhs.tlevs), Nx(rhs.Nx), My(rhs.My), bounds(tlevs, Nx, My),
+    block(rhs.block), grid(rhs.grid), grid_full(rhs.grid_full),
+    array_d(NULL), array_d_t(NULL),
+    array_h(NULL), array_h_t(NULL)
+{
+    cout << "cuda_array::cuda_array(const cuda_array& rhs)\n";
+    cout << "Not implemented yet\n";
+    // Memcpy's should do it, right? :)
 }
 
 template <class T>
@@ -291,20 +380,22 @@ cuda_array<T>& cuda_array<T> :: operator= (const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator= (const T& rhs)
 {
-    //ca_val<T> val;
-    //val.set(rhs);
-    d_set_constant_t<<<grid, block>>>(array_d_t, rhs, 0, Nx, My);
+    ca_val<T> val;
+    val.set(rhs);
+    d_set_constant_t<<<grid, block>>>(array_d_t, val, 0, Nx, My);
     cudaDeviceSynchronize();
     return *this;
 }
 
 
 template <class T>
-cuda_array<T>& cuda_array<T> :: set_all(const T& rhs)
+cuda_array<T>& cuda_array<T> :: set_all(const double& rhs)
 {
+    ca_val<T> val;
+    val.set(rhs);
 	for(unsigned int t = 0; t < tlevs; t++)
 	{
-		d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, Nx, My);
+		d_set_constant_t<<<grid, block>>>(array_d_t, val, t, Nx, My);
 		cudaDeviceSynchronize();
 	}
 	return *this;
@@ -318,7 +409,26 @@ cuda_array<T>& cuda_array<T> :: operator+=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator+= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
-    d_add_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
+    d_add_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+// Template specialization for scalar operations since CUDA insists on not
+// overloading operators for arithmetic for cuDoubleComplex... :/
+template <>
+cuda_array<cuda::real_t>& cuda_array<cuda::real_t> :: operator+=(const cuda::real_t& rhs)
+{
+    d_add_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+
+template <>
+cuda_array<cuda::cmplx_t>& cuda_array<cuda::cmplx_t> :: operator+=(const cuda::cmplx_t& rhs)
+{
+    d_add_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
     cudaDeviceSynchronize();
     return *this;
 }
@@ -332,8 +442,27 @@ cuda_array<T>& cuda_array<T> :: operator-=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator-= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
     
-    d_sub_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
+    d_sub_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
     cudaDeviceSynchronize();
+    return *this;
+}
+
+
+// Template specialization
+template <>
+cuda_array<cuda::real_t>& cuda_array<cuda::real_t> :: operator-=(const cuda::real_t& rhs)
+{
+    d_add_scalar<<<grid, block>>>(array_d_t, -1.0 * rhs, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+
+template<>
+cuda_array<cuda::cmplx_t>& cuda_array<cuda::cmplx_t> :: operator-=(const cuda::cmplx_t& rhs)
+{
+    cuda::cmplx_t minus_rhs = cuCmul(make_cuDoubleComplex(-1.0, 0.0), rhs);
+    d_add_scalar<<<grid, block>>>(array_d_t, minus_rhs, Nx, My);
     return *this;
 }
 
@@ -346,11 +475,30 @@ cuda_array<T>& cuda_array<T> :: operator*=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator*= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
     
-    d_mul_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
+    d_mul_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
     cudaDeviceSynchronize();
     return *this;
 }
-       
+      
+
+template<>
+cuda_array<cuda::real_t>& cuda_array<cuda::real_t> :: operator*=(const cuda::real_t& rhs)
+{
+    d_mul_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+
+template<>
+cuda_array<cuda::cmplx_t>& cuda_array<cuda::cmplx_t> :: operator*=(const cuda::cmplx_t& rhs)
+{
+    d_mul_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+
 
 template <class T>
 T& cuda_array<T> :: operator()(unsigned int t, unsigned int n, unsigned int m)
@@ -375,18 +523,19 @@ void cuda_array<T> :: advance()
 {
 	//Advance array_d_t pointer on device
 	d_advance<<<1, 1>>>(array_d_t, tlevs);
-	cudaDeviceSynchronize();
-    // Zero out last time level for visualization purpose
-    ca_val<T> val;
-    val.set(double(0.0));
-    d_set_constant_t<<<grid, block>>>(array_d_t, val.get(), tlevs - 1, Nx, My);
     // Update array_d_t_host
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
+	cudaDeviceSynchronize();
+
+    // Zero out last time level 
+    ca_val<T> val;
+    val.set(double(0.0));
+    d_set_constant_t<<<grid, block>>>(array_d_t, val, tlevs - 1, Nx, My);
 }
 
 
 
-template <class T>
+template <typename T>
 string cuda_array<T> :: cout_wrapper(const T& val) const
 {
 	stringstream ss;
@@ -405,21 +554,66 @@ string cuda_array<cuda::cmplx_t> :: cout_wrapper(const cuda::cmplx_t& val) const
 
 
 // The array is contiguous, so use only one memcpy
-template <class T>
+template <typename T>
 void cuda_array<T> :: copy_device_to_host() 
 {
     const size_t line_size = Nx * My * tlevs * sizeof(T);
-    cout << "Copying " << line_size << " bytes to " << array_h << " (host) from ";
-    cout << array_d << " (device)\n";
+    //cout << "Copying " << line_size << " bytes to " << array_h << " (host) from ";
+    //cout << array_d << " (device)\n";
     gpuErrchk(cudaMemcpy(array_h, array_d, line_size, cudaMemcpyDeviceToHost));
 }
 
 
-template <class T>
+template <typename T>
 void cuda_array<T> :: copy_device_to_host(unsigned int tlev)
 {
     const size_t line_size = Nx * My * sizeof(T);
     gpuErrchk(cudaMemcpy(array_h_t[tlev], array_d_t_host[tlev], line_size, cudaMemcpyDeviceToHost));
+}
+
+
+template <typename T>
+void cuda_array<T> :: copy(unsigned int t_dst, unsigned int t_src)
+{
+    const size_t line_size = Nx * My * sizeof(T);
+    gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
+}
+
+
+template <typename T>
+void cuda_array<T> :: copy(unsigned int t_dst, const cuda_array<T>& src, unsigned int t_src)
+{
+    const size_t line_size = Nx * My * sizeof(T);
+    gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], src.get_array_d(t_src), line_size, cudaMemcpyDeviceToDevice));
+}
+
+
+template <typename T>
+void cuda_array<T> :: move(unsigned int t_dst, unsigned int t_src)
+{
+    // Copy data 
+    const size_t line_size = Nx * My * sizeof(T);
+    gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
+    // Clear source
+    ca_val<T> zero;
+    zero.set(0.0);
+    d_set_constant_t<<<grid, block>>>(array_d_t, zero, t_src, Nx, My);
+}
+
+
+// Normalize works only for real arrays
+template <>
+void cuda_array<cuda::real_t> :: normalize()
+{
+    cuda::real_t norm = 1. / cuda::real_t(Nx * My);
+    d_mul_scalar<<<grid, block>>>(array_d_t, norm, Nx, My);
+}
+
+
+template <>
+void cuda_array<cuda::cmplx_t> :: normalize()
+{
+    // Do nothing
 }
 
 template class cuda_array<cuda::cmplx_t>;

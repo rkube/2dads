@@ -9,7 +9,6 @@
 #include "include/cuda_types.h"
 #include "include/cuda_array2.h"
 
-#define PI 3.14159265358979323846264338327950288
 
 __global__ 
 void d_init_sine(cuda::real_t* array, cuda::slab_layout layout, double* params) 
@@ -23,7 +22,7 @@ void d_init_sine(cuda::real_t* array, cuda::slab_layout layout, double* params)
     if ((col < layout.My) && (row < layout.Nx))
     {
         //printf("idx: %d, col: %d, row: %d, x = %f, y = %f\t\tkx = %f, ky = %f\n", idx, col, row, x, y, params[0], params[1]);
-        array[idx] = sin(params[0] * PI * x) + sin(params[1] * PI * y);
+        array[idx] = sin(params[0] * cuda::PI * x) + sin(params[1] * cuda::PI * y);
     }
 }
 
@@ -51,5 +50,10 @@ void init_simple_sine(cuda_array<cuda::real_t>* arr,
     //d_init_sine<<<1, 1>>>(arr -> get_array_d(), layout, d_params);
     cudaDeviceSynchronize();
 }
+
+
+
+
+
 
 

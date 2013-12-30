@@ -126,8 +126,9 @@ class cuda_array{
         cuda_array<T>& operator*=(const cuda_array<T>&);
         cuda_array<T>& operator*=(const T&);
 
-        // Similar to operatnr=, but operates on all time levels
-        cuda_array<T>& set_all(const T&);
+        // Similar to operator=, but operates on all time levels
+        cuda_array<T>& set_all(const double&);
+        cuda_array<T>& set_all(const cuDoubleComplex&);
         // Access operator to host array
         T& operator()(unsigned int, unsigned int, unsigned int);
         T operator()(unsigned int, unsigned int, unsigned int) const;
@@ -210,8 +211,9 @@ class cuda_array{
         // Array data is on device
         // Pointer to device data
         T* array_d;
-        // Pointer to each time stage
+        // Pointer to each time stage. Pointer to array of pointers on device
         T** array_d_t;
+        // Pointer to each time stage: Pointer to each time level on host
         T** array_d_t_host;
 
         // Storage copy of device data on host

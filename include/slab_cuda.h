@@ -8,11 +8,12 @@
 #include "2dads_types.h"
 #include "cuda_array2.h"
 #include "slab_config.h"
-
+#include "spectral_kernels.h"
 
 class slab_cuda
 {
     public:
+        typedef void (slab_cuda::*rhs_fun_ptr)();
         slab_cuda(slab_config);
         ~slab_cuda();
 
@@ -44,13 +45,17 @@ class slab_cuda
 
 
     private:
-        slab_config(config);
+        //slab_config(config);
+        slab_config config;
         const unsigned int Nx;
         const unsigned int My;
         const unsigned int tlevs;
 
         cuda_array<cuda::real_t> theta;
         cuda_array<cuda::cmplx_t> theta_hat;
+
+        rhs_fun_ptr theta_rhs_fun;
+        //rhs_fun_ptr omega_rhs_fun;
 
         // DFT plans
         cufftHandle plan_r2c;
@@ -61,6 +66,9 @@ class slab_cuda
         cuda_array<cuda::real_t>* get_field_by_name(twodads::field_t);
         cuda_array<cuda::cmplx_t>* get_field_by_name(twodads::field_k_t);
 
+        void theta_rhs_lin();
+        void theta_rhs_log();
+        void rhs_null();
 };
 
 
