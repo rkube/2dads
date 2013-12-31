@@ -23,14 +23,14 @@ class slab_cuda
 
         void initialize();
 
-        //void move_t(twodads::field_k_t, uint, uint);
-        //void move_t(twodads::field_t, uint, uint);
+        void move_t(twodads::field_k_t, uint, uint);
+        void move_t(twodads::field_t, uint, uint);
 
-        //void d_dx(twodads::field_k_t, field_k_t);
-        //void d_dy(twodads::field_k_t, field_k_t);
-        //void inv_laplace(twodads::field_k_t, twodads::field_k_t, uint);
+        void d_dx(twodads::field_k_t, twodads::field_k_t);
+        void d_dy(twodads::field_k_t, twodads::field_k_t);
+        void inv_laplace(twodads::field_k_t, twodads::field_k_t);
         
-        void advance();
+        void advance(twodads::field_k_t);
         void rhs_fun();
         void integrate_stiff(twodads::dyn_field_t, uint);
 
@@ -43,17 +43,19 @@ class slab_cuda
         void dump_field(twodads::field_t);
         void dump_field(twodads::field_k_t);
 
-
     private:
         //slab_config(config);
         slab_config config;
-        const unsigned int Nx;
-        const unsigned int My;
-        const unsigned int tlevs;
+        const uint Nx;
+        const uint My;
+        const uint tlevs;
 
-        cuda_array<cuda::real_t> theta;
-        cuda_array<cuda::cmplx_t> theta_hat;
+        cuda_array<cuda::real_t> theta, theta_x, theta_y;
+        cuda_array<cuda::real_t> tmp_array;
+        cuda_array<cuda::cmplx_t> theta_hat, theta_x_hat, theta_y_hat;
+        cuda_array<cuda::cmplx_t> tmp_array_hat;
 
+        cuda_array<cuda::cmplx_t> theta_rhs_hat;
         rhs_fun_ptr theta_rhs_fun;
         //rhs_fun_ptr omega_rhs_fun;
 
@@ -69,8 +71,9 @@ class slab_cuda
         void theta_rhs_lin();
         void theta_rhs_log();
         void rhs_null();
+        // Parameters for stiffly stable time integration
+        twodads::stiff_params stiff_params_theta;
+        twodads::stiff_params stiff_params_omega;
 };
 
-
-
-
+// End of file slab_cuda.h

@@ -11,17 +11,15 @@ namespace cuda
     typedef double real_t;
     const int cuda_blockdim_nx = 1;
     const int cuda_blockdim_my = 8;
-
     struct slab_layout
     {
         double x_left;
         double delta_x;
         double y_lo;
         double delta_y;
-        int Nx;
-        int My;
+        unsigned int Nx;
+        unsigned int My;
     };
-
 };
 
 

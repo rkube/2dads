@@ -17,7 +17,7 @@ test_copy:
 	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array2.o test_copy.cpp $(IFLAGS) $(LFLAGS)
 
 test_slab:
-	$(CC) $(CFLAGS) -o test_slab $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_slab.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_slab.cpp $(IFLAGS) $(LFLAGS)
 
 test_init:
 	$(CC) $(CFLAGS) -o test_init $(OBJ_DIR)/initialize.o  $(OBJ_DIR)/cuda_array2.o test_init.cpp $(IFLAGS) $(LFLAGS)

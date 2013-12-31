@@ -6,8 +6,11 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     Nx(my_config.get_nx()),
     My(my_config.get_my()),
     tlevs(my_config.get_tlevs()),
-    theta(1, Nx, My),
-    theta_hat(tlevs, Nx, My / 2 + 1),
+    theta(1, Nx, My), theta_x(1, Nx, My), theta_y(1, Nx, My),
+    tmp_array(1, Nx, My), 
+    theta_hat(tlevs, Nx, My / 2 + 1), theta_x_hat(1, Nx, My / 2 + 1), theta_y_hat(1, Nx, My / 2 + 1),
+    tmp_array_hat(1, Nx, My / 2 + 1), 
+    theta_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
     dft_is_initialized(init_dft())
 {
     cout << "slab_cuda :: slab_cuda(config my_config)\n";
@@ -34,6 +37,32 @@ slab_cuda :: slab_cuda(slab_config my_config) :
             theta_rhs_fun = &slab_cuda::rhs_null;
             break;
     }
+    // Setup auxiliary structures
+    stiff_params_theta.delta_t = config.get_deltat();
+    stiff_params_theta.length_x = config.get_lengthx();
+    stiff_params_theta.length_y = config.get_lengthy();
+    stiff_params_theta.diff = config.get_model_param(0);
+    stiff_params_theta.S = 4.0 * twodads::PI * twodads::PI * config.get_model_param(0) * config.get_deltat();
+    stiff_params_theta.level = config.get_tlevs();
+    cout << "stiff_params_theta.delta_t = " << stiff_params_theta.delta_t << "\n"; 
+    cout << "stiff_params_theta.length_x = " << stiff_params_theta.length_x << "\n"; 
+    cout << "stiff_params_theta.length_y = " << stiff_params_theta.length_y << "\n"; 
+    cout << "stiff_params_theta.diff = " << stiff_params_theta.diff << "\n"; 
+    cout << "stiff_params_theta.S = " << stiff_params_theta.S << "\n"; 
+    cout << "stiff_params_theta.level = " << stiff_params_theta.level << "\n"; 
+
+    stiff_params_omega.delta_t = config.get_deltat();
+    stiff_params_omega.length_x = config.get_lengthx();
+    stiff_params_omega.length_y = config.get_lengthy();
+    stiff_params_omega.diff = config.get_model_param(1);
+    stiff_params_omega.S = 4.0 * twodads::PI * twodads::PI * config.get_model_param(1) * config.get_deltat();
+    stiff_params_omega.level = config.get_tlevs();
+    cout << "stiff_params_omega.delta_t = " << stiff_params_omega.delta_t << "\n"; 
+    cout << "stiff_params_omega.length_x = " << stiff_params_omega.length_x << "\n"; 
+    cout << "stiff_params_omega.length_y = " << stiff_params_omega.length_y << "\n"; 
+    cout << "stiff_params_omega.diff = " << stiff_params_omega.diff << "\n"; 
+    cout << "stiff_params_omega.S = " << stiff_params_omega.S << "\n"; 
+    cout << "stiff_params_omega.level = " << stiff_params_omega.level << "\n"; 
 
 }
 
@@ -52,9 +81,36 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
         case twodads::field_t::f_theta:
             return &theta;
             break;
-        // Rest is not implemented yet...
+        case twodads::field_t::f_theta_x:
+            return &theta_x;
+            break;
+        case twodads::field_t::f_theta_y:
+            return &theta_y;
+            break;
+        /*
+        case twodads::field_t::f_omega:
+            return &omega;
+            break;
+        case twodads::field_t::f_omega_x:
+            return &omega_x;
+            break;
+        case twodads::field_t::f_omega_y:
+            return &omega_y;
+            break;
+        case twodads::field_t::f_strmf:
+            return &strmf;
+            break;
+        case twodads::field_t::f_strmf_x:
+            return &strmf_x;
+            break;
+        case twodads::field_t::f_strmf_y:
+            return &strmf_y;
+            break;
+        */
         default:
-            throw;
+            stringstream err_str;
+            err_str << "Invalid field name\n";
+            throw name_error(err_str.str());
     }
 }
 
@@ -66,9 +122,46 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::field_k_t fie
         case twodads::field_k_t::f_theta_hat:
             return &theta_hat;
             break;
-        // Rest is not implmeneted yet...
+        case twodads::field_k_t::f_theta_x_hat:
+            return &theta_x_hat;
+            break;
+        case twodads::field_k_t::f_theta_y_hat:
+            return &theta_y_hat;
+            break;
+        /*
+        case twodads::field_k_t::f_omega_hat:
+            return &omega_hat;
+            break;
+        case twodads::field_k_t::f_omega_x_hat:
+            return &omega_x_hat;
+            break;
+        case twodads::field_k_t::f_omega_y_hat:
+            return &omega_y_hat;
+            break;
+        
+        case twodads::field_k_t::f_strmf_hat:
+            return &strmf_hat;
+            break;
+        case twodads::field_k_t::f_strmf_x_hat:
+            return &strmf_x_hat;
+            break;
+        case twodads::field_k_t::f_strmf_y_hat:
+            return &strmf_y_hat;
+            break;
+        case twodads::field_k_t::f_omega_rhs_hat:
+            return &omega_rhs_hat;
+            break;
+        */
+        case twodads::field_k_t::f_theta_rhs_hat:
+            return &theta_rhs_hat;
+            break;
+        case twodads::field_k_t::f_tmp_hat:
+            return &tmp_array_hat;
+            break;
         default:
-            throw;
+            stringstream err_str;
+            err_str << "Invalid field name\n";
+            throw name_error(err_str.str());
     }
 }
 
@@ -110,32 +203,32 @@ void slab_cuda :: test_slab_config()
 }
 
 
-void slab_cuda :: advance()
+void slab_cuda :: advance(twodads::field_k_t fname)
 {
-    cout << "slab_cuda :: advance()\n";
-    theta_hat.advance();
+    cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    //theta_hat.advance();
     //omega_hat.advance();
+    arr -> advance();
 }
+
 
 void slab_cuda :: theta_rhs_lin()
 {
     cout << "Not implemented yet: slab_cuda :: theta_rhs_lin()\n";
 }
 
+
 void slab_cuda :: theta_rhs_log()
 {
     cout << "Not implemented yet: slab_cuda :: theta_rhs_log()\n";
 }
+
 
 void slab_cuda :: rhs_null()
 {
     cout << "Not implemented yet: slab_cuda :: rhs_null()\n";
 }
 
-void slab_cuda :: integrate_stiff(twodads::dyn_field_t field, uint tlev)
-{
-    cout << "slab_cuda :: integrate_stiff()\n";
-}
 
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t)
 {
@@ -157,7 +250,10 @@ void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, 
     err = cufftExecZ2D(plan_c2r, arr_c -> get_array_d(t), arr_r -> get_array_d());
     if (err != CUFFT_SUCCESS)
         throw;
+    // Normalize
+    arr_r -> normalize();
 }
+
 
 void slab_cuda :: dump_field(twodads::field_t field_name)
 {
@@ -173,6 +269,20 @@ void slab_cuda :: dump_field(twodads::field_k_t field_name)
 }
 
 
+void slab_cuda :: move_t(twodads::field_t fname, uint t_dst, uint t_src)
+{
+    cuda_array<cuda::real_t>* arr = get_field_by_name(fname);
+    arr -> move(t_dst, t_src);
+}
+
+
+void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
+{
+    cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    arr -> move(t_dst, t_src);
+}
+
+
 void slab_cuda :: initialize()
 {
     cout << "slab_cuda :: initialize()\n";
@@ -183,9 +293,11 @@ void slab_cuda :: initialize()
             break;
         case twodads::init_fun_t::init_theta_gaussian:
             cout << "Initizlizing theta gaussian\n";
-            //init_gaussian(&theta, config.get_initc(), config.get_deltax(),
-            //        config.get_deltay(), config.get_xleft(), config.get_ylow());
+            init_gaussian(&theta, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
             break;
+        /*
         case twodads::init_fun_t::init_omega_random_k:
             cout << "init_omega_random_k\n";
             break;
@@ -204,6 +316,13 @@ void slab_cuda :: initialize()
         case twodads::init_fun_t::init_const_k:
             cout << "init_const_k\n";
             break;
+        case twodads::init_fun_t::init_theta_mode:
+            cout << "init_theta_mode\n";
+            break;
+        case twodads::init_fun_t::init_theta_const:
+            cout << "init_theta_const\n";
+            break;
+        */
         case twodads::init_fun_t::init_simple_sine:
             cout << "init_simple_sine\n";
             init_simple_sine(&theta, config.get_initc(), config.get_deltax(),
@@ -216,15 +335,18 @@ void slab_cuda :: initialize()
             //omega_hat.set_all(0.0);
             //strmf_hat.set_all(0.0);
             break;
-        case twodads::init_fun_t::init_theta_mode:
-            cout << "init_theta_mode\n";
-            break;
-        case twodads::init_fun_t::init_theta_const:
-            cout << "init_theta_const\n";
-            break;
+        case twodads::init_fun_t::init_test:
+            cout << "init_test\n";
+            init_invlapl(&theta, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+
+            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
+            //omega_hat.set_all(0.0);
+            //strmf_hat.set_all(0.0);
         case twodads::init_fun_t::init_file:
             cout << "init_file\n";
             break;
     }
 }
 
+// end of file slab_cuda.cpp

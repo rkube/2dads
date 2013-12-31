@@ -16,10 +16,10 @@
 #include <boost/lexical_cast.hpp>
 #include <string>
 
-
 using namespace std;
 
 /// Store variables of 2dads-oo configuration files.
+
 
 
 class slab_config {
@@ -40,11 +40,11 @@ public:
 	/// Lower domain boundary.
 	inline double get_ylow() const { return ylow; };
 	/// Number of grid points in x direction.
-	inline int get_nx() const { return Nx; };
+	inline unsigned int get_nx() const { return Nx; };
 	/// Number of grid points in y direction.
-	inline int get_my() const { return My; };
+	inline unsigned int get_my() const { return My; };
 	/// Order of time integration scheme.
-	inline int get_tlevs() const { return tlevs; };
+	inline unsigned int get_tlevs() const { return tlevs; };
 	/// Length of one timestep.
 	inline double get_deltat() const { return deltat; };
 	/// Simulation time end
@@ -61,7 +61,7 @@ public:
 	/// Use particle tracking?.
     inline int do_particle_tracking() const { return particle_tracking; };
     /// Randomize modes?
-    bool randomize_modes() const;
+    //bool randomize_modes() const;
     /// Number of radial probes
     inline unsigned int get_nprobe() const { return nprobes; };
 
@@ -72,7 +72,7 @@ public:
 	/// List of variables to include in full output.
 	inline vector<twodads::output_t> get_output() const { return output; };
     /// List of modes to randomize.
-    inline vector<twodads::mode> get_mode_list() const { return mode_list; };
+    //inline vector<twodads::mode> get_mode_list() const { return mode_list; };
 
 	/// Vector of all model parameters.
 	inline vector<double> get_model_params() const { return model_params; };
@@ -149,7 +149,7 @@ private:
 	int chunksize;
     double diff;
 
-    vector<twodads::mode> mode_list;
+    //vector<twodads::mode> mode_list;
 	
     // helper functions
 	void split_at_whitespace(const string, vector<double>*);

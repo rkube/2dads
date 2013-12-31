@@ -31,8 +31,8 @@ class out_of_bounds_err : public exception
         string error;
 };
 
-/// Memory error in operators
 
+/// Memory error in operators
 class operator_err : public exception
 {
     public:
@@ -43,6 +43,7 @@ class operator_err : public exception
     private:
         string error;
 };
+
 
 /// Invalid size for array construction
 class invalid_size : public exception
@@ -60,6 +61,7 @@ class invalid_size : public exception
         string error;
 };
 
+
 /// Configuration file errors
 class config_error : public exception{
     public:
@@ -70,6 +72,7 @@ class config_error : public exception{
     private:
         string error;
 };
+
 
 /// Errors from the diagnostic unit
 class diagnostics_error : public exception
@@ -82,6 +85,20 @@ class diagnostics_error : public exception
     private:
         string error;
 };
+
+
+/// Invalid field name
+class name_error : public exception
+{
+    public:
+        name_error(const string err) : error(err) {};
+        ~name_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+    private:
+        string error;
+};
+
 
 /// GPU call errorss
 class gpu_error : public exception

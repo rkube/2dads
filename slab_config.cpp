@@ -84,8 +84,8 @@ slab_config :: slab_config() :
 		("log_theta", po::value<bool> (&log_theta), "Use logarithmic particle density")
         ("do_particle_tracking", po::value<int> (&particle_tracking), "Track particles")
         ("dealias", po::value<bool> (&do_dealiasing), "Set ambiguous frequencies to zero")
-        ("nprobes", po::value<unsigned int> (&nprobes), "Number of radial probes")
-        ("shift_modes", po::value<string> (&shift_modes_str), "Modes whose phase is shifted randomly");
+        ("nprobes", po::value<unsigned int> (&nprobes), "Number of radial probes");
+        //("shift_modes", po::value<string> (&shift_modes_str), "Modes whose phase is shifted randomly");
 	}
 	catch(exception& e){
 		cout << e.what() << "\n";
@@ -214,8 +214,12 @@ slab_config :: slab_config() :
         init_function = twodads::init_fun_t::init_simple_sine;
     
     else if (init_function_str.compare(string("theta_gaussian")) == 0)
-        init_function = twodads::init_fun_t::init_simple_sine;
+        init_function = twodads::init_fun_t::init_theta_gaussian;
     
+    else if (init_function_str.compare(string("init_test")) == 0)
+        init_function = twodads::init_fun_t::init_test;
+
+    /*
 	else if (init_function_str.compare(string("omega_random_k")) == 0)
 		init_function = twodads::init_fun_t::init_omega_random_k;
     
@@ -242,7 +246,7 @@ slab_config :: slab_config() :
     
 	else if (init_function_str.compare(string("from_file")) == 0)
 		init_function = twodads::init_fun_t::init_file;
-    
+    */
 	else 
 		init_function = twodads::init_fun_t::init_NA;
 
@@ -304,7 +308,7 @@ int slab_config :: consistency() {
 		throw config_error("Lower domain boundary must be smaller than upper domain boundary\n");
 	// Test initialization routine
 	if ( get_init_function() == twodads::init_fun_t::init_NA ) 
-		throw config_error("Invalid initialization routine specified in init file\nValid initialization routines:\ntheta_gaussian\nomega_random_k\nomega_random_k2\n");
+		throw config_error("Invalid initialization routine specified in init file\n");
 	// Test RHS for theta
 	if ( get_theta_rhs_type() == twodads::rhs_t::theta_rhs_NA ) 
 		throw config_error("Selected RHS for theta is invalid\n");
@@ -325,11 +329,12 @@ int slab_config :: consistency() {
 	return (0);
 }
 
+/*
 void slab_config :: test_modes() const {
-    /*for ( vector<mode>::iterator it = mode_list.begin(); it != mode_list.end(); it++){
+    for ( vector<mode>::iterator it = mode_list.begin(); it != mode_list.end(); it++){
         cout << "Item: " << (*it) << "\n";
-    }*/
+    }
 }
-	
+*/	
 
 // End of file slab_config.cpp

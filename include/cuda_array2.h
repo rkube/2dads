@@ -103,15 +103,15 @@ class cuda_array{
     public:
         // Explicitly declare construction operators that allocate memory
         // on the device
-        cuda_array(unsigned int, unsigned int, unsigned int);
+        cuda_array(uint, uint, uint);
         cuda_array(const cuda_array&);
         ~cuda_array();
 
         T* get_array_host(int) const;
 
         // Test function
-        void enumerate_array(const int);
-        void enumerate_array_t(const int);
+        void enumerate_array(const uint);
+        void enumerate_array_t(const uint);
 
         // Operators
         cuda_array<T>& operator=(const cuda_array<T>&);
@@ -130,8 +130,8 @@ class cuda_array{
         cuda_array<T>& set_all(const double&);
         cuda_array<T>& set_all(const cuDoubleComplex&);
         // Access operator to host array
-        T& operator()(unsigned int, unsigned int, unsigned int);
-        T operator()(unsigned int, unsigned int, unsigned int) const;
+        T& operator()(uint, uint, uint);
+        T operator()(uint, uint, uint) const;
 
         // Problem: cuDoubleComplex doesn't like cout. Implement a wrapper that
         // returns a string representation of a single element of the host data array
@@ -141,18 +141,18 @@ class cuda_array{
         // Copy device memory to host and print to stdout
         friend std::ostream& operator<<(std::ostream& os, cuda_array<T>& src)
         {
-            const unsigned int tl = src.get_tlevs();
-            const unsigned int nx = src.get_nx();
-            const unsigned int my = src.get_my();
+            const uint tl = src.get_tlevs();
+            const uint nx = src.get_nx();
+            const uint my = src.get_my();
             src.copy_device_to_host();
             os << std::setw(10);
             os << "\n";
-            for(unsigned int t = 0; t < tl; t++)
+            for(uint t = 0; t < tl; t++)
             {
                 os << "t: " << t << "\n";
-                for(unsigned int n = 0; n < nx; n++)
+                for(uint n = 0; n < nx; n++)
                 {
-                    for(unsigned int m = 0; m < my; m++)
+                    for(uint m = 0; m < my; m++)
                     {
                         os << std::setw(6) << std::setprecision(4);
                         os << src.cout_wrapper(src(t,n,m)) << "\t";
@@ -165,7 +165,7 @@ class cuda_array{
         }
 
         void copy_device_to_host();
-        void copy_device_to_host(unsigned int);
+        void copy_device_to_host(uint);
 
         // Transfer from host to device
         void copy_host_to_device();
@@ -173,33 +173,33 @@ class cuda_array{
         // Advance time levels
         void advance();
         // copy(dst, src);
-        void copy(unsigned int, unsigned int);
-        void copy(unsigned int, const cuda_array<T>&, unsigned int);
-        void move(unsigned int, unsigned int);
+        void copy(uint, uint);
+        void copy(uint, const cuda_array<T>&, uint);
+        void move(uint, uint);
         void normalize();
 
         // Access to private members
-        inline unsigned int get_nx() const {return Nx;};
-        inline unsigned int get_my() const {return My;};
-        inline unsigned int get_tlevs() const {return tlevs;};
-        inline int address(unsigned int n, unsigned int m) const {return (n * My + m);};
+        inline uint get_nx() const {return Nx;};
+        inline uint get_my() const {return My;};
+        inline uint get_tlevs() const {return tlevs;};
+        inline int address(uint n, uint m) const {return (n * My + m);};
         inline dim3 get_grid() const {return grid;};
         inline dim3 get_block() const {return block;};
 
         // Pointer to host copy of device data
         inline T* get_array_h() const {return array_h;};
-        inline T* get_array_h(unsigned int t) const {return array_h_t[t];};
+        inline T* get_array_h(uint t) const {return array_h_t[t];};
 
         // Pointer to device data
         inline T* get_array_d() const {return array_d;};
         inline T** get_array_d_t() const {return array_d_t;};
-        inline T* get_array_d(unsigned int t) const {return array_d_t_host[t];};
+        inline T* get_array_d(uint t) const {return array_d_t_host[t];};
 
     private:
         // Size of data array. Host data
-        const unsigned int tlevs;
-        const unsigned int Nx;
-        const unsigned int My;
+        const uint tlevs;
+        const uint Nx;
+        const uint My;
 
         check_bounds bounds;
 
