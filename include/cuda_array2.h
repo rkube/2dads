@@ -129,6 +129,8 @@ class cuda_array{
         // Similar to operator=, but operates on all time levels
         cuda_array<T>& set_all(const double&);
         cuda_array<T>& set_all(const cuDoubleComplex&);
+        // Set array to constant value for specified time level
+        cuda_array<T>& set_t(const T&, uint);
         // Access operator to host array
         T& operator()(uint, uint, uint);
         T operator()(uint, uint, uint) const;

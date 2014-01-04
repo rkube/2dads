@@ -154,37 +154,37 @@ slab_config :: slab_config() :
     {
         if (str.compare(string("theta")) == 0)
         {
-            output.push_back(twodads::output_t::theta);
+            output.push_back(twodads::output_t::o_theta);
             continue;
         }
         if (str.compare(string("theta_x")) == 0)
         {
-            output.push_back(twodads::output_t::theta_x);
+            output.push_back(twodads::output_t::o_theta_x);
             continue;
         }
         if (str.compare(string("theta_y")) == 0)
         {
-            output.push_back(twodads::output_t::theta_y);
+            output.push_back(twodads::output_t::o_theta_y);
             continue;
         }
         if (str.compare(string("omega")) == 0)
         {
-            output.push_back(twodads::output_t::omega);
+            output.push_back(twodads::output_t::o_omega);
             continue;
         }
         if (str.compare(string("omega_x")) == 0)
         {
-            output.push_back(twodads::output_t::omega_x);
+            output.push_back(twodads::output_t::o_omega_x);
             continue;
         }
         if (str.compare(string("omega_y")) == 0)
         {
-            output.push_back(twodads::output_t::omega_y);
+            output.push_back(twodads::output_t::o_omega_y);
             continue;
         }
         if (str.compare(string("strmf")) == 0)
         {
-            output.push_back(twodads::output_t::strmf);
+            output.push_back(twodads::output_t::o_strmf);
             continue;
         }
     }
@@ -213,11 +213,10 @@ slab_config :: slab_config() :
     else if (init_function_str.compare(string("simple_sine")) == 0)
         init_function = twodads::init_fun_t::init_simple_sine;
     
-    else if (init_function_str.compare(string("theta_gaussian")) == 0)
-        init_function = twodads::init_fun_t::init_theta_gaussian;
-    
     else if (init_function_str.compare(string("init_test")) == 0)
         init_function = twodads::init_fun_t::init_test;
+    else if (init_function_str.compare(string("both_gaussian")) == 0)
+        init_function = twodads::init_fun_t::init_both_gaussian;
 
     /*
 	else if (init_function_str.compare(string("omega_random_k")) == 0)

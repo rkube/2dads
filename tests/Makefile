@@ -1,8 +1,8 @@
 include ../Makefile.inc
 
-.PHONY: test_array2 test_arrayc test_copy test_slab test_init test_dft test_arith test_deriv
+.PHONY: test_array2 test_arrayc test_copy test_slab test_init test_dft test_arith test_deriv test_output test_stiff test_memcpy test_diff test_blob
 
-all: test_array2 test_arrayc test_copy test_slab test_init test_dft test_arith test_deriv
+all: test_array2 test_arrayc test_copy test_slab test_init test_dft test_arith test_deriv test_stiff test_memcpy test_diff test_blob
 
 test_array2: 
 	$(CC) $(CFLAGS) -o test_array2 $(OBJ_DIR)/cuda_array2.o test_array2.cpp $(IFLAGS) $(LFLAGS) 
@@ -17,7 +17,7 @@ test_copy:
 	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array2.o test_copy.cpp $(IFLAGS) $(LFLAGS)
 
 test_slab:
-	$(CC) $(CFLAGS) -o test_slab $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_slab.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_slab.cpp $(IFLAGS) $(LFLAGS)
 
 test_init:
 	$(CC) $(CFLAGS) -o test_init $(OBJ_DIR)/initialize.o  $(OBJ_DIR)/cuda_array2.o test_init.cpp $(IFLAGS) $(LFLAGS)
@@ -28,5 +28,20 @@ test_dft:
 test_deriv:
 	$(CUDACC) -arch=sm_30 -O0 -o test_deriv $(OBJ_DIR)/initialize.o $(OBJ_DIR)/cuda_array2.o test_deriv.cu $(IFLAGS) $(LFLAGS)
 
+test_memcpy:
+	$(CUDACC) -arch=sm_30 -O0 -o test_memcpy test_memcpy.cu $(IFLAGS) 
+
+test_output:
+	$(CC) $(CFLAGS) -DDEBUG -o test_output $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_output.cpp $(IFLAGS) $(LFLAGS)
+
+test_stiff:
+	$(CC) $(CFLAGS) -o test_stiff $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_stiff.cpp $(IFLAGS) $(LFLAGS)
+
+test_diff:
+	$(CC) $(CFLAGS) -o test_diff $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_diff.cpp $(IFLAGS) $(LFLAGS)
+
+test_blob:
+	$(CC) $(CFLAGS) -o test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_blob.cpp $(IFLAGS) $(LFLAGS)
+
 clean:
-	rm test_array2 test_arrayc test_slab test_init test_arith test_deriv
+	rm test_array2 test_arrayc test_slab test_init test_arith test_deriv test_diff

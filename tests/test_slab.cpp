@@ -26,7 +26,7 @@ int main(void)
     //cout << "theta_hat = \n";
     //slab.dump_field(twodads::field_k_t::f_theta_hat);
     //slab.d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat);
-    slab.inv_laplace(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_tmp_hat);
+    slab.inv_laplace(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_tmp_hat, 0);
     cout << "tmp_hat = \n";
     slab.dump_field(twodads::field_k_t::f_tmp_hat);
     cout << "c2r, normalizing...\n";

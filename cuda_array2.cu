@@ -53,8 +53,8 @@ __global__ void d_enumerate_t(T** array_t, uint t, uint Nx, uint My)
     const int row = d_get_row();
     const int index = row * My + col;
 
-	if (blockIdx.x + threadIdx.x + threadIdx.y == 0)
-		printf("blockIdx.x = %d: enumerating at t = %d, at %p(device)\n", blockIdx.x, t, array_t[t]);
+	//if (blockIdx.x + threadIdx.x + threadIdx.y == 0)
+	//	printf("blockIdx.x = %d: enumerating at t = %d, at %p(device)\n", blockIdx.x, t, array_t[t]);
 	if (index < Nx * My)
     {
         ca_val<T> val;
@@ -65,7 +65,7 @@ __global__ void d_enumerate_t(T** array_t, uint t, uint Nx, uint My)
 
 
 template <typename T>
-__global__ void d_set_constant_t(T** array_t, ca_val<T> val,  uint t,  uint Nx,  uint My)
+__global__ void d_set_constant_t(T** array_t, ca_val<T> val, uint t, uint Nx, uint My)
 {
     const int col = d_get_col();
     const int row = d_get_row();
@@ -81,7 +81,7 @@ __global__ void d_alloc_array_d_t(T** array_d_t, T* array,  uint tlevs,  uint Nx
 	if (threadIdx.x < tlevs)
 	{
 		array_d_t[threadIdx.x] = &array[threadIdx.x * Nx * My];
-		printf("Device: array_d_t[%d] at %p\n", threadIdx.x, array_d_t[threadIdx.x]);
+		//printf("Device: array_d_t[%d] at %p\n", threadIdx.x, array_d_t[threadIdx.x]);
 	}
 }
 
@@ -266,9 +266,6 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     array_d(NULL), array_d_t(NULL),
     array_h(NULL), array_h_t(NULL)
 {
-    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
-    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
-    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
     // Determine grid size for kernel launch
     block = dim3(cuda::cuda_blockdim_nx, cuda::cuda_blockdim_my);
     // Testing, use 64 threads in y direction. Thus blockDim.y = 1
@@ -277,17 +274,10 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     // a la int a = (59 + (4 - 1)) / 4;
     grid = dim3(Nx, (My + (cuda::cuda_blockdim_my - 1)) / cuda::cuda_blockdim_my);
 
-    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
-    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
-
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
     array_h = (T*) calloc(nelem, sizeof(T));
-
-    cout << "Device data at " << array_d << "\t";
-    cout << "Host data at " << array_h << "\t";
-    cout << nelem << " bytes of data\n";
 
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(T*)));
@@ -300,16 +290,27 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
 
     for(uint tl = 0; tl < tlevs; tl++)
-    {
         array_h_t[tl] = &array_h[tl * Nx * My];
+    set_all(0.0);
+    cudaDeviceSynchronize();
+#ifdef DEBUG
+    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
+    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
+    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
+    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
+    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
+    cout << "Device data at " << array_d << "\t";
+    cout << "Host data at " << array_h << "\t";
+    cout << nelem << " bytes of data\n";
+    for (uint tl = 0; tl < tlevs; tl++)
+    {
         cout << "time level " << tl << " at ";
         cout << array_h_t[tl] << "(host)\t";
         cout << array_d_t_host[tl] << "(device)\n";
     }
-
     cout << "Testing allocation of array_d_t:\n";
     test_alloc<<<1, 1>>>(array_d_t, tlevs);
-    set_all(0.0);
+#endif // DEBUG
 }
 
 
@@ -377,7 +378,7 @@ cuda_array<T>& cuda_array<T> :: operator= (const cuda_array<T>& rhs)
     return *this;
 }
 
-// Set entire array to rhs
+
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator= (const T& rhs)
 {
@@ -389,6 +390,7 @@ cuda_array<T>& cuda_array<T> :: operator= (const T& rhs)
 }
 
 
+// Set entire array to rhs
 template <class T>
 cuda_array<T>& cuda_array<T> :: set_all(const double& rhs)
 {
@@ -402,6 +404,19 @@ cuda_array<T>& cuda_array<T> :: set_all(const double& rhs)
 	return *this;
 }
 
+
+// Set array to rhs for time level tlev
+template <class T>
+cuda_array<T>& cuda_array<T> :: set_t(const T& rhs, uint t)
+{
+    ca_val<T> val;
+    val.set(rhs);
+    d_set_constant_t<<<grid, block>>>(array_d_t, val, t, Nx, My);
+    cudaDeviceSynchronize();
+    return *this;
+}
+
+
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator+=(const cuda_array<T>& rhs)
 {
@@ -414,6 +429,7 @@ cuda_array<T>& cuda_array<T> :: operator+=(const cuda_array<T>& rhs)
     cudaDeviceSynchronize();
     return *this;
 }
+
 
 // Template specialization for scalar operations since CUDA insists on not
 // overloading operators for arithmetic for cuDoubleComplex... :/
@@ -531,7 +547,8 @@ void cuda_array<T> :: advance()
     // Zero out last time level 
     ca_val<T> val;
     val.set(double(0.0));
-    d_set_constant_t<<<grid, block>>>(array_d_t, val, tlevs - 1, Nx, My);
+    //d_set_constant_t<<<grid, block>>>(array_d_t, val, tlevs - 1, Nx, My);
+    d_set_constant_t<<<grid, block>>>(array_d_t, val, 0, Nx, My);
 }
 
 
