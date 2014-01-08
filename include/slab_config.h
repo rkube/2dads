@@ -30,7 +30,7 @@ public:
 	~slab_config();
 
 	// Inspectors for private memers
-	inline int get_runnr() const { return runnr; };
+	inline unsigned int get_runnr() const { return runnr; };
 	/// Left domain boundary.
 	inline double get_xleft() const { return xleft; };
 	/// Right domain boundary.
@@ -77,7 +77,7 @@ public:
 	/// Vector of all model parameters.
 	inline vector<double> get_model_params() const { return model_params; };
 	/// Value of a specific model parameter.
-	inline double get_model_param(int i) const { return model_params[i]; };
+	inline double get_model_params(int i) const { return model_params[i]; };
 
 	/// Vector of all initial conditions.
 	inline vector<double> get_initc() const { return initc; };

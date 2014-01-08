@@ -9,6 +9,7 @@
 #include "cuda_array2.h"
 #include "slab_config.h"
 #include "output.h"
+#include "diagnostics.h"
 
 class slab_cuda
 {
@@ -29,8 +30,8 @@ class slab_cuda
         void set_t(twodads::field_k_t, cuda::cmplx_t, uint);
 
         // compute spectral derivative
-        void d_dx(twodads::field_k_t, twodads::field_k_t);
-        void d_dy(twodads::field_k_t, twodads::field_k_t);
+        void d_dx(twodads::field_k_t, twodads::field_k_t, uint);
+        void d_dy(twodads::field_k_t, twodads::field_k_t, uint);
         // Solve laplace equation in k-space
         void inv_laplace(twodads::field_k_t, twodads::field_k_t, uint);
         
@@ -38,6 +39,9 @@ class slab_cuda
         void advance();
         // Compute RHS function into tlev0 of theta_rhs_hat, omega_rhs_hat
         void rhs_fun();
+        // Compute all real fields and spatial derivatives from Fourier coeffcients at specified
+        // time level
+        void update_real_fields(uint);
         // Compute new theta_hat, omega_hat into tlev0.
         void integrate_stiff(twodads::dyn_field_t, uint);
 
@@ -81,19 +85,37 @@ class slab_cuda
 
         bool dft_is_initialized;
         output_h5 slab_output;
+        diagnostics slab_diagnostic;
 
         // Parameters for stiff time integration
         const cuda::stiff_params_t stiff_params;
         const cuda::slab_layout_t slab_layout;
-        cuda::cmplx_t* d_ss3_alpha;
-        cuda::cmplx_t* d_ss3_beta;
+
+        // Block and grid dimensions for kernels operating on Nx*My arrays.
+        // For kernels where every element is treated alike
+        dim3 block_nx_my;
+        dim3 grid_nx_my;
 
         // Block and grid dimensions for arrays Nx * My/2+1
+        // Row-like blocks, spanning 0..My/2 in multiples of cuda::cuda_blockdim_my
+        // effectively wasting blockdim_my-1 threads in the last call. But memory is
+        // coalesced :)
         dim3 block_my21_sec1;
-        dim3 block_my21_sec2;
         dim3 grid_my21_sec1;
-        dim3 grid_my21_sec2;
         
+        // Alternative to block_my21_sec1 would be to leave out the last column
+        // and call all kernels a second time doing only the last row, as for
+        // inv_lapl, integrate_stiff etc.
+        // Drawback: diverging memory access and second kernel function to implement
+        // new indexing
+        dim3 block_my21_sec2; 
+        dim3 grid_my21_sec2; 
+
+        // Grid sizes for x derivative 
+        // used to avoid if-block to compute wave number
+        dim3 grid_dx_half;
+        dim3 grid_dx_single;
+
         // Block and grid sizes for inv_lapl and integrate_stiff kernels
         dim3 block_sec12;
         dim3 grid_sec1;
@@ -104,6 +126,8 @@ class slab_cuda
         dim3 grid_sec3;
         dim3 grid_sec4;
 
+        cuda::cmplx_t* d_ss3_alpha;
+        cuda::cmplx_t* d_ss3_beta;
         // Get cuda_array corresponding to field type, real field
         cuda_array<cuda::real_t>* get_field_by_name(twodads::field_t);
         // Get cuda_array corresponding to field type, complex field
@@ -119,9 +143,10 @@ class slab_cuda
         void theta_rhs_lin();
         void theta_rhs_log();
         void theta_rhs_null();
+        void theta_rhs_hw();
 
         void omega_rhs_lin();
-        //void omega_rhs_hw();
+        void omega_rhs_hw();
         //void omega_rhs_hwmod();
         void omega_rhs_null();
         void omega_rhs_ic();

@@ -41,7 +41,7 @@ test_diff:
 	$(CC) $(CFLAGS) -o test_diff $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_diff.cpp $(IFLAGS) $(LFLAGS)
 
 test_blob:
-	$(CC) $(CFLAGS) -o test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_blob.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_blob.cpp $(IFLAGS) $(LFLAGS)
 
 clean:
 	rm test_array2 test_arrayc test_slab test_init test_arith test_deriv test_diff

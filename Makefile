@@ -22,7 +22,16 @@ slab_cuda:
 	$(CUDACC) $(CUDACFLAGS) -o obj/slab_cuda2.o slab_cuda2.cu $(IFLAGS)
 
 output: 
-	$(CC) $(CFLAGS) -DDEBUG -c -o obj/output.o output.cpp $(IFLAGS)
+	$(CC) $(CFLAGS) -c -o obj/output.o output.cpp $(IFLAGS)
+
+diagnostics:
+	$(CC) $(CFLAGS) -c -o obj/diagnostics.o diagnostics.cpp $(IFLAGS)
+
+array_base:
+	$(CC) $(CFLAGS) -c -o obj/array_base.o array_base.cpp $(IFLAGS)
+
+diag_array:
+	$(CC) $(CFLAGS) -c -o obj/diag_array.o diag_array.cpp $(IFLAGS)
 
 tests: cuda_array2 slab_cuda initialize output
 	$(MAKE) -C $(TEST_DIR)

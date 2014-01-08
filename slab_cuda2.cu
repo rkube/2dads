@@ -121,7 +121,9 @@ void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
 // sector II   : kx > Nx/2, ky <= My/2   BS = (1, cuda_blockdim_my), GS = (Nx/2-1, My / (2 * cuda_blockdim_my)
 // sector III  : kx <= Nx/2, ky = My/2   BS = cuda_blockdim_nx, GS = ^(Nx / 2 + 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
 // sector IV   : kx > Nx/2, ky = My/2    BS = cuda_blockdim_nx, GS = ^(Nx / 2 - 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
-
+//
+// Pro: wavenumbers can be computed from index without if-else blocks
+// Con: Diverging memory access
 
 __global__
 //void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double inv_Lx2, double inv_Ly2, double four_pi_s)
@@ -365,6 +367,7 @@ void d_pbracket(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strm
     out[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx];
 }
 
+
 // RHS for logarithmic density field:
 // theta_x * strmf_x - theta_y * strmf_x + diff * (theta_x^2 + theta_y^2)
 __global__
@@ -378,11 +381,26 @@ void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t*
 
     tmp_arr[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
 }
+    //d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), strmf_y_hat.get_array_d(0), Nx, My / 2 + 1);
+
+__global__
+void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, cuda::cmplx_t C, uint Nx, uint My)
+{
+    const uint col = blockIdx.y * blockDim.y * threadIdx.y;
+    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * My + col;
+    if ((col >= My) || (row >= Nx))
+        return;
+    cuda::cmplx_t part1 = cuCmul(C, theta_hat[idx]);
+    cuda::cmplx_t part2 = cuCmul(C, strmf_hat[idx]);
+    theta_rhs_hat[idx] = cuCadd(theta_rhs_hat[idx], cuCsub(cuCsub(part1, part2), strmf_y_hat[idx]));
+}
+
 
 // RHS for vorticity eq, interchange turbulence
 // RHS = RHS - int * theta_y - sdiss * strmf - collfric * omega
 __global__
-void d_omega_ic(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
+void d_omega_ic_sec1(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -396,34 +414,67 @@ void d_omega_ic(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmpl
     out[idx] = cuCsub(out[idx], part1);
     out[idx] = cuCsub(out[idx], part2);
     out[idx] = cuCsub(out[idx], part3);
-    //out[idx] = out[idx] - ic * theta_y[idx] - sdiss * strmf[idx] - cfric * omega[idx];
+}
 
+
+__global__
+void d_omega_ic_sec2(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
+{
+    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    if(row >= Nx)
+        return;
+    const uint idx = (row + 1) * My - 1;
+    cuda::cmplx_t part1 = cuCmul(ic, theta_y_hat[idx]);
+    cuda::cmplx_t part2 = cuCmul(sdiss, strmf_hat[idx]);
+    cuda::cmplx_t part3 = cuCmul(cfric, omega_hat[idx]);
+    out[idx] = cuCsub(out[idx], part1);
+    out[idx] = cuCsub(out[idx], part2);
+    out[idx] = cuCsub(out[idx], part3);
+}
+
+
+__global__
+void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t C, uint Nx, uint My)
+{
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * My + col;
+    if ((col >= My) || (row >= Nx))
+       return;
+
+    cuda::cmplx_t part1 = cuCmul(C, strmf_hat[idx]);
+    cuda::cmplx_t part2 = cuCmul(C, theta_hat[idx]);
+    omega_rhs_hat[idx] = cuCadd(omega_rhs_hat[idx], cuCsub(part1, part2));
 }
 
 
 __global__
 void d_omega_ic_dummy(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
 {
-    const uint col = 0;
-    const uint row = 0;
-    const uint idx = 1;
+    //const uint col = 0;
+    //const uint row = 0;
+    //const uint idx = 1;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * My + col;
     if((col >= My) || (row >= Nx))
         return;
-    printf("d_omega_ic_dummy\n");
-    printf("theta_y_hat = (%f, %f), strmf_hat = (%f, %f), omega_hat = (%f, %f)\n", (theta_y_hat[idx]).x, (theta_y_hat[idx]).y, (strmf_hat[idx]).x, (strmf_hat[idx]).y, (omega_hat[idx]).x, (omega_hat[idx]).x);
-    printf("ic = (%f, %f), sdiss = (%f, %f), cfric = (%f, %f)\n", ic.x, ic.y, sdiss.x, sdiss.y, cfric.x, cfric.y);
-    printf("omega_rhs_hat = (%f, %f)\n", (out[idx]).x, (out[idx]).y);
-    cuda::cmplx_t part1 = cuCmul(ic, theta_y_hat[idx]);
-    out[idx] = cuCsub(out[idx], part1);
-    printf("part1 = (%f, %f), out[idx] = (%f, %f)", part1.x, part1.y, out[idx].x, out[idx].y);
+    //printf("d_omega_ic_dummy\n");
+    //printf("theta_y_hat = (%f, %f), strmf_hat = (%f, %f), omega_hat = (%f, %f)\n", (theta_y_hat[idx]).x, (theta_y_hat[idx]).y, (strmf_hat[idx]).x, (strmf_hat[idx]).y, (omega_hat[idx]).x, (omega_hat[idx]).x);
+    //printf("ic = (%f, %f), sdiss = (%f, %f), cfric = (%f, %f)\n", ic.x, ic.y, sdiss.x, sdiss.y, cfric.x, cfric.y);
+    //printf("omega_rhs_hat = (%f, %f)\n", (out[idx]).x, (out[idx]).y);
+    //cuda::cmplx_t part1 = cuCmul(ic, theta_y_hat[idx]);
+    //out[idx] = cuCsub(out[idx], part1);
+    //printf("part1 = (%f, %f), out[idx] = (%f, %f)", part1.x, part1.y, out[idx].x, out[idx].y);
 
-    cuda::cmplx_t part2 = cuCmul(sdiss, strmf_hat[idx]);
-    out[idx] = cuCsub(out[idx], part2);
-    
-    cuda::cmplx_t part3 = cuCmul(cfric, omega_hat[idx]);
-    out[idx] = cuCsub(out[idx], part3);
+    //cuda::cmplx_t part2 = cuCmul(sdiss, strmf_hat[idx]);
+    //out[idx] = cuCsub(out[idx], part2);
+    //
+    //cuda::cmplx_t part3 = cuCmul(cfric, omega_hat[idx]);
+    //out[idx] = cuCsub(out[idx], part3);
 
-    printf("omega_rhs_hat = (%f, %f)\n", (out[idx]).x, (out[idx]).y);
+    //printf("omega_rhs_hat = (%f, %f)\n", (out[idx]).x, (out[idx]).y);
+    out[idx] = make_cuDoubleComplex(double(col), double(row));
 }
 
 /*****************************************************************************
@@ -433,41 +484,39 @@ void d_omega_ic_dummy(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda
  ****************************************************************************/
 
 
-void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name)
+void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint tlev)
 {
     cuda_array<cuda::cmplx_t>* arr_in = get_field_by_name(src_name);
     cuda_array<cuda::cmplx_t>* arr_out = get_field_by_name(dst_name);
     
-    const uint Nx = config.get_nx();
-    const uint My = config.get_my();
+    const uint my21 = My / 2 + 1;
     double Lx = config.get_deltax() * double(Nx);
-    dim3 grid_dx_half(Nx / 2, arr_in -> get_grid().y);
-    dim3 grid_dx_single(1, arr_in -> get_grid().y);
+    //dim3 grid_dx_half(Nx / 2, arr_in -> get_grid().y);
+    //dim3 grid_dx_single(1, arr_in -> get_grid().y);
 
-    //cout << "Lx = " << Lx << "\ngrid_dx_half = (" << grid_dx_half.x << ", " << grid_dx_half.y << ")\t";
-    //cout << "grid_dx_single = (" << grid_dx_single.x << ", " << grid_dx_single.y << ")\n";
-    
-    d_d_dx_lo<<<grid_dx_half, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
-    d_d_dx_mid<<<grid_dx_single, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
-    d_d_dx_up<<<grid_dx_half, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
+    //d_d_dx_lo<<<grid_dx_half, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
+    //d_d_dx_mid<<<grid_dx_single, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
+    //d_d_dx_up<<<grid_dx_half, arr_in -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Lx);
+    d_d_dx_lo<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Lx);
+    d_d_dx_mid<<<grid_dx_single, block_my21_sec1>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Lx);
+    d_d_dx_up<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Lx);
     cudaDeviceSynchronize();    
 }
 
 
-void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name)
+void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint tlev)
 {
     cuda_array<cuda::cmplx_t>* arr_in = get_field_by_name(src_name);
     cuda_array<cuda::cmplx_t>* arr_out = get_field_by_name(dst_name);
 
-    const uint Nx = config.get_nx();
-    const uint My = config.get_my();
+    const uint my21 = My / 2 + 1;
     double Ly = config.get_lengthy();
     //dim3 block_single(cuda::cuda_blockdim_nx);
     //dim3 grid_single(Nx / cuda::cuda_blockdim_nx);
 
-    d_d_dy_lo<<<arr_in -> get_grid(), arr_out -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
+    d_d_dy_lo<<<arr_in -> get_grid(), arr_out -> get_block()>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
     //d_d_dy_up<<<grid_single, block_single>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
-    d_d_dy_up<<<grid_my21_sec2, block_my21_sec2>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
+    d_d_dy_up<<<grid_my21_sec2, block_my21_sec2>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
     cudaDeviceSynchronize();    
 }
 
@@ -477,22 +526,25 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
     cuda_array<cuda::cmplx_t>* arr_in = get_field_by_name(src_name);
     cuda_array<cuda::cmplx_t>* arr_out = get_field_by_name(dst_name);
 
-    const uint Nx = config.get_nx();
-    const uint My = config.get_my();
+    //const uint Nx = config.get_nx();
+    //const uint My = config.get_my() / 2 + 1;
+    const uint my21 = My / 2 + 1;
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
     const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
 
-    //cout << "slab_chda::inv_laplace(...)\n";
-    //cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
-    //cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
-    //cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
-    //cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
-    //cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
+#ifdef DEBUG
+    cout << "slab_chda::inv_laplace(...)\n";
+    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
+    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
+    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
+    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
+    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
+#endif //DEBUG
 
-    d_inv_laplace_sec1<<<grid_sec1, block_sec12>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, My / 2 + 1, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec2<<<grid_sec2, block_sec12>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, My / 2 + 1, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec3<<<grid_sec3, block_sec3>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, My / 2 + 1, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec4<<<grid_sec4, block_sec4>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, My / 2 + 1, inv_Lx2, inv_Ly2);
+    d_inv_laplace_sec1<<<grid_sec1, block_sec12>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
+    d_inv_laplace_sec2<<<grid_sec2, block_sec12>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
+    d_inv_laplace_sec3<<<grid_sec3, block_sec3>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
+    d_inv_laplace_sec4<<<grid_sec4, block_sec4>>>(arr_in -> get_array_d(t_in), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
     cudaDeviceSynchronize();    
 }
@@ -513,36 +565,56 @@ void slab_cuda :: integrate_stiff(twodads::dyn_field_t fname, uint tlev)
 
 void slab_cuda :: theta_rhs_lin()
 {
-    cout << "theta_rhs_lin\n";
-    d_pbracket<<<theta.get_grid(), theta.get_block()>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    cudaDeviceSynchronize();
 }
+
+
+void slab_cuda :: theta_rhs_hw()
+{
+    cuda::cmplx_t C = make_cuDoubleComplex(config.get_model_params(0), 0.0);
+    d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), strmf_y_hat.get_array_d(0), C, Nx, My / 2 + 1);
+}
+
 
 void slab_cuda :: theta_rhs_log()
 {
-    cout << "theta_rhs_log\n";
-    d_theta_rhs_log<<<theta.get_grid(), theta.get_block()>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), Nx, My);
+    d_theta_rhs_log<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    cudaDeviceSynchronize();
+}
+
+
+void slab_cuda :: omega_rhs_hw()
+{
+    cuda::cmplx_t C = make_cuDoubleComplex(config.get_model_params(0), 0.0);
+    d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    d_omega_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), C, Nx, My / 2 + 1);
 }
 
 
 void slab_cuda::omega_rhs_ic()
 {
-    cout << "omega_rhs\n";
     // Compute Poisson bracket in real space, use full grid/block
-    d_pbracket<<<theta.get_grid(), theta.get_block()>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
     // Convert model parameters to complex numbers
-    cuda::cmplx_t ic = make_cuDoubleComplex(config.get_model_param(2), 0.0);
-    cuda::cmplx_t sdiss = make_cuDoubleComplex(config.get_model_param(3), 0.0);
-    cuda::cmplx_t cfric = make_cuDoubleComplex(config.get_model_param(4), 0.0);
+    cuda::cmplx_t ic = make_cuDoubleComplex(config.get_model_params(2), 0.0);
+    cuda::cmplx_t sdiss = make_cuDoubleComplex(config.get_model_params(3), 0.0);
+    cuda::cmplx_t cfric = make_cuDoubleComplex(config.get_model_params(4), 0.0);
+#ifdef DEBUG
+    cout << "omega_rhs\n";
     cout << "ic = (" << ic.x << ", " << ic.y << "), sdiss = (" << sdiss.x << ", " << sdiss.y << "), cfric = (" << cfric.x << ", " << cfric.y << ")\n";
     cout << "grid = (" << theta_hat.get_grid().x << ", " << theta_hat.get_grid().y << "), block = (" << theta_hat.get_block().x << ", " << theta_hat.get_block().y << ")\n";
-    //d_omega_ic_dummy<<<1, 1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My);
-    d_omega_ic<<<theta_hat.get_grid(), theta_hat.get_block()>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
-    //d_d_dy_lo<<<arr_in -> get_grid(), arr_out -> get_block()>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
-    //d_d_dy_up<<<grid_single, block_single>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
-    //d_d_dy_up<<<grid_my21_sec2, block_my21_sec2>>>(arr_in -> get_array_d(0), arr_out -> get_array_d(0), Nx, My / 2 + 1, Ly);
+#endif //DEBUG
+    //d_omega_ic_dummy<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
+    d_omega_ic_sec1<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
+    //d_omega_ic_sec1<<<grid_my21_sec2, block_my21_sec2>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
+    cudaDeviceSynchronize();
 }
 
 

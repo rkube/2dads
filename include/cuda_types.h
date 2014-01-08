@@ -10,7 +10,7 @@ namespace cuda
     typedef double2 cmplx_t;
     typedef double real_t;
     const unsigned int cuda_blockdim_nx = 1;
-    const unsigned int cuda_blockdim_my = 8;
+    const unsigned int cuda_blockdim_my = 256;
     //const real_t PI = 3.14159265358979323846264338327950288;
     const real_t PI = 3.141592653589793;
     const real_t TWOPI = 6.283185307179586;

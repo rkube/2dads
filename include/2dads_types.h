@@ -48,7 +48,7 @@ namespace twodads {
     //                       init_both_random_k, init_omega_exp_k, init_omega_dlayer, init_const_k,
     //                       init_simple_sine, init_theta_mode, init_theta_const, init_file};
 
-    enum init_fun_t {init_NA, init_theta_gaussian, init_simple_sine, init_test, init_both_gaussian, init_file};
+    enum init_fun_t {init_NA, init_theta_gaussian, init_simple_sine, init_test, init_both_gaussian, init_theta_mode, init_file};
 
     //enum class rhs_t {theta_rhs_lin, theta_rhs_log, theta_rhs_hw, theta_rhs_hwmod, theta_rhs_ic, theta_rhs_NA,
     //                  omega_rhs_std, omega_rhs_hw, omega_rhs_hwmod, omega_rhs_ic, omega_rhs_NA,
@@ -64,6 +64,21 @@ namespace twodads {
     // Output fields
     //enum class output_t {theta, theta_x, theta_y, omega, omega_x, omega_y, strmf};
     enum output_t {o_theta, o_theta_x, o_theta_y, o_omega, o_omega_x, o_omega_y, o_strmf};
+
+
+    struct diag_data_t
+    {
+        uint Nx;
+        uint My;
+        uint runnr;
+        real_t x_left;
+        real_t delta_x;
+        real_t y_lo;
+        real_t delta_y;
+        real_t delta_t;
+    } __attribute__ ((aligned (8)));
+
+
 };
 
 
