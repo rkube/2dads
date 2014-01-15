@@ -6,7 +6,7 @@ LFLAGS = -L/usr/local/lib -L/usr/local/cuda/lib -lcudart -lcufft -lboost_program
 
 CUDACC	= /usr/local/cuda/bin/nvcc
 #CUDACFLAGS	= -O0 -g -G -DDEBUG --gpu-architecture sm_30 -c --compiler-options -Wall
-CUDACFLAGS	= -O3 --gpu-architecture sm_30 -c --compiler-options -Wall
+CUDACFLAGS	= -O2 --gpu-architecture sm_30 -c --compiler-options -Wall
 CUDALFLAGS	= -lcufft
 
 OBJ_DIR = /home/rku000/cuda-workspace/cuda_array2/obj/

@@ -10,16 +10,10 @@
 #ifndef __DIAGNOSTICS_H
 #define __DIAGNOSTICS_H
 
-//#include "2dads.h"
-//#include "slab.h"
-//#include "config.h"
-//#include "tracker.h"
-//#include "error.h"
-//#include "fftw_array.h"
-//#include <vector>
 #include "include/2dads_types.h"
 #include "include/cuda_types.h"
 #include "include/slab_config.h"
+#include "include/diag_array.h"
 #include "include/error.h"
 
 using namespace std;
@@ -31,22 +25,21 @@ class diagnostics {
 		diagnostics(slab_config const);
 		~diagnostics();
 	
-		// Pointers to diagnostic member functions 
-        //typedef boost::function<void( slab const *, double const)> dfun_ptr;
-
 		// Initialize diagnostic routines
 		void init_diagnostic_output(string, string, bool&);
 	
 		// Diagnostic routines
-		void blobs(twodads::real_t const);
-		void energy(twodads::real_t const);
+		void blobs(twodads::real_t const, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&);  
+		void energy(twodads::real_t const, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&); 
         //void particles_full(tracker const*, slab const * , double);
-        void probes(twodads::real_t const);
+        void probes(twodads::real_t const, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&, diag_array<double>&); 
 	    //void strmf_max(slab_cuda const*, double const);	
 		void write_logfile();		
 		// Run specified diagnostic routines
 		//void write_diagnostics(slab const * , double);
-		
+	   
+        // This is a fix. applying operator?= on any diag_array returns an array_base
+        twodads::real_t get_mean(diag_array<twodads::real_t>&);    
 		
 	private:
         twodads::diag_data_t slab_layout;
@@ -57,7 +50,8 @@ class diagnostics {
 		twodads::real_t old_wxx;
 		twodads::real_t old_wyy;
 		twodads::real_t t_probe;		
-		
+	
+        unsigned int n_probes;    
 		bool use_log_theta;
         twodads::real_t theta_bg;		
 		// Flags which output files have been initialized

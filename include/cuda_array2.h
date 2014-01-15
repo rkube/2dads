@@ -178,6 +178,7 @@ class cuda_array{
         void copy(uint, uint);
         void copy(uint, const cuda_array<T>&, uint);
         void move(uint, uint);
+        void swap(uint, uint);
         void normalize();
 
         // Access to private members

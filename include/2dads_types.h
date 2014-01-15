@@ -48,7 +48,7 @@ namespace twodads {
     //                       init_both_random_k, init_omega_exp_k, init_omega_dlayer, init_const_k,
     //                       init_simple_sine, init_theta_mode, init_theta_const, init_file};
 
-    enum init_fun_t {init_NA, init_theta_gaussian, init_simple_sine, init_test, init_both_gaussian, init_theta_mode, init_file};
+    enum init_fun_t {init_NA, init_theta_gaussian, init_simple_sine, init_test, init_both_gaussian, init_theta_mode, init_file, init_both_mode};
 
     //enum class rhs_t {theta_rhs_lin, theta_rhs_log, theta_rhs_hw, theta_rhs_hwmod, theta_rhs_ic, theta_rhs_NA,
     //                  omega_rhs_std, omega_rhs_hw, omega_rhs_hwmod, omega_rhs_ic, omega_rhs_NA,

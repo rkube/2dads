@@ -206,7 +206,7 @@ void d_inv_laplace_zero(cuda::cmplx_t* out)
 
 
 __global__
-void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmplx_t* alpha, cuda::cmplx_t* beta, cuda::stiff_params_t p, uint tlev) 
+void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev) 
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -220,21 +220,27 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmpl
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky));
 
     // Add contribution from explicit / implicit parts
     for(uint k = 1; k < tlev; k++)
     {
-        sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
-        sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        //sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
+        //sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
+        sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
+        sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
+        sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
-    A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    //sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
+    //A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div; 
+    A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div; 
 }
 
 
 __global__
-void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmplx_t* alpha, cuda::cmplx_t* beta, cuda::stiff_params_t p, uint tlev)
+void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x + p.Nx / 2 + 1;
@@ -248,20 +254,27 @@ void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmpl
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    //cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky));
 
     for(uint k = 1; k < tlev; k++)
     {
-        sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
-        sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        //sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
+        //sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
+        sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
+        sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
+        sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
-    A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    //sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
+    //A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
+    A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
 }
 
 
 __global__
-void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmplx_t* alpha, cuda::cmplx_t* beta, cuda::stiff_params_t p, uint tlev)
+void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
 {
     const uint col = p.My;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -275,20 +288,26 @@ void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmpl
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI/ p.length_y;
     cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky));
 
     for(uint k = 1; k < tlev; k++)
     {
-        sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
-        sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        //sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
+        //sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
+        sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
+        sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
+        sum1_beta.y += + A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
-    A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    //sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
+    //A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
+    A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
 }
 
 
 __global__
-void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmplx_t* alpha, cuda::cmplx_t* beta, cuda::stiff_params_t p, uint tlev)
+void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
 {
     const uint col = p.My;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x + p.Nx / 2 + 1;
@@ -302,24 +321,31 @@ void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmpl
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky));
 
     for(uint k = 1; k < tlev; k++)
     {
-        sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
-        sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        //sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
+        //sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
+        sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
+        sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
+        sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
-    A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    //sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
+    //A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
+    A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
 }
 
 
 __global__
-void d_integrate_stiff_dummy(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmplx_t* alpha, cuda::cmplx_t* beta, cuda::stiff_params_t p, uint tlev)
+void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
 {
-    const uint col = 1;
+    //const uint col = 1;
     const uint row = 1;
-    const uint idx = row * p.My + col;
+    //const uint idx = row * p.My + col;
+    const uint idx = 2;
 
     uint off_a = (tlev - 2) * p.level + tlev;
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
@@ -328,21 +354,31 @@ void d_integrate_stiff_dummy(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::cmp
     printf("delta_t = %f, diff = %f\n", p.delta_t, p.diff);
     cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    //cuda::cmplx_t temp_div = make_cuDoubleComplex(1. / (alpha[(tlev - 2) * p.level].x + p.delta_t * p.diff * (kx * kx + ky * ky)), 0.0);
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky));
 
+    printf("\ttlev = %d, off_a = %d, off_b = %d\n", tlev, off_a, off_b);
     for(uint k = 1; k < tlev; k++)
     {
-        printf("tlev=%d,k=%d\t %f * A[%d] + dt * %f * A_R[%d]\n", tlev, k, (alpha[off_a - k]).x, p.level - k, (beta[off_b - k]).x, p.level - 1 - k);
-        printf("tlev=%d, k = %d\t sum_alpha += %f * (%f, %f)\n", tlev, k, (alpha[off_a - k]).x, (A[p.level -k][idx]).x, (A[p.level -k][idx]).y);
-        printf("tlev=%d, k = %d\t sum_beta+= %f * (%f, %f)\n", tlev, k, (beta[off_b - k]).x, (A_rhs[p.level - 1 - k][idx]).x, (A_rhs[p.level - 1 - k][idx]).y);
-        sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
-        sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        printf("\ttlev=%d,k=%d\t %f * A[%d] + dt * %f * A_R[%d]\n", tlev, k, alpha[off_a - k], p.level - k, beta[off_b - k], p.level - 1 - k);
+        printf("\ttlev=%d, k = %d\t sum_alpha += %f * (%f, %f)\n", tlev, k, alpha[off_a - k], (A[p.level -k][idx]).x, (A[p.level -k][idx]).y);
+        printf("\ttlev=%d, k = %d\t sum_beta+= %f * (%f, %f)\n", tlev, k, beta[off_b - k], (A_rhs[p.level - 1 - k][idx]).x, (A_rhs[p.level - 1 - k][idx]).y);
+        //sum1_alpha = cuCadd(sum1_alpha, cuCmul(A[p.level - k][idx], alpha[off_a - k]));
+        //sum1_beta = cuCadd(sum1_beta, cuCmul(A_rhs[p.level - 1 - k][idx], beta[off_b - k]));
+        sum1_alpha.x += (A[p.level - k][idx]).x * alpha[off_a - k];
+        sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
+        sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
+        sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
-    A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
-    printf("\ttlev=%d, computing A[%d], gamma_0 = %f\n", tlev, p.level - tlev, alpha[(tlev - 2) * p.level].x);
+    //sum1_beta = cuCmul(sum1_beta, make_cuDoubleComplex(p.delta_t, 0.0));
+    //sum1_beta.x = sum1_beta.x * p.delta_t;
+    //sum1_beta.y = sum1_beta.y * p.delta_t;
+    A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
+    A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
+    //A[p.level - tlev][idx] = cuCmul(cuCadd(sum1_alpha, sum1_beta), temp_div);
+    printf("\ttlev=%d, computing A[%d], gamma_0 = %f\n", tlev, p.level - tlev, alpha[(tlev - 2) * p.level]);
     printf("sum1_alpha = (%f, %f)\tsum1_beta = (%f, %f)\t", sum1_alpha.x, sum1_alpha.y, sum1_beta.x, sum1_beta.y);
-    printf("temp_div = (%f, %f)\n", temp_div.x, temp_div.y);
+    printf("temp_div = %f\n", temp_div); 
     printf("A[%d][%d] = (%f, %f)\n", p.level - tlev, idx, A[p.level - tlev][idx].x, A[p.level - tlev][idx].y);
 }
 
@@ -381,26 +417,42 @@ void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t*
 
     tmp_arr[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
 }
-    //d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), strmf_y_hat.get_array_d(0), Nx, My / 2 + 1);
 
 __global__
-void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, cuda::cmplx_t C, uint Nx, uint My)
+void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, cuda::real_t C, uint Nx, uint My)
 {
-    const uint col = blockIdx.y * blockDim.y * threadIdx.y;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * My + col;
     if ((col >= My) || (row >= Nx))
         return;
-    cuda::cmplx_t part1 = cuCmul(C, theta_hat[idx]);
-    cuda::cmplx_t part2 = cuCmul(C, strmf_hat[idx]);
-    theta_rhs_hat[idx] = cuCadd(theta_rhs_hat[idx], cuCsub(cuCsub(part1, part2), strmf_y_hat[idx]));
+    theta_rhs_hat[idx].x += C * (strmf_hat[idx].x  - theta_hat[idx].x) - strmf_y_hat[idx].x;
+    theta_rhs_hat[idx].y += C * (strmf_hat[idx].y  - theta_hat[idx].y) - strmf_y_hat[idx].y;
+}
+
+
+__global__
+void d_theta_rhs_hw_debug(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, cuda::real_t C, uint Nx, uint My)
+{
+    //const uint col = 2;
+    //const uint row = 0;
+    //const uint idx = row * My + col;
+    const uint idx = 2;
+
+    cuda::cmplx_t dummy = theta_rhs_hat[idx]; 
+    dummy.x = theta_rhs_hat[idx].x + C * (strmf_hat[idx].x - theta_hat[idx].x) - strmf_y_hat[idx].x;
+    dummy.y = theta_rhs_hat[idx].y + C * (strmf_hat[idx].y - theta_hat[idx].y) - strmf_y_hat[idx].y;
+    printf("d_theta_rhs_hw_debug: initially: theta_rhs_hat[%d] = (%f, %f)\t", idx, theta_rhs_hat[idx].x, theta_rhs_hat[idx].y);
+    printf("--> theta_rhs_hat[%d] = (%f, %f)\tC = %f, theta_hat = (%f, %f), strmf_hat =(%f, %f), strmf_y_hat=(%f,%f)\n" ,
+            idx, dummy.x, dummy.y, C, (theta_hat[idx]).x, (theta_hat[idx]).y, (strmf_hat[idx]).x, (strmf_hat[idx]).y, 
+            (strmf_y_hat[idx]).x, (strmf_y_hat[idx]).y); 
 }
 
 
 // RHS for vorticity eq, interchange turbulence
 // RHS = RHS - int * theta_y - sdiss * strmf - collfric * omega
 __global__
-void d_omega_ic_sec1(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
+void d_omega_ic_sec1(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::real_t ic, cuda::real_t sdiss, cuda::real_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -408,33 +460,13 @@ void d_omega_ic_sec1(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda:
     if ((col >= My) || (row >= Nx))
        return;
 
-    cuda::cmplx_t part1 = cuCmul(ic, theta_y_hat[idx]);
-    cuda::cmplx_t part2 = cuCmul(sdiss, strmf_hat[idx]);
-    cuda::cmplx_t part3 = cuCmul(cfric, omega_hat[idx]);
-    out[idx] = cuCsub(out[idx], part1);
-    out[idx] = cuCsub(out[idx], part2);
-    out[idx] = cuCsub(out[idx], part3);
+    out[idx].x -= ic * theta_y_hat[idx].x - sdiss * strmf_hat[idx].x - cfric * omega_hat[idx].x;
+    out[idx].y -= ic * theta_y_hat[idx].y - sdiss * strmf_hat[idx].y - cfric * omega_hat[idx].y;
 }
 
 
 __global__
-void d_omega_ic_sec2(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, cuda::cmplx_t ic, cuda::cmplx_t sdiss, cuda::cmplx_t cfric, cuda::cmplx_t* out, uint Nx, uint My)
-{
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    if(row >= Nx)
-        return;
-    const uint idx = (row + 1) * My - 1;
-    cuda::cmplx_t part1 = cuCmul(ic, theta_y_hat[idx]);
-    cuda::cmplx_t part2 = cuCmul(sdiss, strmf_hat[idx]);
-    cuda::cmplx_t part3 = cuCmul(cfric, omega_hat[idx]);
-    out[idx] = cuCsub(out[idx], part1);
-    out[idx] = cuCsub(out[idx], part2);
-    out[idx] = cuCsub(out[idx], part3);
-}
-
-
-__global__
-void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t C, uint Nx, uint My)
+void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::real_t C, uint Nx, uint My)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -442,9 +474,23 @@ void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
     if ((col >= My) || (row >= Nx))
        return;
 
-    cuda::cmplx_t part1 = cuCmul(C, strmf_hat[idx]);
-    cuda::cmplx_t part2 = cuCmul(C, theta_hat[idx]);
-    omega_rhs_hat[idx] = cuCadd(omega_rhs_hat[idx], cuCsub(part1, part2));
+    omega_rhs_hat[idx].x += C * (strmf_hat[idx].x - theta_hat[idx].x);
+    omega_rhs_hat[idx].y += C * (strmf_hat[idx].y - theta_hat[idx].y);
+}
+
+
+__global__
+void d_omega_rhs_hw_debug(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::real_t C, uint Nx, uint My)
+{
+    const uint col = 2;
+    const uint row = 0;
+    const uint idx = row * My + col;
+
+    cuda::cmplx_t dummy;
+    dummy.x = omega_rhs_hat[idx].x + C * (strmf_hat[idx].x - theta_hat[idx].x);
+    dummy.y = omega_rhs_hat[idx].y + C * (strmf_hat[idx].y - theta_hat[idx].y);
+    printf("d_omega_rhs_hw_debug: omega_rhs_hat[%d] = (%f, %f)\tC = %f, strmf_hat = (%f, %f), theta_hat =(%f, %f), strmf_y_hat=(%f,%f)\n" ,
+            idx, dummy.x, dummy.y, C, strmf_hat[idx].x, strmf_hat[idx].y, theta_hat[idx].x, theta_hat[idx].y);
 }
 
 
@@ -554,8 +600,7 @@ void slab_cuda :: integrate_stiff(twodads::dyn_field_t fname, uint tlev)
 {
     cuda_array<cuda::cmplx_t>* A = get_field_by_name(fname); 
     cuda_array<cuda::cmplx_t>* A_rhs = get_rhs_by_name(fname); 
-
-    //d_integrate_stiff_dummy<<<1, 1>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+    //d_integrate_stiff_debug<<<1, 1>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec1<<<grid_sec1, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec2<<<grid_sec2, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3<<<grid_sec3, block_sec3>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
@@ -563,7 +608,7 @@ void slab_cuda :: integrate_stiff(twodads::dyn_field_t fname, uint tlev)
     cudaDeviceSynchronize();
 }
 
-void slab_cuda :: theta_rhs_lin()
+void slab_cuda :: theta_rhs_lin(uint t)
 {
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
@@ -571,41 +616,50 @@ void slab_cuda :: theta_rhs_lin()
 }
 
 
-void slab_cuda :: theta_rhs_hw()
+void slab_cuda :: theta_rhs_hw(uint t)
 {
-    cuda::cmplx_t C = make_cuDoubleComplex(config.get_model_params(0), 0.0);
+    cuda::real_t C = config.get_model_params(1);
+    //theta_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
-    d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), strmf_y_hat.get_array_d(0), C, Nx, My / 2 + 1);
+    //cout << "theta_rhs_hw: theta_rhs_Hat = \n" << theta_rhs_hat << "\n";
+    //d_theta_rhs_hw_debug<<<1, 1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t), strmf_y_hat.get_array_d(), C, Nx, My / 2 + 1);
+    d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t), strmf_y_hat.get_array_d(), C, Nx, My / 2 + 1);
+    //cudaDeviceSynchronize();
+    //cout << "theta_rhs_hw: theta_rhs_Hat = \n" << theta_rhs_hat << "\n";
 }
 
 
-void slab_cuda :: theta_rhs_log()
+void slab_cuda :: theta_rhs_log(uint t)
 {
+    d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     d_theta_rhs_log<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
     cudaDeviceSynchronize();
 }
 
 
-void slab_cuda :: omega_rhs_hw()
+void slab_cuda :: omega_rhs_hw(uint t)
 {
-    cuda::cmplx_t C = make_cuDoubleComplex(config.get_model_params(0), 0.0);
+    cuda::real_t C = config.get_model_params(1);
+    //omega_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
     d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
-    dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
-    d_omega_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(0), C, Nx, My / 2 + 1);
+    //dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    //d_omega_rhs_hw_debug<<<1, 1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t), C, Nx, My / 2 + 1);
+    d_omega_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t), C, Nx, My / 2 + 1);
+    //cudaDeviceSynchronize();
 }
 
 
-void slab_cuda::omega_rhs_ic()
+void slab_cuda::omega_rhs_ic(uint t)
 {
     // Compute Poisson bracket in real space, use full grid/block
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
     // Convert model parameters to complex numbers
-    cuda::cmplx_t ic = make_cuDoubleComplex(config.get_model_params(2), 0.0);
-    cuda::cmplx_t sdiss = make_cuDoubleComplex(config.get_model_params(3), 0.0);
-    cuda::cmplx_t cfric = make_cuDoubleComplex(config.get_model_params(4), 0.0);
+    cuda::real_t ic = config.get_model_params(2); 
+    cuda::real_t sdiss = config.get_model_params(3);
+    cuda::real_t cfric = config.get_model_params(4);
 #ifdef DEBUG
     cout << "omega_rhs\n";
     cout << "ic = (" << ic.x << ", " << ic.y << "), sdiss = (" << sdiss.x << ", " << sdiss.y << "), cfric = (" << cfric.x << ", " << cfric.y << ")\n";
@@ -613,7 +667,6 @@ void slab_cuda::omega_rhs_ic()
 #endif //DEBUG
     //d_omega_ic_dummy<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
     d_omega_ic_sec1<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
-    //d_omega_ic_sec1<<<grid_my21_sec2, block_my21_sec2>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
     cudaDeviceSynchronize();
 }
 

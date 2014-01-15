@@ -217,6 +217,10 @@ slab_config :: slab_config() :
         init_function = twodads::init_fun_t::init_test;
     else if (init_function_str.compare(string("both_gaussian")) == 0)
         init_function = twodads::init_fun_t::init_both_gaussian;
+    else if (init_function_str.compare(string("theta_mode")) == 0)
+        init_function = twodads::init_fun_t::init_theta_mode;
+    else if (init_function_str.compare(string("both_mode")) == 0)
+        init_function = twodads::init_fun_t::init_both_mode;
 
     /*
 	else if (init_function_str.compare(string("omega_random_k")) == 0)

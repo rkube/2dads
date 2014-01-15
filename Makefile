@@ -5,8 +5,9 @@ TEST_DIR = tests
 
 .PHONY: slab_cuda clean tests
 
-all: cuda_array2 output initialize slab_config slab_cuda
-base: cuda_array2 initialize slab_config output slab_cuda
+all: cuda_array2 output initialize diagnostics slab_config slab_cuda array_base diag_array
+base: cuda_array2 initialize diagnostics slab_config output slab_cuda array_base diag_array
+
 
 cuda_array2: 
 	$(CUDACC) $(CUDACFLAGS) -o obj/cuda_array2.o cuda_array2.cu $(IFLAGS)

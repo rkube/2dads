@@ -31,11 +31,11 @@ int main(void)
     {
         cout << "========================================t = " << t << "========================================\n";
         slab.integrate_stiff(twodads::dyn_field_t::d_theta, t + 1);
-        slab.integrate_stiff(twodads::dyn_field_t::d_omega, t + 1);
+        //slab.integrate_stiff(twodads::dyn_field_t::d_omega, t + 1);
         time += delta_t;
         //slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, 0);
         slab.dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, my_config.get_tlevs() - t - 1);
-        slab.dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, my_config.get_tlevs() - t - 1);
+        //slab.dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, my_config.get_tlevs() - t - 1);
         //slab.dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, my_config.get_tlevs() - t);
 
         //slab.write_output(time);
@@ -48,9 +48,9 @@ int main(void)
     for(; t < num_tsteps + 1; t++)
     {
         slab.integrate_stiff(twodads::dyn_field_t::d_theta, tlevs);
-        slab.integrate_stiff(twodads::dyn_field_t::d_omega, tlevs);
+        //slab.integrate_stiff(twodads::dyn_field_t::d_omega, tlevs);
         slab.dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, 0);
-        slab.dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, 0);
+        //slab.dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, 0);
 
         slab.advance();
         time += delta_t;

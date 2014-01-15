@@ -17,6 +17,9 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     tmp_array_hat(1, Nx, My / 2 + 1), 
     theta_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
     omega_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
+    theta_diag(theta), theta_x_diag(theta_x), theta_y_diag(theta_y),
+    omega_diag(omega), omega_x_diag(omega_x), omega_y_diag(omega_y),
+    strmf_diag(strmf), strmf_x_diag(strmf_x), strmf_y_diag(strmf_y),
     dft_is_initialized(init_dft()),
     slab_output(config.get_output(), Nx, My),
     slab_diagnostic(config), 
@@ -45,7 +48,10 @@ slab_cuda :: slab_cuda(slab_config my_config) :
             break;
         case twodads::rhs_t::theta_rhs_log:
             theta_rhs_fun = &slab_cuda::theta_rhs_log;
+            break;
         case twodads::rhs_t::theta_rhs_hw:
+            theta_rhs_fun = &slab_cuda::theta_rhs_hw;
+            break;
         case twodads::rhs_t::theta_rhs_hwmod:
         case twodads::rhs_t::theta_rhs_ic:
         case twodads::rhs_t::theta_rhs_NA:
@@ -64,6 +70,8 @@ slab_cuda :: slab_cuda(slab_config my_config) :
             omega_rhs_fun = &slab_cuda::omega_rhs_ic;
             break;
         case twodads::rhs_t::omega_rhs_hw:
+            omega_rhs_fun = &slab_cuda::omega_rhs_hw;
+            break;
         case twodads::rhs_t::omega_rhs_hwmod:
         case twodads::rhs_t::omega_rhs_NA:
         default:
@@ -74,11 +82,16 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     }
 
     // Copy coefficients for SS3 scheme to device
-    gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_c)));
-    gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_c[0], sizeof(cuda::ss3_alpha_c), cudaMemcpyHostToDevice));
+    //gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_c)));
+    //gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_c[0], sizeof(cuda::ss3_alpha_c), cudaMemcpyHostToDevice));
 
-    gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_c)));
-    gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_c[0], sizeof(cuda::ss3_beta_c), cudaMemcpyHostToDevice));
+    //gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_c)));
+    //gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_c[0], sizeof(cuda::ss3_beta_c), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_r)));
+    gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_r[0], sizeof(cuda::ss3_alpha_r), cudaMemcpyHostToDevice));
+
+    gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_r)));
+    gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_r[0], sizeof(cuda::ss3_beta_r), cudaMemcpyHostToDevice));
 
     // Initialize block and grid sizes for inv_lapl and integrate_stiff
     uint bs_y_sec12 = min(cuda::cuda_blockdim_my, My / 2);
@@ -219,21 +232,18 @@ void slab_cuda :: initialize()
             strmf_y.set_all(0.0);
 
             // Copy theta_hat from tlev-1 to zero to compute derivatives
-            //copy_t(twodads::field_k_t::f_theta_hat, 0, config.get_tlevs() - 1);
             d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
             dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
 
             d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat, config.get_tlevs() - 1);
             dft_c2r(twodads::field_k_t::f_theta_y_hat, twodads::field_t::f_theta_y, 0);
             // Zero out f_theta_hat(0,:,:)
-            //set_t(twodads::field_k_t::f_theta_hat, make_cuDoubleComplex(0.0, 0.0), 0);
             // Compute RHS
-            rhs_fun();
+            rhs_fun(config.get_tlevs() - 1);
             // Copy RHS to last time level
-            //copy_t(twodads::field_k_t::f_theta_rhs_hat, 0, config.get_tlevs() - 2);
-            //copy_t(twodads::field_k_t::f_omega_rhs_hat, 0, config.get_tlevs() - 2);
             move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
             move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
+            cout << "Done initializing\n";
             break;
 
         case twodads::init_fun_t::init_both_gaussian:
@@ -241,17 +251,75 @@ void slab_cuda :: initialize()
             init_gaussian(&omega, config.get_initc(), config.get_deltax(),
                     config.get_deltay(), config.get_xleft(), config.get_ylow(), 0);
             dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+
             init_gaussian(&theta, config.get_initc(), config.get_deltax(),
                     config.get_deltay(), config.get_xleft(), config.get_ylow(), 0);
             dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
+
+            d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
+
+            d_dx(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_x_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_omega_x_hat, twodads::field_t::f_omega_x, 0);
+
+            d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_y_hat, twodads::field_t::f_theta_y, 0);
+
+            d_dy(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_y_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_omega_y_hat, twodads::field_t::f_omega_y, 0);
+
             break;
 
         case twodads::init_fun_t::init_theta_mode:
             cout << "Initializing single mode for theta\n";
             init_mode(&theta_hat, config.get_initc(), config.get_deltax(),
                     config.get_deltay(), config.get_xleft(), config.get_ylow());
-            dump_field(twodads::field_k_t::f_theta_hat);
+            move_t(twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1, 0);
+            //cout << "theta_hat = \n";
+            //dump_field(twodads::field_k_t::f_theta_hat);
+
+            dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
+
+            d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_y_hat, twodads::field_t::f_theta_y, 0);
+
+            rhs_fun(config.get_tlevs() - 1);
+            move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
+            move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
             break;
+
+        case twodads::init_fun_t::init_both_mode:
+            cout << "Initializing single modes for theta and omega\n";
+            init_mode(&theta_hat, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+            move_t(twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1, 0);
+
+            init_mode(&omega_hat, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+            move_t(twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1, 0);
+
+            dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
+
+            d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_y_hat, twodads::field_t::f_theta_y, 0);
+
+            dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_x_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_omega_x_hat, twodads::field_t::f_omega_x, 0);
+
+            d_dy(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_y_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_omega_y_hat, twodads::field_t::f_omega_y, 0);
+
+            rhs_fun(config.get_tlevs() - 1);
+            move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
+            move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
+            break;
+
+
 
         /*
         case twodads::init_fun_t::init_omega_random_k:
@@ -348,11 +416,11 @@ void slab_cuda :: advance()
 
 
 // Compute RHS
-void slab_cuda :: rhs_fun()
+void slab_cuda :: rhs_fun(uint t)
 {
     // Update real fields be
-    (this ->* theta_rhs_fun)();
-    (this ->* omega_rhs_fun)();
+    (this ->* theta_rhs_fun)(t);
+    (this ->* omega_rhs_fun)(t);
 }
 
 
@@ -412,6 +480,7 @@ void slab_cuda :: dump_field(twodads::field_t field_name)
 {
     cuda_array<cuda::real_t>* field = get_field_by_name(field_name);
     cout << *field << "\n";
+    cudaDeviceSynchronize();
 }
 
 
@@ -433,20 +502,35 @@ void slab_cuda :: write_output(twodads::real_t time)
     slab_output.output_counter++;
 }
 
+
 void slab_cuda::write_diagnostics(twodads::real_t time)
 {
+    // Update diagnostic fields and call routines as specified
+    cout << "slab_cuda::write_diagnostics()\n";
+    theta_diag.update(theta);
+    theta_x_diag.update(theta_x);
+    theta_y_diag.update(theta_y);
+    omega_diag.update(omega);
+    omega_x_diag.update(omega_x);
+    omega_y_diag.update(omega_y);
+    strmf_diag.update(strmf);
+    strmf_x_diag.update(strmf_x);
+    strmf_y_diag.update(strmf_y);
     for(auto diag_name : config.get_diagnostics())
     {
         switch (diag_name)
         {
             case twodads::diagnostic_t::diag_blobs:
-                slab_diagnostic.blobs(time);
+                slab_diagnostic.blobs(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                cout << "Writing blobs diagnostics\n";
                 break;
             case twodads::diagnostic_t::diag_energy:
-                slab_diagnostic.energy(time);
+                slab_diagnostic.energy(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                cout << "Writing energy diagnostics\n";
                 break;
             case twodads::diagnostic_t::diag_probes:
-                slab_diagnostic.probes(time);
+                slab_diagnostic.probes(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                cout << "Writing probes diagnostics\n";
                 break;
             default:
                 string err_msg("slab_cuda::write_diagnostics(): unknown diagnostics function type\n");
@@ -455,6 +539,7 @@ void slab_cuda::write_diagnostics(twodads::real_t time)
         }
     }
 }
+
 
 // convert field type to internal pointer
 cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
@@ -605,13 +690,13 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fna
     throw name_error(err_str);
 }
 
-void slab_cuda :: theta_rhs_null()
+void slab_cuda :: theta_rhs_null(uint t)
 {
     theta_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
 }
 
 
-void slab_cuda :: omega_rhs_null()
+void slab_cuda :: omega_rhs_null(uint t)
 {
     omega_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
 }

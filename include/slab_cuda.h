@@ -10,11 +10,12 @@
 #include "slab_config.h"
 #include "output.h"
 #include "diagnostics.h"
+#include "diag_array.h"
 
 class slab_cuda
 {
     public:
-        typedef void (slab_cuda::*rhs_fun_ptr)();
+        typedef void (slab_cuda::*rhs_fun_ptr)(uint);
         slab_cuda(slab_config);
         ~slab_cuda();
 
@@ -38,7 +39,7 @@ class slab_cuda
         // Advance all fields with multiple time levels
         void advance();
         // Compute RHS function into tlev0 of theta_rhs_hat, omega_rhs_hat
-        void rhs_fun();
+        void rhs_fun(uint);
         // Compute all real fields and spatial derivatives from Fourier coeffcients at specified
         // time level
         void update_real_fields(uint);
@@ -76,6 +77,11 @@ class slab_cuda
 
         cuda_array<cuda::cmplx_t> theta_rhs_hat;
         cuda_array<cuda::cmplx_t> omega_rhs_hat;
+
+        // Arrays that store data on CPU for diagnostic functions
+        diag_array<cuda::real_t> theta_diag, theta_x_diag, theta_y_diag;
+        diag_array<cuda::real_t> omega_diag, omega_x_diag, omega_y_diag;
+        diag_array<cuda::real_t> strmf_diag, strmf_x_diag, strmf_y_diag;
         rhs_fun_ptr theta_rhs_fun;
         rhs_fun_ptr omega_rhs_fun;
 
@@ -126,8 +132,8 @@ class slab_cuda
         dim3 grid_sec3;
         dim3 grid_sec4;
 
-        cuda::cmplx_t* d_ss3_alpha;
-        cuda::cmplx_t* d_ss3_beta;
+        cuda::real_t* d_ss3_alpha;
+        cuda::real_t* d_ss3_beta;
         // Get cuda_array corresponding to field type, real field
         cuda_array<cuda::real_t>* get_field_by_name(twodads::field_t);
         // Get cuda_array corresponding to field type, complex field
@@ -139,23 +145,16 @@ class slab_cuda
         // Get right-hand side for time integration corresponding to dynamic field 
         cuda_array<cuda::cmplx_t>* get_rhs_by_name(twodads::dyn_field_t);
 
-        //cuda::stiff_params stiff_params_omega;
-        void theta_rhs_lin();
-        void theta_rhs_log();
-        void theta_rhs_null();
-        void theta_rhs_hw();
+        void theta_rhs_lin(uint);
+        void theta_rhs_log(uint);
+        void theta_rhs_null(uint);
+        void theta_rhs_hw(uint);
 
-        void omega_rhs_lin();
-        void omega_rhs_hw();
-        //void omega_rhs_hwmod();
-        void omega_rhs_null();
-        void omega_rhs_ic();
-        // Parameters for stiffly stable time integration
-        // Time-integration parameters on device
-        //cuda::real_t** d_alpha;
-        //cuda::real_t** d_beta;
-        //cuda::stiff_params d_stiff_params_theta;
-        //cuda::stiff_params d_stiff_params_omega;
+        void omega_rhs_lin(uint);
+        void omega_rhs_hw(uint);
+        //void omega_rhs_hwmod(uint);
+        void omega_rhs_null(uint);
+        void omega_rhs_ic(uint);
 };
 
 // End of file slab_cuda.h
