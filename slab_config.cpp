@@ -219,6 +219,8 @@ slab_config :: slab_config() :
         init_function = twodads::init_fun_t::init_both_gaussian;
     else if (init_function_str.compare(string("theta_mode")) == 0)
         init_function = twodads::init_fun_t::init_theta_mode;
+    else if (init_function_str.compare(string("omega_mode")) == 0)
+        init_function = twodads::init_fun_t::init_omega_mode;
     else if (init_function_str.compare(string("both_mode")) == 0)
         init_function = twodads::init_fun_t::init_both_mode;
 
@@ -271,6 +273,8 @@ slab_config :: slab_config() :
     
     else if ( theta_rhs_str.compare(string("theta_rhs_ic")) == 0) 
 		theta_rhs = twodads::rhs_t::theta_rhs_ic;
+    else if ( theta_rhs_str.compare(string("theta_rhs_ns")) == 0)
+        theta_rhs = twodads::rhs_t::rhs_ns;
     
     else 
 		theta_rhs = twodads::rhs_t::theta_rhs_NA;
@@ -286,6 +290,8 @@ slab_config :: slab_config() :
 		omega_rhs = twodads::rhs_t::rhs_null;
     else if ( omega_rhs_str.compare(string("omega_rhs_ic")) == 0) 
         omega_rhs = twodads::rhs_t::omega_rhs_ic;
+    else if ( omega_rhs_str.compare(string("omega_rhs_ns")) == 0)
+        omega_rhs = twodads::rhs_t::rhs_ns;
     else 
 		omega_rhs = twodads::rhs_t::omega_rhs_NA;
     

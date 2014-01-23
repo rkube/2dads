@@ -181,6 +181,10 @@ class cuda_array{
         void swap(uint, uint);
         void normalize();
 
+        void kill_kx0();
+        void kill_ky0();
+        void kill_k0();
+
         // Access to private members
         inline uint get_nx() const {return Nx;};
         inline uint get_my() const {return My;};

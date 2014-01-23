@@ -42,12 +42,14 @@ namespace cuda
         unsigned int level;
     } __attribute__ ((aligned (8)));
 
-    const cmplx_t ss3_alpha_c[3][4] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)},
-                                       {make_cuDoubleComplex(1.5, 0.0), make_cuDoubleComplex(2.0, 0.0), make_cuDoubleComplex(-0.5, 0.0), make_cuDoubleComplex(0.0, 0.0)},
-                                       {make_cuDoubleComplex(11.0/6.0, 0.0), make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-1.5, 0.0), make_cuDoubleComplex(1.0 / 3.0, 0.0)}};
-    const cmplx_t ss3_beta_c[3][3] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)}, 
-                                      {make_cuDoubleComplex(2.0, 0.0), make_cuDoubleComplex(-1.0, 0.0), make_cuDoubleComplex(0.0, 0.0)}, 
-                                      {make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-3.0, 0.0), make_cuDoubleComplex(1.0, 0.0)}};
+    //const cmplx_t ss3_alpha_c[3][4] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)},
+    //                                   {make_cuDoubleComplex(1.5, 0.0), make_cuDoubleComplex(2.0, 0.0), make_cuDoubleComplex(-0.5, 0.0), make_cuDoubleComplex(0.0, 0.0)},
+    //                                   {make_cuDoubleComplex(11.0/6.0, 0.0), make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-1.5, 0.0), make_cuDoubleComplex(1.0 / 3.0, 0.0)}};
+    //const cmplx_t ss3_beta_c[3][3] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)}, 
+    //                                  {make_cuDoubleComplex(2.0, 0.0), make_cuDoubleComplex(-1.0, 0.0), make_cuDoubleComplex(0.0, 0.0)}, 
+    //                                  {make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-3.0, 0.0), make_cuDoubleComplex(1.0, 0.0)}};
+    const real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}};
+    const real_t ss3_beta_r[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}};
 };
 
 #endif //CUDA_TYPES

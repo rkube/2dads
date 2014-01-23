@@ -109,6 +109,16 @@ __global__ void d_advance(T** array_t, int tlevs)
 
 
 template <typename T>
+__global__ void d_swap(T**array_t, uint t1, uint t2)
+{
+    T* tmp = array_t[t1];
+    array_t[t1] = array_t[t2];
+    array_t[t2] = tmp;
+}
+
+
+
+template <typename T>
 __global__ void test_alloc(T** array_t,  uint tlevs)
 {
     for(int t = 0; t < tlevs; t++)
@@ -258,6 +268,38 @@ void d_div_arr_t(cuda::cmplx_t** lhs, cuda::cmplx_t** rhs,  uint tlev,  uint Nx,
         lhs[0][idx] = cuCdiv(lhs[0][idx], rhs[tlev][idx]);
 }
 
+
+// Kill kx = 0 mode
+__global__
+void d_kill_kx0(cuda::cmplx_t* arr, uint Nx, uint My)
+{
+    const int col = d_get_col();
+    if (col > My)
+        return;
+    arr[col].x = 0.; 
+    arr[col].y = 0.;
+}
+
+
+// Kill ky=0 mode
+__global__
+void d_kill_ky0(cuda::cmplx_t* arr, uint Nx, uint My)
+{
+    const int row = d_get_row();
+    if (row > Nx)
+        return;
+    arr[row * My].x = 0.0;
+    arr[row * My].y = 0.0;
+}
+
+
+// Kill k=0 mode
+__global__
+void d_kill_k0(cuda::cmplx_t* arr) 
+{
+    arr[0].x = 0.0;
+    arr[0].y = 0.0;
+}
 
 // Default constructor
 template <class T>
@@ -571,14 +613,17 @@ string cuda_array<cuda::cmplx_t> :: cout_wrapper(const cuda::cmplx_t& val) const
 }
 
 
-// The array is contiguous, so use only one memcpy
+// The array is contiguous 
 template <typename T>
 void cuda_array<T> :: copy_device_to_host() 
 {
-    const size_t line_size = Nx * My * tlevs * sizeof(T);
-    //cout << "Copying " << line_size << " bytes to " << array_h << " (host) from ";
-    //cout << array_d << " (device)\n";
-    gpuErrchk(cudaMemcpy(array_h, array_d, line_size, cudaMemcpyDeviceToHost));
+    //const size_t line_size = Nx * My * tlevs * sizeof(T);
+    //gpuErrchk(cudaMemcpy(array_h, array_d, line_size, cudaMemcpyDeviceToHost));
+    const size_t line_size = Nx * My * sizeof(T);
+    for(uint t = 0; t < tlevs; t++)
+    {
+        gpuErrchk(cudaMemcpy(&array_h[t * (Nx * My)], array_d_t_host[t], line_size, cudaMemcpyDeviceToHost));
+    }
 }
 
 
@@ -618,6 +663,34 @@ void cuda_array<T> :: move(uint t_dst, uint t_src)
     d_set_constant_t<<<grid, block>>>(array_d_t, zero, t_src, Nx, My);
 }
 
+
+template <typename T>
+void cuda_array<T> :: swap(uint t1, uint t2)
+{
+    //
+    d_swap<<<1, 1>>>(array_d_t, t1, t2);
+    gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
+	cudaDeviceSynchronize();
+}
+
+
+template <>
+void cuda_array<cuda::cmplx_t> :: kill_kx0()
+{
+    d_kill_kx0<<<grid.x, block.x>>>(array_d, Nx, My);
+}
+
+template <>
+void cuda_array<cuda::cmplx_t> :: kill_ky0()
+{
+    d_kill_ky0<<<grid.y, block.y>>>(array_d, Nx, My);
+}
+
+template <>
+void cuda_array<cuda::cmplx_t> :: kill_k0()
+{
+    d_kill_k0<<<1, 1>>>(array_d);
+}
 
 // Normalize works only for real arrays
 template <>

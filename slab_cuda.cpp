@@ -2,6 +2,10 @@
 #include "include/initialize.h"
 #include "include/error.h"
 
+/// Standard constructor for slab_cuda
+
+/// Initializes all real and fourier fields
+/// Sets pointer to RHS functions for theta and omega
 slab_cuda :: slab_cuda(slab_config my_config) :
     config(my_config),
     Nx(my_config.get_nx()),
@@ -35,13 +39,15 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     grid_dx_half(dim3(Nx / 2, theta_hat.get_grid().y)),
     grid_dx_single(dim3(1, theta_hat.get_grid().y))
 {
-    // Wait for allocation to finish 
     cudaDeviceSynchronize();
-    // Setting RHS pointer
+    //* Setting RHS pointer for theta and omega corresponding to get_?????_rhs_type() from config */
     switch(config.get_theta_rhs_type())
     {
         case twodads::rhs_t::rhs_null:
             theta_rhs_fun = &slab_cuda::theta_rhs_null;
+            break;
+        case twodads::rhs_t::rhs_ns:
+            theta_rhs_fun = &slab_cuda::theta_rhs_ns;
             break;
         case twodads::rhs_t::theta_rhs_lin:
             theta_rhs_fun = &slab_cuda::theta_rhs_lin;
@@ -53,10 +59,12 @@ slab_cuda :: slab_cuda(slab_config my_config) :
             theta_rhs_fun = &slab_cuda::theta_rhs_hw;
             break;
         case twodads::rhs_t::theta_rhs_hwmod:
+            theta_rhs_fun = &slab_cuda::theta_rhs_hwmod;
+            break;
         case twodads::rhs_t::theta_rhs_ic:
         case twodads::rhs_t::theta_rhs_NA:
         default:
-            // Not implemented yet
+            //* Throw a name_error when the RHS for theta is not ot implemented yet*/
             string err_msg("Invalid RHS: RHS for theta not implemented yet\n");
             throw name_error(err_msg);
     }
@@ -66,6 +74,9 @@ slab_cuda :: slab_cuda(slab_config my_config) :
         case twodads::rhs_t::rhs_null:
             omega_rhs_fun = &slab_cuda::omega_rhs_null;
             break;
+        case twodads::rhs_t::rhs_ns:
+            omega_rhs_fun = &slab_cuda::omega_rhs_ns;
+            break;
         case twodads::rhs_t::omega_rhs_ic:
             omega_rhs_fun = &slab_cuda::omega_rhs_ic;
             break;
@@ -73,27 +84,24 @@ slab_cuda :: slab_cuda(slab_config my_config) :
             omega_rhs_fun = &slab_cuda::omega_rhs_hw;
             break;
         case twodads::rhs_t::omega_rhs_hwmod:
+            omega_rhs_fun = &slab_cuda::omega_rhs_hwmod;
+            break;
         case twodads::rhs_t::omega_rhs_NA:
         default:
-            // Not implemented yet
+            //* Throw a name_error when the RHS for omega is not ot implemented yet*/
             string err_msg("Invalid RHS: RHS for omega not implemented yet\n");
             throw name_error(err_msg);
     
     }
 
-    // Copy coefficients for SS3 scheme to device
-    //gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_c)));
-    //gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_c[0], sizeof(cuda::ss3_alpha_c), cudaMemcpyHostToDevice));
-
-    //gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_c)));
-    //gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_c[0], sizeof(cuda::ss3_beta_c), cudaMemcpyHostToDevice));
+    //* Copy coefficients alpha and beta for time integration scheme to device */
     gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_r)));
     gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_r[0], sizeof(cuda::ss3_alpha_r), cudaMemcpyHostToDevice));
 
     gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_r)));
     gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_r[0], sizeof(cuda::ss3_beta_r), cudaMemcpyHostToDevice));
 
-    // Initialize block and grid sizes for inv_lapl and integrate_stiff
+    //* Initialize block and grid sizes for inv_lapl and integrate_stiff */
     uint bs_y_sec12 = min(cuda::cuda_blockdim_my, My / 2);
     uint gs_y_sec12 = My / (2 * bs_y_sec12);
     uint num_blocks_sec3 = ((Nx / 2 + 1) + (cuda::cuda_blockdim_nx - 1)) / cuda::cuda_blockdim_nx;
@@ -275,8 +283,6 @@ void slab_cuda :: initialize()
             init_mode(&theta_hat, config.get_initc(), config.get_deltax(),
                     config.get_deltay(), config.get_xleft(), config.get_ylow());
             move_t(twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1, 0);
-            //cout << "theta_hat = \n";
-            //dump_field(twodads::field_k_t::f_theta_hat);
 
             dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
             d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
@@ -288,6 +294,33 @@ void slab_cuda :: initialize()
             rhs_fun(config.get_tlevs() - 1);
             move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
             move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
+            break;
+
+        case twodads::init_fun_t::init_omega_mode:
+            cout << "Initializing single mode for theta\n";
+            init_mode(&omega_hat, config.get_initc(), config.get_deltax(),
+                    config.get_deltay(), config.get_xleft(), config.get_ylow());
+            move_t(twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1, 0);
+
+            // Compute stream function and spatial derivatives for omega, and phi
+            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_x_hat, config.get_tlevs() - 1);
+            d_dy(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_y_hat, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_strmf_hat, twodads::field_k_t::f_strmf_x_hat, 0);
+            d_dy(twodads::field_k_t::f_strmf_hat, twodads::field_k_t::f_strmf_y_hat, 0);
+
+            dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_omega_x_hat, twodads::field_t::f_omega_x, 0);
+            dft_c2r(twodads::field_k_t::f_omega_y_hat, twodads::field_t::f_omega_y, 0);
+
+            dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
+            dft_c2r(twodads::field_k_t::f_strmf_x_hat, twodads::field_t::f_strmf_x, 0);
+            dft_c2r(twodads::field_k_t::f_strmf_y_hat, twodads::field_t::f_strmf_y, 0);
+
+            // Move everything to their appropriate place
+            rhs_fun(config.get_tlevs() - 1);
+            move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
+            move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
             break;
 
         case twodads::init_fun_t::init_both_mode:
@@ -300,25 +333,32 @@ void slab_cuda :: initialize()
                     config.get_deltay(), config.get_xleft(), config.get_ylow());
             move_t(twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1, 0);
 
-            dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
-            d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
-            dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
+            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
 
+            d_dx(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_x_hat, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_x_hat, config.get_tlevs() - 1);
+            d_dx(twodads::field_k_t::f_strmf_hat, twodads::field_k_t::f_strmf_x_hat, 0);
             d_dy(twodads::field_k_t::f_theta_hat, twodads::field_k_t::f_theta_y_hat, config.get_tlevs() - 1);
+            d_dy(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_y_hat, config.get_tlevs() - 1);
+            d_dy(twodads::field_k_t::f_strmf_hat, twodads::field_k_t::f_strmf_y_hat, 0);
+
+
+            dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
+            dft_c2r(twodads::field_k_t::f_theta_x_hat, twodads::field_t::f_theta_x, 0);
             dft_c2r(twodads::field_k_t::f_theta_y_hat, twodads::field_t::f_theta_y, 0);
 
             dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, config.get_tlevs() - 1);
-            d_dx(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_x_hat, config.get_tlevs() - 1);
             dft_c2r(twodads::field_k_t::f_omega_x_hat, twodads::field_t::f_omega_x, 0);
-
-            d_dy(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_omega_y_hat, config.get_tlevs() - 1);
             dft_c2r(twodads::field_k_t::f_omega_y_hat, twodads::field_t::f_omega_y, 0);
+
+            dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
+            dft_c2r(twodads::field_k_t::f_strmf_x_hat, twodads::field_t::f_strmf_x, 0);
+            dft_c2r(twodads::field_k_t::f_strmf_y_hat, twodads::field_t::f_strmf_y, 0);
 
             rhs_fun(config.get_tlevs() - 1);
             move_t(twodads::field_k_t::f_theta_rhs_hat, config.get_tlevs() - 2, 0);
             move_t(twodads::field_k_t::f_omega_rhs_hat, config.get_tlevs() - 2, 0);
             break;
-
 
 
         /*
@@ -415,12 +455,12 @@ void slab_cuda :: advance()
 }
 
 
-// Compute RHS
-void slab_cuda :: rhs_fun(uint t)
+// Compute RHS from using time index t_src for dynamical fields
+// omega_hat and theta_hat.
+void slab_cuda :: rhs_fun(uint t_src)
 {
-    // Update real fields be
-    (this ->* theta_rhs_fun)(t);
-    (this ->* omega_rhs_fun)(t);
+    (this ->* theta_rhs_fun)(t_src);
+    (this ->* omega_rhs_fun)(t_src);
 }
 
 
@@ -447,7 +487,7 @@ void slab_cuda::update_real_fields(uint tlev)
     dft_c2r(twodads::field_k_t::f_strmf_y_hat, twodads::field_t::f_strmf_y, 0);
 }
 
-// Carry out DFT
+// execute DFT
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t)
 {
     cufftResult err;
@@ -459,9 +499,7 @@ void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, 
 }
 
 
-// void slab_cuda :: integrate_stiff === see slab_cuda2.cu ===
-
-// Carry out iDFT
+// execute iDFT
 void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, uint t)
 {
     cufftResult err;
@@ -506,7 +544,6 @@ void slab_cuda :: write_output(twodads::real_t time)
 void slab_cuda::write_diagnostics(twodads::real_t time)
 {
     // Update diagnostic fields and call routines as specified
-    cout << "slab_cuda::write_diagnostics()\n";
     theta_diag.update(theta);
     theta_x_diag.update(theta_x);
     theta_y_diag.update(theta_y);
@@ -522,21 +559,22 @@ void slab_cuda::write_diagnostics(twodads::real_t time)
         {
             case twodads::diagnostic_t::diag_blobs:
                 slab_diagnostic.blobs(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                cout << "Writing blobs diagnostics\n";
+                cout << "blobs...\t";
                 break;
             case twodads::diagnostic_t::diag_energy:
                 slab_diagnostic.energy(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                cout << "Writing energy diagnostics\n";
+                cout << "energy..\t";
                 break;
             case twodads::diagnostic_t::diag_probes:
                 slab_diagnostic.probes(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                cout << "Writing probes diagnostics\n";
+                cout << "probes...\t";
                 break;
             default:
                 string err_msg("slab_cuda::write_diagnostics(): unknown diagnostics function type\n");
                 throw name_error(err_msg);
                 break;
         }
+        cout << "\n";
     }
 }
 
