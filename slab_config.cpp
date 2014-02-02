@@ -285,7 +285,7 @@ slab_config :: slab_config() :
     else if ( omega_rhs_str.compare(string("omega_rhs_hw")) == 0) 
 		omega_rhs = twodads::rhs_t::omega_rhs_hw;
     else if ( omega_rhs_str.compare(string("omega_rhs_hw_mod")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_hw;
+		omega_rhs = twodads::rhs_t::omega_rhs_hwmod;
     else if ( omega_rhs_str.compare(string("omega_rhs_null")) == 0) 
 		omega_rhs = twodads::rhs_t::rhs_null;
     else if ( omega_rhs_str.compare(string("omega_rhs_ic")) == 0) 

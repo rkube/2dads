@@ -1,5 +1,5 @@
 #include <iostream>
-#include "include/cuda_array2.h"
+//#include "include/cuda_array2.h"
 #include "include/diag_array.h"
 
 
@@ -13,17 +13,25 @@ int main(void)
 
     cuda_array<double> arr1(tlevs, Nx, My);
     arr1 = 4.0;
-    cout << "arr1 = \n" << arr1 << "\n";
 
-    diag_array<double> darr(arr1);
-    for(unsigned int i = 0; i < darr.get_nx(); i++)
-        darr(3,i) = -2.7;
-    for(unsigned int i = 0; i < darr.get_nx(); i++)
-        cout << "profile(" << i << ") = " << darr.get_profile(i) << "\n";
-    cout << "darr = " << darr << "\n";
-    cout << "max(darr) = " << darr.get_max() << "\n";
-    cout << "darr.max =" << darr.get_max() << "\n";
-    cout << "darr.min =" << darr.get_min() << "\n";
-    cout << "darr.mean = " << darr.get_mean() << "\n";
+    cuda_array<double> arr2(tlevs, Nx, My);
+    arr2 = 7.1;
+    
+    diag_array<double> da1(arr1);
+    diag_array<double> da2(arr2);
+    
+    //for(int i = -int(da1.get_nx()); i < 0; i++)
+    for(int i = int(da1.get_nx()); i < 2 * int(da1.get_nx()); i++)
+    {
+        da1(i,3) = -2.7;
+        da2(3,i) = 5.7;
+    }
+    cout << "darr = " << da1 << "\n";
+    cout << "darr = " << da2 << "\n";
+   
+    cout << "funny stuff: " << (da1 + da2).get_mean()<< "\n"; 
+
+    cout << "Accessing da(-1, -2): " << da1(-1, -2) << "\n";
+
 
 }

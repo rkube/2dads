@@ -77,6 +77,7 @@ void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, double* params
 }
 
 
+/// Initialize gaussian profile around a single mode
 __global__
 void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
 {
@@ -87,10 +88,6 @@ void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double am
         return;
     double n = double(row);
     double m = double(col);
-    //double amplitude = params[0];
-    //double modex = params[1];
-    //double modey = params[2];
-    //double sigma = params[3];
     double damp = exp ( -((n-modex)*(n-modex) / sigma) - ((m-modey)*(m-modey) / sigma) ); 
     double phase = 0.56051 * 2.0 * cuda::PI;  
     
@@ -99,17 +96,7 @@ void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double am
 }
 
 
-//__global__
-//void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double* params)
-//{
-//    const uint idx = uint(params[2]) * layout.My + uint(params[1]);
-//    double phase = 0.56051 * 2.0 * cuda::PI;
-//    array[idx] = make_cuDoubleComplex(params[0] * sin(phase), params[0] * cos(phase));
-//    printf("d_init_mide: mode (%d, %d) at idx= %d = (%f, %f)\n",
-//            uint(params[2]), uint(params[1]), idx, params[0] * sin(phase), params[0] * cos(phase));
-//}
-
-
+/// Initialize a single mode pointwise
 __global__
 void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, uint col, uint row)
 {
@@ -120,6 +107,8 @@ void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, u
             row, col, idx, cos(phase), sin(phase));
 }
 
+
+/// Initialize sinusoidal profile
 void init_simple_sine(cuda_array<cuda::real_t>* arr, 
         vector<double> initc,
         const double delta_x,
@@ -136,18 +125,13 @@ void init_simple_sine(cuda_array<cuda::real_t>* arr,
     const double kx = initc[0] * cuda::TWOPI / double(layout.delta_x * double(arr -> get_nx()));
     const double ky = initc[1] * cuda::TWOPI / double(layout.delta_y * double(arr -> get_my()));
 
-    //double* params = initc.data();
-    // Copy the parameters for the function to the device
-    //double* d_params;
-    //gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
-    //gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
-
     //d_init_sine<<<grid, block>>>(arr -> get_array_d(0), layout, d_params);
     d_init_sine<<<grid, block>>>(arr -> get_array_d(0), layout, kx, ky);
     cudaDeviceSynchronize();
 }
 
 
+/// Initialize field with a guassian profile
 void init_gaussian(cuda_array<cuda::real_t>* arr,
         vector<double> initc,
         const double delta_x,
@@ -180,6 +164,8 @@ void init_gaussian(cuda_array<cuda::real_t>* arr,
 }
 
 
+
+/// Initialize real field with nabla^2 exp(-(x-x0)^2/ (2. * sigma^2) - (y - y0)^2 / (2. * sigma_y^2)
 void init_invlapl(cuda_array<cuda::real_t>* arr,
         vector<double> initc,
         const double delta_x,
@@ -203,6 +189,7 @@ void init_invlapl(cuda_array<cuda::real_t>* arr,
 }
 
 
+
 void init_mode(cuda_array<cuda::cmplx_t>* arr,
         vector<double> initc,
         const double delta_x,
@@ -214,25 +201,15 @@ void init_mode(cuda_array<cuda::cmplx_t>* arr,
     // type cuda_array<cuda::cmplx_t>
     cuda::slab_layout_t layout = {x_left, delta_x, y_lo, delta_y, arr -> get_nx(), arr -> get_my()};
 
-    //double* params = initc.data();
     const unsigned int num_modes = initc.size() / 4;
-    //for(uint i = 1; i < (initc.size()-1); i++)
-    //    cout << "params[" << i << "] = " << params[i] << "\n";
+    
     (*arr) = make_cuDoubleComplex(0.0, 0.0);
     for(uint n = 0; n < num_modes; n++)
     {
         cout << "mode " << n << ": amp=" << initc[4*n] << " ky=" << initc[4*n+1] << ", kx=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
     }
-
-//    gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
-//    gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
-
-    //d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, d_params);
-    //(*arr) = make_cuDoubleComplex(0.0, 0.0);
-//void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, uint col, uint row)
-//    d_init_mode<<<1, 1>>>(arr -> get_array_d(0), layout, d_params);
-    //cudaDeviceSynchronize();
+    cudaDeviceSynchronize();
 }
 
 

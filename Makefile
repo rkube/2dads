@@ -5,8 +5,8 @@ TEST_DIR = tests
 
 .PHONY: slab_cuda clean tests
 
-all: cuda_array2 output initialize diagnostics slab_config slab_cuda array_base diag_array
-base: cuda_array2 initialize diagnostics slab_config output slab_cuda array_base diag_array
+all: cuda_array2 output initialize diagnostics slab_config slab_cuda 
+base: cuda_array2 initialize diagnostics slab_config output slab_cuda 
 
 
 cuda_array2: 
@@ -28,11 +28,10 @@ output:
 diagnostics:
 	$(CC) $(CFLAGS) -c -o obj/diagnostics.o diagnostics.cpp $(IFLAGS)
 
-array_base:
-	$(CC) $(CFLAGS) -c -o obj/array_base.o array_base.cpp $(IFLAGS)
-
-diag_array:
-	$(CC) $(CFLAGS) -c -o obj/diag_array.o diag_array.cpp $(IFLAGS)
+#array_base:
+#	$(CC) $(CFLAGS) -c -o obj/array_base.o array_base.cpp $(IFLAGS)
+#diag_array: 
+#	$(CC) $(CFLAGS) -c -o obj/diag_array.o diag_array.cpp $(IFLAGS)
 
 tests: cuda_array2 slab_cuda initialize output
 	$(MAKE) -C $(TEST_DIR)

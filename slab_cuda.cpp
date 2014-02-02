@@ -21,12 +21,12 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     tmp_array_hat(1, Nx, My / 2 + 1), 
     theta_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
     omega_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
-    theta_diag(theta), theta_x_diag(theta_x), theta_y_diag(theta_y),
-    omega_diag(omega), omega_x_diag(omega_x), omega_y_diag(omega_y),
-    strmf_diag(strmf), strmf_x_diag(strmf_x), strmf_y_diag(strmf_y),
+    //theta_diag(theta), theta_x_diag(theta_x), theta_y_diag(theta_y),
+    //omega_diag(omega), omega_x_diag(omega_x), omega_y_diag(omega_y),
+    //strmf_diag(strmf), strmf_x_diag(strmf_x), strmf_y_diag(strmf_y),
     dft_is_initialized(init_dft()),
     slab_output(config.get_output(), Nx, My),
-    slab_diagnostic(config), 
+    //slab_diagnostic(config), 
     stiff_params{config.get_deltat(), config.get_lengthx(), config.get_lengthy(), config.get_model_params(0),
         4.0 * cuda::PI * cuda::PI * config.get_model_params(0) * config.get_deltat(), Nx, My / 2 + 1, tlevs},
     slab_layout{config.get_xleft(), config.get_deltax(), config.get_ylow(), config.get_deltay(), Nx, My},
@@ -410,7 +410,10 @@ void slab_cuda :: initialize()
     }
 }
 
-// Move data from time level t_src to t_dst
+/// @brief Move data from time level t_src to t_dst
+/// @param fname field name 
+/// @param t_dst destination time index
+/// @param t_src source time index
 void slab_cuda :: move_t(twodads::field_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::real_t>* arr = get_field_by_name(fname);
@@ -418,7 +421,10 @@ void slab_cuda :: move_t(twodads::field_t fname, uint t_dst, uint t_src)
 }
 
 
-// Move data from time level t_src to t_dst
+/// @brief Move data from time level t_src to t_dst
+/// @param fname field name 
+/// @param t_dst destination time index
+/// @param t_src source time index
 void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
@@ -426,7 +432,10 @@ void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 }
 
 
-// Copy data from t_src to t_dst
+/// @brief Copy data from time level t_src to t_dst
+/// @param fname field name 
+/// @param t_dst destination time index
+/// @param t_src source time index
 void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
@@ -434,18 +443,18 @@ void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 }
 
 
-void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint tlev)
+/// @brief Set fname to a constant value at time index tlev
+/// @param fname field name 
+/// @param val constant complex number
+/// @param t_src time index
+void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 {
     cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
-    arr -> set_t(val, tlev);
+    arr -> set_t(val, t_src);
 }
 
-// void d_dx
-// void d_dy         === see slab_cuda2.cu ===
-// void inv_laplace
 
-
-// advance all fields with multiple time levels
+/// @brief advance all fields with multiple time levels
 void slab_cuda :: advance()
 {
     theta_hat.advance();
@@ -455,8 +464,8 @@ void slab_cuda :: advance()
 }
 
 
-// Compute RHS from using time index t_src for dynamical fields
-// omega_hat and theta_hat.
+/// @brief Compute RHS from using time index t_src for dynamical fields omega_hat and theta_hat.
+/// @param t_src The most current time level, only important for first transient time steps
 void slab_cuda :: rhs_fun(uint t_src)
 {
     (this ->* theta_rhs_fun)(t_src);
@@ -464,7 +473,8 @@ void slab_cuda :: rhs_fun(uint t_src)
 }
 
 
-// Update real fields
+/// @brief Update real fields theta, theta_x, theta_y, etc.
+/// @param tlev: The time level for theta_hat, omega_hat used as input for inverse DFT
 void slab_cuda::update_real_fields(uint tlev)
 {
     //Compute theta, omega, strmf and respective spatial derivatives
@@ -487,7 +497,10 @@ void slab_cuda::update_real_fields(uint tlev)
     dft_c2r(twodads::field_k_t::f_strmf_y_hat, twodads::field_t::f_strmf_y, 0);
 }
 
-// execute DFT
+/// @brief execute DFT
+/// @param fname_r real field type
+/// @param fname_c complex field type
+/// @param t time index of complex field used as target for DFT
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t)
 {
     cufftResult err;
@@ -499,7 +512,10 @@ void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, 
 }
 
 
-// execute iDFT
+/// @brief execute iDFT and normalize the resulting real field
+/// @param fname_c complex field type
+/// @param fname_r real field type
+/// @param t time index of complex field used as source for iDFT
 void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, uint t)
 {
     cufftResult err;
@@ -522,7 +538,8 @@ void slab_cuda :: dump_field(twodads::field_t field_name)
 }
 
 
-// dump k-field on terminal
+/// @brief dump complex field on terminal, all time levels
+/// @param field_name name of complex field
 void slab_cuda :: dump_field(twodads::field_k_t field_name)
 {
     cuda_array<cuda::cmplx_t>* field = get_field_by_name(field_name);
@@ -530,9 +547,12 @@ void slab_cuda :: dump_field(twodads::field_k_t field_name)
 }
 
 
+/// @brief write full output to output.h5
+/// @param time real number to be written as attribute of the datasets
 void slab_cuda :: write_output(twodads::real_t time)
 {
 #ifdef DEBUG
+    cudaDeviceSynchronize();
     cout << "Writing output, time = " << time << "\n";
 #endif //DEBUG
     for(auto field_name : config.get_output())
@@ -540,33 +560,40 @@ void slab_cuda :: write_output(twodads::real_t time)
     slab_output.output_counter++;
 }
 
-
+/// @brief write diagnostic output
+/// @param time simulation time
+/*
 void slab_cuda::write_diagnostics(twodads::real_t time)
 {
+    cudaDeviceSynchronize();
     // Update diagnostic fields and call routines as specified
-    theta_diag.update(theta);
-    theta_x_diag.update(theta_x);
-    theta_y_diag.update(theta_y);
-    omega_diag.update(omega);
-    omega_x_diag.update(omega_x);
-    omega_y_diag.update(omega_y);
-    strmf_diag.update(strmf);
-    strmf_x_diag.update(strmf_x);
-    strmf_y_diag.update(strmf_y);
+    slab_diagnostic.update_arrays(theta, theta_x, theta_y, omega, omega_x, omega_y, strmf, strmf_x, strmf_y);
+    //theta_diag.update(theta);
+    //theta_x_diag.update(theta_x);
+    //theta_y_diag.update(theta_y);
+    //omega_diag.update(omega);
+    //omega_x_diag.update(omega_x);
+    //omega_y_diag.update(omega_y);
+    //strmf_diag.update(strmf);
+    //strmf_x_diag.update(strmf_x);
+    //strmf_y_diag.update(strmf_y);
     for(auto diag_name : config.get_diagnostics())
     {
         switch (diag_name)
         {
             case twodads::diagnostic_t::diag_blobs:
-                slab_diagnostic.blobs(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                //slab_diagnostic.blobs(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                slab_diagnostic.blobs(time);
                 cout << "blobs...\t";
                 break;
             case twodads::diagnostic_t::diag_energy:
-                slab_diagnostic.energy(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                //slab_diagnostic.energy(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                slab_diagnostic.energy(time);
                 cout << "energy..\t";
                 break;
             case twodads::diagnostic_t::diag_probes:
-                slab_diagnostic.probes(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                //slab_diagnostic.probes(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
+                slab_diagnostic.probes(time);
                 cout << "probes...\t";
                 break;
             default:
@@ -577,9 +604,10 @@ void slab_cuda::write_diagnostics(twodads::real_t time)
         cout << "\n";
     }
 }
+*/
 
-
-// convert field type to internal pointer
+/// @brief convert field type to internal pointer
+/// @param field name of the real field
 cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
 {
     switch(field)
@@ -620,6 +648,8 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
 }
 
 
+/// @brief convert field type to internal pointer
+/// @param field name of the complex field
 cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::field_k_t field)
 {
     switch(field)
@@ -666,6 +696,8 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::field_k_t fie
 }
 
 
+/// @brief convert field type to internal pointer
+/// @param fname name of the output field
 cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname)
 {
     switch(fname)
@@ -697,6 +729,8 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname
 }
 
 
+/// @brief convert field type to internal pointer
+/// @param fname name of the dynamic field
 cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::dyn_field_t fname)
 {
     switch(fname)
@@ -713,6 +747,8 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::dyn_field_t f
 }
 
 
+/// @brief convert field type to internal pointer
+/// @param fname name of the RHS field
 cuda_array<cuda::cmplx_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fname)
 {
     switch(fname)
@@ -728,12 +764,15 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fna
     throw name_error(err_str);
 }
 
+/// @brief RHS, set explicit part for theta equation to zero
+/// @param t not used 
 void slab_cuda :: theta_rhs_null(uint t)
 {
     theta_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
 }
 
-
+/// @brief RHS, set explicit part for omega equation to zero
+/// @param t not used
 void slab_cuda :: omega_rhs_null(uint t)
 {
     omega_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
