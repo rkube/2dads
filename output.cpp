@@ -38,8 +38,11 @@ output_h5 :: output_h5(vector<twodads::output_t> o_list, uint _nx, uint _my) :
 	group_omega(new Group(output_file -> createGroup("/O"))),
     group_omega_x(new Group(output_file -> createGroup("/Ox"))),
     group_omega_y(new Group(output_file -> createGroup("/Oy"))),
-
-group_strmf(new Group(output_file -> createGroup("/S"))),
+    group_strmf(new Group(output_file -> createGroup("/S"))),
+    group_strmf_x(new Group(output_file -> createGroup("/Sx"))),
+    group_strmf_y(new Group(output_file -> createGroup("/Sy"))),
+    group_omega_rhs(new Group(output_file -> createGroup("/ORHS"))),
+    group_theta_rhs(new Group(output_file -> createGroup("/TRHS"))),
 	dspace_file(NULL)
 {
     cerr << "output_h5 :: output_h5\n";
@@ -74,12 +77,17 @@ group_strmf(new Group(output_file -> createGroup("/S"))),
 
 output_h5 :: ~output_h5()
 {
-	//delete output_file;
 	delete group_theta;
+	delete group_theta_x;
+	delete group_theta_y;
 	delete group_omega;
     delete group_omega_x;
     delete group_omega_y;
 	delete group_strmf;
+	delete group_strmf_x;
+	delete group_strmf_y;
+    delete group_theta_rhs;
+    delete group_omega_rhs;
 }
 
 
@@ -132,6 +140,18 @@ DataSpace* output_h5 :: get_dspace_from_field(twodads::output_t field_name)
         case twodads::output_t::o_strmf:
             return &dspace_strmf;
             break;
+        case twodads::output_t::o_strmf_x:
+            return &dspace_strmf_x;
+            break;
+        case twodads::output_t::o_strmf_y:
+            return &dspace_strmf_y;
+            break;
+        case twodads::output_t::o_omega_rhs:
+            return &dspace_omega_rhs;
+            break;
+        case twodads::output_t::o_theta_rhs:
+            return &dspace_theta_rhs;
+            break;
     }
     // This should never happen
     string err_msg("get_space_from_field: could not find field for twodads::output_t field_name");
@@ -164,12 +184,28 @@ string output_h5 :: get_fname_str_from_field(twodads::output_t field_name)
             return string("S/");
             break;
             
+        case twodads::output_t::o_strmf_x:
+            return string("Sx/");
+            break;
+            
+        case twodads::output_t::o_strmf_y:
+            return string("Sy/");
+            break;
+            
         case twodads::output_t::o_theta_x:
             return string("Tx/");
             break;
             
         case twodads::output_t::o_theta_y:
             return string("Ty/");
+            break;
+
+        case twodads::output_t::o_theta_rhs:
+            return string("TRHS/");
+            break;
+
+        case twodads::output_t::o_omega_rhs:
+            return string("ORHS/");
             break;
     }
     // This should never happen

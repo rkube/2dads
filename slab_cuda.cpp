@@ -15,20 +15,17 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     omega(1, Nx, My), omega_x(1, Nx, My), omega_y(1, Nx, My),
     strmf(1, Nx, My), strmf_x(1, Nx, My), strmf_y(1, Nx, My),
     tmp_array(1, Nx, My), 
+    theta_rhs(1, Nx, My), omega_rhs(1, Nx, My),
     theta_hat(tlevs, Nx, My / 2 + 1), theta_x_hat(1, Nx, My / 2 + 1), theta_y_hat(1, Nx, My / 2 + 1),
     omega_hat(tlevs, Nx, My / 2 + 1), omega_x_hat(1, Nx, My / 2 + 1), omega_y_hat(1, Nx, My / 2 + 1),
     strmf_hat(1, Nx, My / 2 + 1), strmf_x_hat(1, Nx, My / 2 + 1), strmf_y_hat(1, Nx, My / 2 + 1),
     tmp_array_hat(1, Nx, My / 2 + 1), 
     theta_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
     omega_rhs_hat(tlevs - 1, Nx, My / 2 + 1),
-    //theta_diag(theta), theta_x_diag(theta_x), theta_y_diag(theta_y),
-    //omega_diag(omega), omega_x_diag(omega_x), omega_y_diag(omega_y),
-    //strmf_diag(strmf), strmf_x_diag(strmf_x), strmf_y_diag(strmf_y),
     dft_is_initialized(init_dft()),
     slab_output(config.get_output(), Nx, My),
-    //slab_diagnostic(config), 
     stiff_params{config.get_deltat(), config.get_lengthx(), config.get_lengthy(), config.get_model_params(0),
-        4.0 * cuda::PI * cuda::PI * config.get_model_params(0) * config.get_deltat(), Nx, My / 2 + 1, tlevs},
+        config.get_model_params(1), Nx, My / 2 + 1, tlevs},
     slab_layout{config.get_xleft(), config.get_deltax(), config.get_ylow(), config.get_deltay(), Nx, My},
     block_nx_my(theta.get_block()),
     grid_nx_my(theta.get_grid()),
@@ -127,43 +124,6 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
     cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
     cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
-
-    // Use this to test of memory is aligned between g++ and NVCC
-    //cout << "slab_cuda::slab_cuda()\n";
-    //cout << "config at " << (void*) &config << "\n";
-    //cout << "Nx at " << (void*) &Nx << "\n";
-    //cout << "My at " << (void*) &My << "\n";
-    //cout << "tlevs at " << (void*) &tlevs << "\n";
-    //cout << "plan_r2c at " << (void*) &plan_r2c << "\n";
-    //cout << "plan_c2r at " << (void*) &plan_c2r << "\n";
-    //cout << "slab_output at " << (void*) &slab_output << "\n";
-    //cout << "theta at " << (void*) &theta << "\n";
-    //cout << "theta_x at " << (void*) &theta_x << "\n";
-    //cout << "theta_y at " << (void*) &theta_y << "\n";
-    //cout << "slab_output at " << (void*) &slab_output << "\n";
-    //cout << "stiff_params at " << (void*) &stiff_params << "\n";
-
-
-    //dump_stiff_params();
-    //cout << "slab_cuda::slab_cuda()\n";
-    //cout << "\nsizeof(cuda::stiff_params_t) = " << sizeof(cuda::stiff_params_t); 
-    //cout << "\nstiff_params at " << (void*) &stiff_params;
-    //cout << "\n\t.delta_t = " << stiff_params.delta_t;
-    //cout << "\n\t.length_x = " << stiff_params.length_x;
-    //cout << "\n\t.length_y = " << stiff_params.length_y;
-    //cout << "\n\t.diff = " << stiff_params.diff;
-    //cout << "\n\t.S = " << stiff_params.S;
-    //cout << "\n\t.level = " << stiff_params.level;
-    //cout << "\n";
-
-    //cout << "\nsizeof(cuda::slab_layout_t) = " << sizeof(cuda::slab_layout_t); 
-    //cout << "\nslab_layout at " << (void*) &slab_layout;
-    //cout << "\n\t.x_left = " << slab_layout.x_left;
-    //cout << "\n\t.delta_x = " << slab_layout.x_left;
-    //cout << "\n\t.y_lo = " << slab_layout.y_lo;
-    //cout << "\n\t.delta_y = " << slab_layout.delta_y;
-    //cout << "\n\t.Nx = " << slab_layout.Nx;
-    //cout << "\n\t.My = " << slab_layout.My;
 #endif //DEBUG
 }
 
@@ -495,6 +455,9 @@ void slab_cuda::update_real_fields(uint tlev)
     dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
     dft_c2r(twodads::field_k_t::f_strmf_x_hat, twodads::field_t::f_strmf_x, 0);
     dft_c2r(twodads::field_k_t::f_strmf_y_hat, twodads::field_t::f_strmf_y, 0);
+
+    dft_c2r(twodads::field_k_t::f_theta_rhs_hat, twodads::field_t::f_theta_rhs, 1);
+    dft_c2r(twodads::field_k_t::f_omega_rhs_hat, twodads::field_t::f_omega_rhs, 1);
 }
 
 /// @brief execute DFT
@@ -560,51 +523,47 @@ void slab_cuda :: write_output(twodads::real_t time)
     slab_output.output_counter++;
 }
 
-/// @brief write diagnostic output
-/// @param time simulation time
-/*
-void slab_cuda::write_diagnostics(twodads::real_t time)
+
+void slab_cuda ::dump_stiff_params()
 {
-    cudaDeviceSynchronize();
-    // Update diagnostic fields and call routines as specified
-    slab_diagnostic.update_arrays(theta, theta_x, theta_y, omega, omega_x, omega_y, strmf, strmf_x, strmf_y);
-    //theta_diag.update(theta);
-    //theta_x_diag.update(theta_x);
-    //theta_y_diag.update(theta_y);
-    //omega_diag.update(omega);
-    //omega_x_diag.update(omega_x);
-    //omega_y_diag.update(omega_y);
-    //strmf_diag.update(strmf);
-    //strmf_x_diag.update(strmf_x);
-    //strmf_y_diag.update(strmf_y);
-    for(auto diag_name : config.get_diagnostics())
-    {
-        switch (diag_name)
-        {
-            case twodads::diagnostic_t::diag_blobs:
-                //slab_diagnostic.blobs(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                slab_diagnostic.blobs(time);
-                cout << "blobs...\t";
-                break;
-            case twodads::diagnostic_t::diag_energy:
-                //slab_diagnostic.energy(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                slab_diagnostic.energy(time);
-                cout << "energy..\t";
-                break;
-            case twodads::diagnostic_t::diag_probes:
-                //slab_diagnostic.probes(time, theta_diag, theta_x_diag, theta_y_diag, omega_diag, omega_x_diag, omega_y_diag, strmf_diag, strmf_x_diag, strmf_y_diag);
-                slab_diagnostic.probes(time);
-                cout << "probes...\t";
-                break;
-            default:
-                string err_msg("slab_cuda::write_diagnostics(): unknown diagnostics function type\n");
-                throw name_error(err_msg);
-                break;
-        }
-        cout << "\n";
-    }
+    // Use this to test of memory is aligned between g++ and NVCC
+    cout << "slab_cuda::dump_stiff_params()\n";
+    cout << "config at " << (void*) &config << "\n";
+    cout << "Nx at " << (void*) &Nx << "\n";
+    cout << "My at " << (void*) &My << "\n";
+    cout << "tlevs at " << (void*) &tlevs << "\n";
+    cout << "plan_r2c at " << (void*) &plan_r2c << "\n";
+    cout << "plan_c2r at " << (void*) &plan_c2r << "\n";
+    cout << "slab_output at " << (void*) &slab_output << "\n";
+    cout << "theta at " << (void*) &theta << "\n";
+    cout << "theta_x at " << (void*) &theta_x << "\n";
+    cout << "theta_y at " << (void*) &theta_y << "\n";
+    cout << "slab_output at " << (void*) &slab_output << "\n";
+    cout << "stiff_params at " << (void*) &stiff_params << "\n";
+
+    cout << "slab_cuda::slab_cuda()\n";
+    cout << "\nsizeof(cuda::stiff_params_t) = " << sizeof(cuda::stiff_params_t); 
+    cout << "\nstiff_params at " << (void*) &stiff_params;
+    cout << "\n\t.delta_t = " << stiff_params.delta_t;
+    cout << "\n\t.length_x = " << stiff_params.length_x;
+    cout << "\n\t.length_y = " << stiff_params.length_y;
+    cout << "\n\t.diff = " << stiff_params.diff;
+    cout << "\n\t.hv = " << stiff_params.hv;
+    cout << "\n\t.level = " << stiff_params.level;
+    cout << "\n";
+
+    cout << "\nsizeof(cuda::slab_layout_t) = " << sizeof(cuda::slab_layout_t); 
+    cout << "\nslab_layout at " << (void*) &slab_layout;
+    cout << "\n\t.x_left = " << slab_layout.x_left;
+    cout << "\n\t.delta_x = " << slab_layout.x_left;
+    cout << "\n\t.y_lo = " << slab_layout.y_lo;
+    cout << "\n\t.delta_y = " << slab_layout.delta_y;
+    cout << "\n\t.Nx = " << slab_layout.Nx;
+    cout << "\n\t.My = " << slab_layout.My;
+    cout << "\n\n";
 }
-*/
+
+
 
 /// @brief convert field type to internal pointer
 /// @param field name of the real field
@@ -641,6 +600,12 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
             break;
         case twodads::field_t::f_tmp:
             return &tmp_array;
+            break;
+        case twodads::field_t::f_theta_rhs:
+            return &theta_rhs;
+            break;
+        case twodads::field_t::f_omega_rhs:
+            return &omega_rhs;
             break;
     }
     string err_str("Invalid field name\n");
@@ -722,6 +687,18 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname
             break;
         case twodads::output_t::o_strmf:
             return &strmf;
+            break;
+        case twodads::output_t::o_strmf_x:
+            return &strmf_x;
+            break;
+        case twodads::output_t::o_strmf_y:
+            return &strmf_y;
+            break;
+        case twodads::output_t::o_theta_rhs:
+            return &theta_rhs;
+            break;
+        case twodads::output_t::o_omega_rhs:
+            return &omega_rhs;
             break;
     }
     string err_str("get_field_by_name(twodads::output_t field): Invalid field name\n");

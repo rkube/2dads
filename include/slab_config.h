@@ -139,8 +139,6 @@ private:
     vector<twodads::diagnostic_t> diagnostics;
     vector<twodads::output_t> output;
 
-	//vector<string> diagnostics;
-	//vector<string> output;
 	vector<double> initc;
 	vector<double> model_params;
 	string initial_conditions_str;

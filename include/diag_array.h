@@ -1,18 +1,26 @@
-/*
- * Array used in diagnostic functions
- *
- * From array_base, but includes function to compute mean, fluctuatioons and stuff
- * diag_array is derived from a templated class. Thus all members of the base class
- * are unknown to the compiler.
- * Paragraph 14.6/3 of the C++11 Standard:
- */
+///
+/// @detailed Array used in diagnostic functions
+/// 
+/// @detailed From array_base, but includes function to compute mean, fluctuations and stuff
+/// @detailed diag_array is derived from a templated class. 
+/// @detailed Thus all members of the base class are unknown to the compiler and we have to resort to an
+/// @detailed ugly using hack
+/// @detailed Paragraph 14.6/3 of the C++11 Standard:
+
 
 #ifndef DIAG_ARRAY_H
 #define DIAG_ARRAY_H
 
-// Use periodic boundary conditions for array access
 #define PERIODIC
 
+template <class R, class T>
+void add_to_mean(R* array, T& result, unsigned int n_start, unsigned int n_end)
+{
+    const unsigned int My{array -> get_my()};
+    for(int n = n_start; n < n_end; n++)
+        for(int m = 0; m < My; m++)
+            result += (*array)(n, m);
+}
 
 #include <cstring>
 #include <iostream>
@@ -33,12 +41,14 @@ using namespace std;
 template <class T>
 class diag_array : public array_base<T, diag_array<T> >
 {
-    using array_base<T, diag_array<T> >::My;
-    using array_base<T, diag_array<T> >::Nx;
-    using array_base<T, diag_array<T> >::tlevs;
-    using array_base<T, diag_array<T> >:: array;
-    using array_base<T, diag_array<T> >:: array_t;
-    public:
+using array_base<T, diag_array<T> >::My;
+using array_base<T, diag_array<T> >::Nx;
+using array_base<T, diag_array<T> >::tlevs;
+using array_base<T, diag_array<T> >::nthreads;
+using array_base<T, diag_array<T> >::nelem;
+using array_base<T, diag_array<T> >:: array;
+using array_base<T, diag_array<T> >:: array_t;
+public:
         // Create dummy array Nx*My
         diag_array(uint, uint);
         // Create array from cuda_array
@@ -73,24 +83,30 @@ class diag_array : public array_base<T, diag_array<T> >
             }                                                                                                
             return (os);                                                                                     
         }                                          
-        T get_mean() const;
-        T get_max() const;
-        T get_min() const;
-        T get_profile(int) const;
-        diag_array<T> bar() const;
-        diag_array<T> tilde() const;
+        // Inine these definitions to avoid linker confusion when these guys
+        // pop up in multiple object files
+        inline T get_mean() const;
+        inline T get_mean_t() const;
+        inline T get_max() const;
+        inline T get_min() const;
+        inline T get_profile(int) const;
+        inline diag_array<T> bar() const;
+        inline diag_array<T> tilde() const;
 
 
-        void update(cuda_array<T>&);
-        diag_array<T> d1_dx1(const diag_array<T>&, const double);
-        diag_array<T> d2_dx2(const diag_array<T>&, const double);
-        diag_array<T> d3_dx3(const diag_array<T>&, const double);
-        diag_array<T> d1_dy1(const diag_array<T>&, const double);
-        diag_array<T> d2_dy2(const diag_array<T>&, const double);
-        diag_array<T> d3_dy3(const diag_array<T>&, const double);
+        inline void update(cuda_array<T>&);
+        inline diag_array<T> d1_dx1(const double);
+        inline diag_array<T> d2_dx2(const double);
+        inline diag_array<T> d3_dx3(const double);
+        inline diag_array<T> d1_dy1(const double);
+        inline diag_array<T> d2_dy2(const double);
+        inline diag_array<T> d3_dy3(const double);
 };
 
 
+/// @brief Create diag_array from cuda array
+/// @detailed Create diag_array with same dimensions as cuda_array
+/// @detailed nthreads = 1, tlevs = 1
 template <class T>
 diag_array<T> :: diag_array(cuda_array<T>& in) :
     array_base<T, diag_array<T>>(1, 1, in.get_nx(), in.get_my())
@@ -104,10 +120,12 @@ diag_array<T> :: diag_array(cuda_array<T>& in) :
     gpuErrchk(cudaMemcpy(array, in.get_array_d(), memsize * sizeof(T), cudaMemcpyDeviceToHost));
 }
 
-
+/// @brief Calls corresponding constructor from array_base
 template <class T>
 diag_array<T> :: diag_array(array_base<T, diag_array<T>>* in) : array_base<T, diag_array<T>>(in) {}
 
+
+/// @brief Calls corresponding constructor from array_base
 template <class T>
 diag_array<T> :: diag_array(uint Nx, uint My) :
     array_base<T, diag_array<T>>(1, 1, Nx, My)
@@ -115,6 +133,8 @@ diag_array<T> :: diag_array(uint Nx, uint My) :
 }
 
 
+/// @Copy data pointed to by in to memory localtion pointed to by array
+/// @details assumes that nthreads=1, tlevs=1
 template <class T>
 void diag_array<T> :: update(cuda_array<T>& in)
 {
@@ -129,12 +149,14 @@ void diag_array<T> :: update(cuda_array<T>& in)
 
 /*
  * ****************************************************************************
- * ****************************** Operators ***********************************
+ * ****************************** Member functions ****************************
  * ****************************************************************************
  */
 
+
+/// @brief Returns maximum of array
 template<>
-twodads::real_t diag_array<twodads::real_t> :: get_max() const
+inline twodads::real_t diag_array<twodads::real_t> :: get_max() const
 {
     int n{0}, m{0};
     twodads::real_t f_max{-1.0};
@@ -145,8 +167,10 @@ twodads::real_t diag_array<twodads::real_t> :: get_max() const
     return(f_max);
 }
 
+
+/// @brief return minimum value of array
 template <>
-twodads::real_t diag_array<twodads::real_t> :: get_min() const
+inline twodads::real_t diag_array<twodads::real_t> :: get_min() const
 {
     int n{0}, m{0};
     twodads::real_t min{1e10};
@@ -158,11 +182,45 @@ twodads::real_t diag_array<twodads::real_t> :: get_min() const
 }
 
 
+template <class T>
+inline T diag_array<T> :: get_mean_t() const
+{
+    unsigned int n{0}; 
+    T mean{0.0};
+    // Parallel version
+    T result_threads[nthreads];
+    for(n = 0; n < nthreads; n++)
+        result_threads[n] = 0.0;
+
+    std::vector<std::thread> thr;
+    for(n = 0; n < nthreads; n++)
+        thr.push_back(std::thread(add_to_mean<diag_array<T>, T>, const_cast<diag_array<T>*>(this), std::ref(result_threads[n]), n * nelem, (n + 1) * nelem));
+    for(auto &t: thr)
+        t.join();
+
+    for(n = 0; n < nthreads; n++)
+        mean += result_threads[n];
+    mean = mean / double(Nx * My);
+    return(mean);
+}
+
+
+/// @brief Compute mean of array, normalized by Nx*My
 template <class T> 
-T diag_array<T> :: get_mean() const
+inline T diag_array<T> :: get_mean() const
 {
     int n{0}, m{0};
     T mean{0.0};
+    // Parallel version
+    //T result_threads[nthreads];
+    //vector<thread> thr;
+    //for(unsigned int n = 0; n < nthreads; n++)
+    //    thr.push_back(thread(add_to_mean, this, n * nelem, (n + 1) * nelem));
+    //for(auto &t: thr)
+    //    t.join();
+
+    //for(unsigned int n = 0; n < nthreads; n++)
+    //    mean += result_threads[n];
 
     for(n = 0; n < int(Nx); n++)
         for(m = 0; m < int(My); m++)
@@ -171,8 +229,10 @@ T diag_array<T> :: get_mean() const
     return(mean);
 }
 
+
+/// @brief Return mean along y-direction at n
 template <class T>
-T diag_array<T> :: get_profile(int n) const
+inline T diag_array<T> :: get_profile(int n) const
 {
     T result{0.0};
 
@@ -184,9 +244,9 @@ T diag_array<T> :: get_profile(int n) const
 }
 
 
-// Return an array with the radial profile, i.e. pol.avg at each radial position
+/// @brief Return an array with the radial profile, i.e. pol.avg at each radial position
 template <class T>
-diag_array<T> diag_array<T> :: bar() const
+inline diag_array<T> diag_array<T> :: bar() const
 {
     diag_array<T> result(*this);
     T temp {0.0};
@@ -205,9 +265,9 @@ diag_array<T> diag_array<T> :: bar() const
 }
 
 
-
+/// @brief Return copy of an array where the radial profile is subtracted at each n
 template <class T>
-diag_array<T> diag_array<T> :: tilde() const
+inline diag_array<T> diag_array<T> :: tilde() const
 {
     diag_array<T> result(*this);
 
@@ -223,50 +283,102 @@ diag_array<T> diag_array<T> :: tilde() const
 }
 
 
-
-// d/dx derivative, second order scheme
+/// @brief Compute first x-derivative with a second order FD scheme
+/// @detailed f'(x) = f(x_{i+1})  - f(x_{i-1}) / 2 \delta x
 template <class T>
-diag_array<T> diag_array<T> :: d1_dx1(const diag_array<T>& rhs, const double Lx)
+inline diag_array<T> diag_array<T> :: d1_dx1(const double Lx)
 {
-    //diag_array<T> result(array_base<T>::Nx, array_base<T>::My);
     diag_array<T> result(Nx, My);
     int n{0}, m{0};
-    const double invdx2{Lx / (2.0 * double(Nx))};
+    const double inv2dx{0.5 * double(Nx) / Lx};
 
-    for(n = 0; n < Nx - 1; n++)
+    for(n = 0; n < Nx; n++)
         for(m = 0; m < My; m++)
-            result(n, m) = (rhs(n + 1, m) - rhs(n - 1, m)) * invdx2;
+            result(n, m) = ((*this)(n + 1, m) - (*this)(n - 1, m)) * inv2dx;
 
     return result;
 }
 
 
+/// @brief Compute first x-derivative with a second order FD scheme
+/// @detailed f'(x) = f(x_{i+1})  - f(x_{i-1}) / 2 \delta x
 template <class T>
-diag_array<T> diag_array<T> :: d2_dx2(const diag_array<T>& rhs, const double Lx)
+inline diag_array<T> diag_array<T> :: d1_dy1(const double Ly)
 {
     diag_array<T> result(Nx, My);
     int n{0}, m{0};
-    const double invdx{Lx / double(Nx)};
-
+    const double inv2dy{0.5 * double(My) / Ly};
 
     for(n = 0; n < Nx; n++)
         for(m = 0; m < My; m++)
-            result(n, m) = (rhs(n - 1, m) - 2.0 * rhs(n, m) + rhs(n + 1, m)) * invdx;
+            result(n, m) = ((*this)(n, m + 1) - (*this)(n, m - 1)) * inv2dy;
 
     return result;
 }
 
 
+/// @brief Compute second x-derivative with a second order FD scheme
+/// @brief f''(x) = f(x_{i-1}) - 2 f(x_{i}) + f(x_{i+1}) / delta_x^2
 template <class T>
-diag_array<T> diag_array<T> :: d3_dx3(const diag_array<T>& rhs, const double Lx)
+inline diag_array<T> diag_array<T> :: d2_dx2(const double Lx)
 {
     diag_array<T> result(Nx, My);
     int n{0}, m{0};
-    const double invdx2{0.5 * Lx / double(Nx)};
+    const double invdx2{double(Nx * Nx) / (Lx * Lx)};
 
     for(n = 0; n < Nx; n++)
         for(m = 0; m < My; m++)
-            result(n, m) = (-rhs(n - 2, m) + 2.0 * rhs(n - 1, m) - 2.0 * rhs(n + 1, m) + rhs(n + 2, m)) * invdx2;
+            result(n, m) = ((*this)(n - 1, m) - 2.0 * (*this)(n, m) + (*this)(n + 1, m)) * invdx2;
+
+    return result;
+}
+
+
+/// @brief Compute second y-derivative with a second order FD scheme
+/// @brief f''(x) = f(x_{i-1}) - 2 f(x_{i}) + f(x_{i+1}) / delta_x^2
+template <class T>
+inline diag_array<T> diag_array<T> :: d2_dy2(const double Ly)
+{
+    diag_array<T> result(Nx, My);
+    int n{0}, m{0};
+    const double invdy2{double(My * My) / (Ly * Ly)};
+
+    for(n = 0; n < Nx; n++)
+        for(m = 0; m < My; m++)
+            result(n, m) = ((*this)(n, m - 1) - 2.0 * (*this)(n, m) + (*this)(n, m + 1)) * invdy2;
+
+    return result;
+}
+
+
+/// @brief Compute third x-derivative with a second order FD scheme
+/// @detailed f'''(x) = -f(x_{i-2}) + 2 f(x_{i-1}) - 2 f(x_{i+1}) + f(x_{i+1}) / 2 delta_x^3 
+template <class T>
+inline diag_array<T> diag_array<T> :: d3_dx3(const double Lx)
+{
+    diag_array<T> result(Nx, My);
+    int n{0}, m{0};
+    const double inv2dx3{0.5 * double(Nx * Nx * Nx) / double(Lx * Lx * Lx)};
+
+    for(n = 0; n < Nx; n++)
+        for(m = 0; m < My; m++)
+            result(n, m) = (-1.0 * (*this)(n - 2, m) + 2.0 * ((*this)(n - 1, m) - (*this)(n + 1, m)) + (*this)(n + 2, m)) * inv2dx3;
+    return result;
+}
+
+
+/// @brief Compute third y-derivative with a second order FD scheme
+/// @detailed f'''(x) = -f(x_{i-2}) + 2 f(x_{i-1}) - 2 f(x_{i+1}) + f(x_{i+1}) / 2 delta_x^3 
+template <class T>
+inline diag_array<T> diag_array<T> :: d3_dy3(const double Ly)
+{
+    diag_array<T> result(Nx, My);
+    int n{0}, m{0};
+    const double inv2dy3{0.5 * double(My * My * My) / double(Ly * Ly * Ly)};
+
+    for(n = 0; n < Nx; n++)
+        for(m = 0; m < My; m++)
+            result(n, m) = (-1.0 * (*this)(n, m - 2) + 2.0 * ((*this)(n, m - 1) - (*this)(n, m + 1)) + (*this)(n, m + 2)) * inv2dy3;
     return result;
 }
 

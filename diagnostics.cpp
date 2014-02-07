@@ -6,7 +6,6 @@
 
 
 #include "include/diagnostics.h"
-#include "include/diag_array.h"
 #include <string>
 #include <iostream>
 #include <iomanip>
@@ -24,6 +23,7 @@ diagnostics :: diagnostics(slab_config const config) :
     theta(config.get_nx(), config.get_my()), theta_x(config.get_nx(), config.get_my()), theta_y(config.get_nx(), config.get_my()),
     omega(config.get_nx(), config.get_my()), omega_x(config.get_nx(), config.get_my()), omega_y(config.get_nx(), config.get_my()),
     strmf(config.get_nx(), config.get_my()), strmf_x(config.get_nx(), config.get_my()), strmf_y(config.get_nx(), config.get_my()),
+    theta_rhs(config.get_nx(), config.get_my()), omega_rhs(config.get_nx(), config.get_my()),
     time(0.0),
     old_com_x(0.0),
     old_com_y(0.0),
@@ -147,9 +147,6 @@ void diagnostics :: init_diagnostic_output(string filename, string header, bool&
 }
 
 	
-//void diagnostics :: update_arrays(cuda_array<cuda::real_t>& c_theta, cuda_array<cuda::real_t>& c_theta_x, cuda_array<cuda::real_t>& c_theta_y,
-//                                  cuda_array<cuda::real_t>& c_omega, cuda_array<cuda::real_t>& c_omega_x, cuda_array<cuda::real_t>& c_omega_y,
-//                                  cuda_array<cuda::real_t>& c_strmf, cuda_array<cuda::real_t>& c_strmf_x, cuda_array<cuda::real_t>& c_strmf_y)
 void diagnostics :: update_arrays(slab_cuda& slab)
 {
     theta.update(slab.theta);
@@ -161,11 +158,25 @@ void diagnostics :: update_arrays(slab_cuda& slab)
     strmf.update(slab.strmf);
     strmf_x.update(slab.strmf_x);
     strmf_y.update(slab.strmf_y);
+    theta_rhs.update(slab.theta_rhs);
+    omega_rhs.update(slab.omega_rhs);
 }
 
 /*
  *************************** Diagnostic routines *******************************
  */ 
+
+
+void diagnostics::diag_rhs(const twodads::real_t time)
+{
+    cout << "diag_rhs:\n";
+    cout << "theta_rhs.max = " << theta_rhs.get_max() << "\t";
+    cout << "theta_rhs.min = " << theta_rhs.get_min() << "\t";
+    cout << "theta_rhs.mean = " << theta_rhs.get_mean() << "\t";
+    cout << "omega_rhs.max = " << omega_rhs.get_max() << "\t";
+    cout << "omega_rhs.min = " << omega_rhs.get_min() << "\t";
+    cout << "omega_rhs.mean = " << omega_rhs.get_mean() << "\n";
+}
 
 
 void diagnostics::write_diagnostics(const twodads::real_t time, const slab_config& config)
@@ -187,7 +198,7 @@ void diagnostics::write_diagnostics(const twodads::real_t time, const slab_confi
                 break;
         }
     }
-
+    diag_rhs(time);
 }
 
 
@@ -288,51 +299,64 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 }
 
 
+///@brief Compute energy integrals for various turbulence models
+///@param time Time of output
+///@detailed flows.dat: t D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13
+///@detailed $D_{1} = \frac{1}{2A} \int \mathrm{d}A n^2$
+///@detailed $D_{2} = \frac{1}{2A} \int \mathrm{d}A \left\nabla_\perp \phi\right)^2$
+///@detailed $D_{3} = \frac{1}{2A} \int \mathrm{d}A \Omega^2$
+///@detailed $D_{4} = -\frac{1}{A} \int \mathrm{d}A \widetilde{n}\widetilde{\phi_y}$
+///@detailed $D_{5} = \frac{1}{A} \int \mathrm{d}A \left(\bar{n} - \bar{\phi}\right)^2$
+///@detailed $D_{6} = \frac{1}{A} \int \mathrm{d}A \left(\widetilde{n} - \widetilde{\phi}\right)^2$
+///@detailed $D_{7} = \frac{1}{A} \int \mathrm{d}A \bar{\phi} \left( \bar{\phi} - \bar{n} \right)$
+///@detailed $D_{8] = \frac{1}{A} \int \mathrm{d}A \widetilde{\phi} \left( \widetilde{\phi} - \widetilde{n}\right)$
+///@detailed $D_{9} = \frac{1}{A} \int \mathrm{d}A 0$
+///@detailed $D_{10} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp^2 n$
+///@detailed $D_{11} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp \phi \nabla_\perp \Omega$
+///@detailed $D_{12} = \frac{1}{A} \int \mathrm{d}A n_{xxx}^2 + n_{yyy}^2$
+///@detailed $D_{13} = \frac{1}{A} \int \mathrm{d}A \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}$
+
 void diagnostics::diag_energy(const twodads::real_t time)
 {
 	ofstream output;
 
-    //fftw_plan plan_fw, plan_bw;
-
     // Energy transfer integrals for interchange model
-    double A = 0.0, B = 0.0, C = 0.0, D = 0.0, E = 0.0, F = 0.0, G = 0.0, H = 0.0;
-    double K = 0.0, O = 0.0, P = 0.0, Q = 0.0, S = 0.0, T = 0.0, U = 0.0, V = 0.0;
-    double W = 0.0, max1 = 0.0, max2 = 0.0, cfl = 0.0;
+    double max1 = 0.0, max2 = 0.0, cfl = 0.0;
 
-    double D1 = 0.0, D2 = 0.0, D3 = 0.0, D4 = 0.0, D5 = 0.0, D6 = 0.0, D7 = 0.0, D8 = 0.0, D9 = 0.0, D10 = 0.0;
-    double D11 = 0.0, D12 = 0.0, D13 = 0.0;
+    double Ly = slab_layout.delta_y * double(slab_layout.My);
+    double Lx = slab_layout.delta_x * double(slab_layout.Nx);
 
-    A = (theta_x * (theta * strmf_y).bar()).get_mean();
-    B = 0.5 * (theta.bar() * theta.bar()).get_mean() ;
-    C = omega.get_mean();
-    D = 0.5 * (theta_x.bar() * theta_x.bar()).get_mean(); 
-    E = 0.5 * (omega.tilde() * omega.tilde()).get_mean();
-    F = -1.0 * (theta * strmf_y).get_mean();
-    H = theta.get_mean();
-    G = 0.0; // ???
-    K = 0.5  * (strmf_x.tilde()*strmf_x.tilde() + strmf_y*strmf_y).get_mean();
-    O = (omega_x.bar()).get_mean();
-    P = (theta.tilde() * theta.tilde()).get_mean();
-    Q = ((theta_x.tilde() * theta_x.tilde()) + (theta_y * theta_y)).get_mean();
-    S = -1.0 * (omega * strmf_y).get_mean();
-    T = ((strmf_x * strmf_y) * omega.bar()).get_mean();
-    U = 0.5 * (strmf_x.bar() * strmf_x.bar()).get_mean();
-    W = 0.5 * (omega.bar() * omega.bar()).get_mean();
-    V = 0.5 * (omega_x.tilde()*omega_x.tilde() + omega_y * omega_y).get_mean();
+    const double A{(theta_x * (theta * strmf_y).bar()).get_mean()};
+    const double B{0.5 * (theta.bar() * theta.bar()).get_mean()};
+    const double C{omega.get_mean()};
+    const double D{0.5 * (theta_x.bar() * theta_x.bar()).get_mean()}; 
+    const double E{0.5 * (omega.tilde() * omega.tilde()).get_mean()};
+    const double F{-1.0 * (theta * strmf_y).get_mean()};
+    const double H{theta.get_mean()};
+    const double G{0.0}; // ???
+    const double K{0.5 * (strmf_x.tilde()*strmf_x.tilde() + strmf_y*strmf_y).get_mean()};
+    const double O{(omega_x.bar()).get_mean()};
+    const double P{(theta.tilde() * theta.tilde()).get_mean()};
+    const double Q{((theta_x.tilde() * theta_x.tilde()) + (theta_y * theta_y)).get_mean()};
+    const double S{-1.0 * (omega * strmf_y).get_mean()};
+    const double T{((strmf_x * strmf_y) * omega.bar()).get_mean()};
+    const double U{0.5 * (strmf_x.bar() * strmf_x.bar()).get_mean()};
+    const double W{0.5 * (omega.bar() * omega.bar()).get_mean()};
+    const double V{0.5 * (omega_x.tilde()*omega_x.tilde() + omega_y * omega_y).get_mean()};
 
-    D1 = 0.5 * (theta * theta).get_mean();
-    D2 = 0.5 * (strmf_x * strmf_x + strmf_y * strmf_y).get_mean();
-    D3 = 0.5 * (omega * omega).get_mean();
-    D4 = -1.0 * (theta.tilde() * strmf_y.tilde()).get_mean();
-    D5 = ((theta.bar() - strmf.bar()) *  (theta.bar() - strmf.bar())).get_mean();
-    D6 = ((theta.tilde() - strmf.tilde()) *  (theta.tilde() - strmf.tilde())).get_mean();
-    D7 = (strmf.bar() * (strmf.bar() - theta.bar())).get_mean();
-    D8 = (strmf.tilde() * (strmf.tilde() - theta.tilde())).get_mean();
-    D9 = (theta_x * theta_x + theta_y * theta_y).get_mean();
-    D10 = (strmf_x * omega_x + strmf_y * omega_y).get_mean();
-
-    // Quantities for energy theorem, diffusion and hyperviscosity parts
-    D11 = (strmf_x * omega_x + strmf_y * omega_y).get_mean();
+    const double D1{0.5 * (theta * theta).get_mean()};
+    const double D2{0.5 * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+    const double D3{0.5 * (omega * omega).get_mean()};
+    const double D4{-1.0 * (theta.tilde() * strmf_y.tilde()).get_mean()};
+    const double D5{((theta.bar() - strmf.bar()) *  (theta.bar() - strmf.bar())).get_mean()};
+    const double D6{( (theta.tilde() - strmf.tilde()) *  (theta.tilde() - strmf.tilde()) ).get_mean()};
+    const double D7{(strmf.bar() * (strmf.bar() - theta.bar())).get_mean()};
+    const double D8{(strmf.tilde() * (strmf.tilde() - theta.tilde())).get_mean()};
+    const double D9{0.0};
+    const double D10{(theta_x * theta_x + theta_y * theta_y).get_mean()};
+    const double D11{(strmf_x * omega_x + strmf_y * omega_y).get_mean()};
+    const double D12{((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
+    const double D13{((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
     // Compute the Reynolds stress
     //slab_array v(*theta);
@@ -385,7 +409,7 @@ void diagnostics::diag_energy(const twodads::real_t time)
         output << time << "\t";
         output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
         output << setw(12) << D6 << "\t" << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t";
-        output << setw(12) << D9 << "\t" << setw(12) << D10 << "\n";
+        output << setw(12) << D9 << "\t" << setw(12) << D10 << "\t" << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n";
         output.close();
     }
 
@@ -462,9 +486,6 @@ void diagnostics::diag_energy(const twodads::real_t time)
 
 
 void diagnostics::diag_probes(const twodads::real_t time)
-        //diag_array<double>& theta, diag_array<double>& theta_x, diag_array<double>& theta_y,  
-        //diag_array<double>& omega, diag_array<double>& omega_x, diag_array<double>& omega_y,  
-        //diag_array<double>& strmf, diag_array<double>& strmf_x, diag_array<double>& strmf_y)
 {
 	ofstream output;
     stringstream filename;	
@@ -511,3 +532,4 @@ void diagnostics::diag_probes(const twodads::real_t time)
 	}	
 }
 
+// End of file diagnostics.cpp

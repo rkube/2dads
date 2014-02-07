@@ -1,5 +1,5 @@
 ///
-///  diagnostics - To write diagnostics for turbulence simulations
+///  To write diagnostics for turbulence simulations
 /// 
 
 
@@ -8,11 +8,11 @@
 
 #include "include/2dads_types.h"
 #include "include/cuda_types.h"
-#include "include/slab_config.h"
-#include "include/diag_array.h"
 #include "include/error.h"
+#include "include/slab_config.h"
 #include "include/cuda_array2.h"
 #include "include/slab_cuda.h"
+#include "include/diag_array.h"
 
 
 using namespace std;
@@ -35,23 +35,20 @@ class diagnostics {
 
 		/// @brief Write blob diagnostics 
         void diag_blobs(twodads::real_t const);
-        /// Energy diagnostics
+        /// @brief Energy diagnostics
         void diag_energy(twodads::real_t const);
-        //void particles_full(tracker const*, slab const * , double);
-        /// Write time series of physical variables
+        /// @brief Write time series of physical variables
         void diag_probes(twodads::real_t const);
-	    //void strmf_max(slab_cuda const*, double const);	
-        /// Write simulation parameters to log file
+        /// @brief Write simulation parameters to log file
+        void diag_rhs(twodads::real_t const);
 		void write_logfile();		
 	   
-        // This is a fix. applying operator?= on any diag_array returns an array_base
-        //twodads::real_t get_mean(diag_array<twodads::real_t>&);    
-		
         twodads::diag_data_t slab_layout;
 
         diag_array<double> theta, theta_x, theta_y;
         diag_array<double> omega, omega_x, omega_y;
         diag_array<double> strmf, strmf_x, strmf_y;
+        diag_array<double> theta_rhs, omega_rhs;
 
 		twodads::real_t time; /// Real time 
 		twodads::real_t old_com_x; /// Old radial COM velocity of the blob
@@ -60,7 +57,7 @@ class diagnostics {
 		twodads::real_t old_wyy; /// Old dispersion tensor of the blob
 		twodads::real_t t_probe; /// Time for probe diagnostics
 	
-        unsigned int n_probes; /// Number of blobs
+        unsigned int n_probes; /// Number of probes
 		bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
         twodads::real_t theta_bg; /// Subtract uniform background on theta
 		// Flags which output files have been initialized
@@ -68,9 +65,9 @@ class diagnostics {
 		bool init_flag_kinetic; /// True if kinetic.dat has been initialized
         bool init_flag_thermal; /// True if thermal.dat has been initialized
         bool init_flag_flow; /// True of flows.dat has been initialized
-        bool init_flag_particles;
-        bool init_flag_tprobe; 
-        bool init_flag_oprobe;
+        bool init_flag_particles; /// Not implemented yet
+        bool init_flag_tprobe; /// Not implemented yet
+        bool init_flag_oprobe; /// Not implemented yet
 };
 
 #endif //__DIAGNOSTICS_H	

@@ -3,7 +3,7 @@ include Makefile.inc
 # Subdirectories
 TEST_DIR = tests
 
-.PHONY: slab_cuda clean tests
+.PHONY: slab_cuda clean tests dist
 
 all: cuda_array2 output initialize diagnostics slab_config slab_cuda 
 base: cuda_array2 initialize diagnostics slab_config output slab_cuda 
@@ -28,13 +28,12 @@ output:
 diagnostics:
 	$(CC) $(CFLAGS) -c -o obj/diagnostics.o diagnostics.cpp $(IFLAGS)
 
-#array_base:
-#	$(CC) $(CFLAGS) -c -o obj/array_base.o array_base.cpp $(IFLAGS)
-#diag_array: 
-#	$(CC) $(CFLAGS) -c -o obj/diag_array.o diag_array.cpp $(IFLAGS)
-
-tests: cuda_array2 slab_cuda initialize output
+tests: cuda_array2 slab_cuda initialize output diagnostics
 	$(MAKE) -C $(TEST_DIR)
+
+dist:
+	cp -R *.cpp *.cu Makefile Makefile.inc include/ dist
+
 
 clean:
 	rm obj/*.o

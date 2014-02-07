@@ -7,7 +7,6 @@
  *
  */
 
-//#include "include/2dads_types.h"
 #include "include/slab_config.h"
 #include "include/error.h"
 #include "include/2dads_types.h"
@@ -185,6 +184,26 @@ slab_config :: slab_config() :
         if (str.compare(string("strmf")) == 0)
         {
             output.push_back(twodads::output_t::o_strmf);
+            continue;
+        }
+        if (str.compare(string("strmf_x")) == 0)
+        {
+            output.push_back(twodads::output_t::o_strmf_x);
+            continue;
+        }
+        if (str.compare(string("strmf_y")) == 0)
+        {
+            output.push_back(twodads::output_t::o_strmf_y);
+            continue;
+        }
+        if (str.compare(string("theta_rhs")) == 0)
+        {
+            output.push_back(twodads::output_t::o_theta_rhs);
+            continue;
+        }
+        if (str.compare(string("omega_rhs")) == 0)
+        {
+            output.push_back(twodads::output_t::o_omega_rhs);
             continue;
         }
     }

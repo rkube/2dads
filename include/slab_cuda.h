@@ -4,16 +4,15 @@
 ///
 
 
+#ifndef SLAB_CUDA_H
+#define SLAB_CUDA_H
+
 #include "cufft.h"
 #include "cuda_types.h"
 #include "2dads_types.h"
 #include "cuda_array2.h"
 #include "slab_config.h"
 #include "output.h"
-//#include "diagnostics.h"
-//#include "diag_array.h"
-
-//class diagnostics{};
 
 class slab_cuda
 {
@@ -38,6 +37,12 @@ class slab_cuda
         void d_dy(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute y derivative
         // Solve laplace equation in k-space
         void inv_laplace(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
+
+        // Debug functions that only enumerate the array by row and col number (1000 * col + row)
+        void d_dx_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute x derivative 
+        void d_dy_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute y derivative
+        // Solve laplace equation in k-space
+        void inv_laplace_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
         
         // Advance all fields with multiple time levels
         void advance(); ///<Advance all member fields with multiple time levels theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
@@ -48,7 +53,7 @@ class slab_cuda
         void update_real_fields(uint); ///< Update all real fields
         // Compute new theta_hat, omega_hat into tlev0.
         void integrate_stiff(twodads::dyn_field_t, uint); ///< Time step
-
+        void integrate_stiff_enumerate(twodads::dyn_field_t, uint);
         // Carry out DFT
         void dft_r2c(twodads::field_t, twodads::field_k_t, uint); ///< Real to complex DFT
         void dft_c2r(twodads::field_k_t, twodads::field_t, uint); ///< Complex to real DFT
@@ -60,10 +65,9 @@ class slab_cuda
         // Make output_h5 a pointer since we deleted the default constructor
         void write_output(twodads::real_t); ///<Write output fields
         friend class diagnostics;
-        //friend void diagnostics::update_fields(cuda_array<cuda::real_t>& theta);
-        //void write_diagnostics(twodads::real_t); ///<Write diagnostics
 
         void dump_address();
+        void dump_stiff_params();
     private:
         slab_config config; ///< slab configuration
         const uint Nx; ///< Number of discretization points in x-direction
@@ -74,6 +78,7 @@ class slab_cuda
         cuda_array<cuda::real_t> omega, omega_x, omega_y; ///< Real fields assoc. with omega
         cuda_array<cuda::real_t> strmf, strmf_x, strmf_y; ///< Real fields assoc.with stream function
         cuda_array<cuda::real_t> tmp_array; ///< temporary data
+        cuda_array<cuda::real_t> theta_rhs, omega_rhs; ///< Real fields for RHS, for debugging
 
         cuda_array<cuda::cmplx_t> theta_hat, theta_x_hat, theta_y_hat; ///< Fourier fields assoc. with theta
         cuda_array<cuda::cmplx_t> omega_hat, omega_x_hat, omega_y_hat; ///< Fourier fields assoc. with omega
@@ -84,9 +89,6 @@ class slab_cuda
         cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
 
         // Arrays that store data on CPU for diagnostic functions
-        //diag_array<cuda::real_t> theta_diag, theta_x_diag, theta_y_diag; ///< Copy of cuda_arrays for diagnostic functioins  
-        //diag_array<cuda::real_t> omega_diag, omega_x_diag, omega_y_diag; ///< Copy of cuda_arrays for diagnostic functioins  
-        //diag_array<cuda::real_t> strmf_diag, strmf_x_diag, strmf_y_diag; ///< Copy of cuda_arrays for diagnostic functioins  
         rhs_fun_ptr theta_rhs_fun; ///< Evaluate explicit part for time integrator
         rhs_fun_ptr omega_rhs_fun; ///< Evaluate explicit part for time integrator
 
@@ -165,4 +167,5 @@ class slab_cuda
         void omega_rhs_ic(uint); ///< Interchange turbulence
 };
 
+#endif //SLAB_CUDA_H
 // End of file slab_cuda.h

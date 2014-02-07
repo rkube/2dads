@@ -16,8 +16,6 @@ namespace twodads {
     const double PI = 3.14159265358979323846264338327950288;
 
     // Coefficients for stiffly stable time integration
-    //constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
-    //constexpr real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
     const real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
     const real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
 
@@ -36,7 +34,7 @@ namespace twodads {
     enum field_t {f_theta, ///< theta
         f_theta_x,  ///< radial derivative of theta
         f_theta_y, ///< poloidal derivative of theta
-        f_omega, f_omega_x, f_omega_y,f_strmf, f_strmf_x, f_strmf_y, f_tmp};
+        f_omega, f_omega_x, f_omega_y,f_strmf, f_strmf_x, f_strmf_y, f_tmp, f_theta_rhs, f_omega_rhs};
 
     /// List of fields of Fourier coefficients
     //enum class field_k_t {f_theta_hat, f_theta_x_hat, f_theta_y_hat,
@@ -95,7 +93,7 @@ namespace twodads {
     enum output_t {o_theta,  ///< Theta, thermodynamic variable
         o_theta_x, ///< Radial derivative of theta
         o_theta_y, ///< Poloidal derivative of theta
-        o_omega, o_omega_x, o_omega_y, o_strmf};
+        o_omega, o_omega_x, o_omega_y, o_strmf, o_strmf_x, o_strmf_y, o_theta_rhs, o_omega_rhs};
 
 
     struct diag_data_t

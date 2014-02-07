@@ -7,6 +7,9 @@
  *
  */
 
+#ifndef __OUTPUT_CLASS
+#define __OUTPUT_CLASS
+
 #include "include/2dads_types.h"
 #include "include/cuda_types.h"
 //#include "array_base.h"
@@ -20,9 +23,6 @@
 #endif
 
 using namespace std;
-
-#ifndef __OUTPUT_CLASS
-#define __OUTPUT_CLASS
 
 // Base class for output
 // Virtual only
@@ -64,7 +64,11 @@ private:
     Group* group_omega_x;
     Group* group_omega_y;
     Group* group_strmf;
-    
+    Group* group_strmf_x;
+    Group* group_strmf_y;
+    Group* group_omega_rhs;
+    Group* group_theta_rhs;
+
     DataSpace* dspace_file;
     // Vector of output functions
     //vector<ofun_ptr> o_funs_vec;
@@ -76,6 +80,10 @@ private:
     DataSpace dspace_omega_x;
     DataSpace dspace_omega_y;
     DataSpace dspace_strmf;
+    DataSpace dspace_strmf_x;
+    DataSpace dspace_strmf_y;
+    DataSpace dspace_omega_rhs;
+    DataSpace dspace_theta_rhs;
     DSetCreatPropList ds_creatplist;
     // Mapping from field types to dataspace
     DataSpace* get_dspace_from_field(twodads::output_t);
