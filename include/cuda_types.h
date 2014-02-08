@@ -3,14 +3,16 @@
 
 #include "vector_types.h"
 #include "cufft.h"
+#include "cucmplx.h"
 
 namespace cuda
 {
     //typedef cufftDoubleComplex cmplx_t;
-    typedef double2 cmplx_t;
+    //typedef double2 cmplx_t;
     typedef double real_t;
+    typedef CuCmplx<real_t> cmplx_t;
     const unsigned int cuda_blockdim_nx = 1; ///< Block dimension in radial (x) direction
-    const unsigned int cuda_blockdim_my = 16; ///< Block dimension in poloidal(y) direction
+    const unsigned int cuda_blockdim_my = 8; ///< Block dimension in poloidal(y) direction
     //const real_t PI = 3.14159265358979323846264338327950288;
     const real_t PI = 3.141592653589793; ///< $\pi$
     const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$

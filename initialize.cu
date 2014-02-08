@@ -1,5 +1,4 @@
 /*
- *
  * CUDA specific initialization function
  *
  */
@@ -7,7 +6,7 @@
 #include <iostream>
 #include <vector>
 #include "include/cuda_types.h"
-#include "include/cuda_array2.h"
+#include "include/cuda_array3.h"
 
 
 __global__ 
@@ -79,7 +78,8 @@ void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, double* params
 
 /// Initialize gaussian profile around a single mode
 __global__
-void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
+//void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
+void d_init_mode_exp(CuCmplx<cuda::real_t>* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -91,7 +91,9 @@ void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double am
     double damp = exp ( -((n-modex)*(n-modex) / sigma) - ((m-modey)*(m-modey) / sigma) ); 
     double phase = 0.56051 * 2.0 * cuda::PI;  
     
-    array[idx] = make_cuDoubleComplex(damp * amp * cos(phase), damp * amp * sin(phase));
+    //array[idx] = make_cuDoubleComplex(damp * amp * cos(phase), damp * amp * sin(phase));
+    CuCmplx<cuda::real_t> foo(damp * amp * cos(phase), damp * amp * sin(phase));
+    array[idx] = foo;
     //printf("sigma = %f, re = %f, im = %f\n", sigma, array[idx].x, array[idx].y);
 }
 
@@ -102,14 +104,15 @@ void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, u
 {
     const uint idx = row * layout.My + col;
     const double phase = 0.56051 * cuda::TWOPI;
-    array[idx] = make_cuDoubleComplex(amp * cos(phase), amp * sin(phase));
+    CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
+    array[idx] = foo;
     printf("d_init_mode: mode(%d, %d) at idx = %d = (%f, %f)\n",
             row, col, idx, cos(phase), sin(phase));
 }
 
 
 /// Initialize sinusoidal profile
-void init_simple_sine(cuda_array<cuda::real_t>* arr, 
+void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr, 
         vector<double> initc,
         const double delta_x,
         const double delta_y,
@@ -132,7 +135,7 @@ void init_simple_sine(cuda_array<cuda::real_t>* arr,
 
 
 /// Initialize field with a guassian profile
-void init_gaussian(cuda_array<cuda::real_t>* arr,
+void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
         vector<double> initc,
         const double delta_x,
         const double delta_y,
@@ -166,7 +169,7 @@ void init_gaussian(cuda_array<cuda::real_t>* arr,
 
 
 /// Initialize real field with nabla^2 exp(-(x-x0)^2/ (2. * sigma^2) - (y - y0)^2 / (2. * sigma_y^2)
-void init_invlapl(cuda_array<cuda::real_t>* arr,
+void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
         vector<double> initc,
         const double delta_x,
         const double delta_y,
@@ -190,7 +193,7 @@ void init_invlapl(cuda_array<cuda::real_t>* arr,
 
 
 
-void init_mode(cuda_array<cuda::cmplx_t>* arr,
+void init_mode(cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr,
         vector<double> initc,
         const double delta_x,
         const double delta_y,
@@ -203,7 +206,8 @@ void init_mode(cuda_array<cuda::cmplx_t>* arr,
 
     const unsigned int num_modes = initc.size() / 4;
     
-    (*arr) = make_cuDoubleComplex(0.0, 0.0);
+    //(*arr) = make_cuDoubleComplex(0.0, 0.0);
+    (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
     for(uint n = 0; n < num_modes; n++)
     {
         cout << "mode " << n << ": amp=" << initc[4*n] << " ky=" << initc[4*n+1] << ", kx=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";

@@ -376,7 +376,7 @@ void slab_cuda :: initialize()
 /// @param t_src source time index
 void slab_cuda :: move_t(twodads::field_t fname, uint t_dst, uint t_src)
 {
-    cuda_array<cuda::real_t>* arr = get_field_by_name(fname);
+    cuda_array<cuda::real_t, cuda::real_t>* arr = get_field_by_name(fname);
     arr -> move(t_dst, t_src);
 }
 
@@ -387,7 +387,7 @@ void slab_cuda :: move_t(twodads::field_t fname, uint t_dst, uint t_src)
 /// @param t_src source time index
 void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
-    cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr = get_field_by_name(fname);
     arr -> move(t_dst, t_src);
 }
 
@@ -398,7 +398,7 @@ void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 /// @param t_src source time index
 void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
-    cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr = get_field_by_name(fname);
     arr -> copy(t_dst, t_src);
 }
 
@@ -409,7 +409,7 @@ void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 /// @param t_src time index
 void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 {
-    cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr = get_field_by_name(fname);
     arr -> set_t(val, t_src);
 }
 
@@ -467,9 +467,9 @@ void slab_cuda::update_real_fields(uint tlev)
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t)
 {
     cufftResult err;
-    cuda_array<cuda::real_t>* arr_r = get_field_by_name(fname_r);
-    cuda_array<cuda::cmplx_t>* arr_c = get_field_by_name(fname_c);
-    err = cufftExecD2Z(plan_r2c, arr_r -> get_array_d(), arr_c -> get_array_d(t));
+    cuda_array<cuda::real_t, cuda::real_t>* arr_r = get_field_by_name(fname_r);
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr_c = get_field_by_name(fname_c);
+    err = cufftExecD2Z(plan_r2c, arr_r -> get_array_d(), (cufftDoubleComplex*) arr_c -> get_array_d(t));
     if (err != CUFFT_SUCCESS)
         throw;
 }
@@ -482,9 +482,9 @@ void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, 
 void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, uint t)
 {
     cufftResult err;
-    cuda_array<cuda::cmplx_t>* arr_c= get_field_by_name(fname_c);
-    cuda_array<cuda::real_t>* arr_r = get_field_by_name(fname_r);
-    err = cufftExecZ2D(plan_c2r, arr_c -> get_array_d(t), arr_r -> get_array_d());
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr_c= get_field_by_name(fname_c);
+    cuda_array<cuda::real_t, cuda::real_t>* arr_r = get_field_by_name(fname_r);
+    err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) arr_c -> get_array_d(t), arr_r -> get_array_d());
     if (err != CUFFT_SUCCESS)
         throw;
     // Normalize
@@ -495,7 +495,7 @@ void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, 
 // dump real field on terminal
 void slab_cuda :: dump_field(twodads::field_t field_name)
 {
-    cuda_array<cuda::real_t>* field = get_field_by_name(field_name);
+    cuda_array<cuda::real_t, cuda::real_t>* field = get_field_by_name(field_name);
     cout << *field << "\n";
     cudaDeviceSynchronize();
 }
@@ -505,7 +505,7 @@ void slab_cuda :: dump_field(twodads::field_t field_name)
 /// @param field_name name of complex field
 void slab_cuda :: dump_field(twodads::field_k_t field_name)
 {
-    cuda_array<cuda::cmplx_t>* field = get_field_by_name(field_name);
+    cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* field = get_field_by_name(field_name);
     cout << *field << "\n";
 }
 
@@ -567,7 +567,7 @@ void slab_cuda ::dump_stiff_params()
 
 /// @brief convert field type to internal pointer
 /// @param field name of the real field
-cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
+cuda_array<cuda::real_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
 {
     switch(field)
     {
@@ -615,7 +615,7 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
 
 /// @brief convert field type to internal pointer
 /// @param field name of the complex field
-cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::field_k_t field)
+cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_k_t field)
 {
     switch(field)
     {
@@ -663,7 +663,7 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::field_k_t fie
 
 /// @brief convert field type to internal pointer
 /// @param fname name of the output field
-cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname)
+cuda_array<cuda::real_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname)
 {
     switch(fname)
     {
@@ -708,7 +708,7 @@ cuda_array<cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname
 
 /// @brief convert field type to internal pointer
 /// @param fname name of the dynamic field
-cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::dyn_field_t fname)
+cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::dyn_field_t fname)
 {
     switch(fname)
     {
@@ -726,7 +726,7 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_field_by_name(twodads::dyn_field_t f
 
 /// @brief convert field type to internal pointer
 /// @param fname name of the RHS field
-cuda_array<cuda::cmplx_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fname)
+cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fname)
 {
     switch(fname)
     {
@@ -745,14 +745,16 @@ cuda_array<cuda::cmplx_t>* slab_cuda :: get_rhs_by_name(twodads::dyn_field_t fna
 /// @param t not used 
 void slab_cuda :: theta_rhs_null(uint t)
 {
-    theta_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
+    CuCmplx<cuda::real_t> foobar(0.0, 0.0);
+    theta_rhs_hat = foobar;
 }
 
 /// @brief RHS, set explicit part for omega equation to zero
 /// @param t not used
 void slab_cuda :: omega_rhs_null(uint t)
 {
-    omega_rhs_hat = make_cuDoubleComplex(0.0, 0.0);
+    CuCmplx<cuda::real_t> foobar(0.0, 0.0);
+    omega_rhs_hat = foobar;
 }
 
 // end of file slab_cuda.cpp

@@ -91,10 +91,13 @@ output_h5 :: ~output_h5()
 }
 
 
-void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
+void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t, cuda::real_t>* src, const cuda::real_t time)
 {
     // Dataset name is /[OST]/[0-9]*
-    string dataset_name = get_fname_str_from_field(field_name) + "/" + to_string(output_counter); 
+    //string dataset_name = get_fname_str_from_field(field_name) + "/" + to_string(output_counter); 
+    stringstream foo;
+    foo << get_fname_str_from_field(field_name) << "/" << to_string(output_counter);
+    string dataset_name(foo.str());
     output_file = new H5File(filename, H5F_ACC_RDWR);
 	DataSpace* dspace_ptr = get_dspace_from_field(field_name);
 

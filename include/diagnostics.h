@@ -3,14 +3,14 @@
 /// 
 
 
-#ifndef __DIAGNOSTICS_H
-#define __DIAGNOSTICS_H
+#ifndef DIAGNOSTICS_H
+#define DIAGNOSTICS_H
 
 #include "include/2dads_types.h"
 #include "include/cuda_types.h"
 #include "include/error.h"
 #include "include/slab_config.h"
-#include "include/cuda_array2.h"
+//#include "include/cuda_array3.h"
 #include "include/slab_cuda.h"
 #include "include/diag_array.h"
 
@@ -70,4 +70,4 @@ class diagnostics {
         bool init_flag_oprobe; /// Not implemented yet
 };
 
-#endif //__DIAGNOSTICS_H	
+#endif //DIAGNOSTICS_H	

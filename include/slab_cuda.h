@@ -10,7 +10,7 @@
 #include "cufft.h"
 #include "cuda_types.h"
 #include "2dads_types.h"
-#include "cuda_array2.h"
+#include "cuda_array3.h"
 #include "slab_config.h"
 #include "output.h"
 
@@ -54,6 +54,7 @@ class slab_cuda
         // Compute new theta_hat, omega_hat into tlev0.
         void integrate_stiff(twodads::dyn_field_t, uint); ///< Time step
         void integrate_stiff_enumerate(twodads::dyn_field_t, uint);
+
         // Carry out DFT
         void dft_r2c(twodads::field_t, twodads::field_k_t, uint); ///< Real to complex DFT
         void dft_c2r(twodads::field_k_t, twodads::field_t, uint); ///< Complex to real DFT
@@ -74,19 +75,19 @@ class slab_cuda
         const uint My; ///< Number of discretization points in y=direction
         const uint tlevs; ///< Number of time levels stored, order of time integration + 1
 
-        cuda_array<cuda::real_t> theta, theta_x, theta_y; ///< Real fields assoc. with theta
-        cuda_array<cuda::real_t> omega, omega_x, omega_y; ///< Real fields assoc. with omega
-        cuda_array<cuda::real_t> strmf, strmf_x, strmf_y; ///< Real fields assoc.with stream function
-        cuda_array<cuda::real_t> tmp_array; ///< temporary data
-        cuda_array<cuda::real_t> theta_rhs, omega_rhs; ///< Real fields for RHS, for debugging
+        cuda_array<cuda::real_t, cuda::real_t> theta, theta_x, theta_y; ///< Real fields assoc. with theta
+        cuda_array<cuda::real_t, cuda::real_t> omega, omega_x, omega_y; ///< Real fields assoc. with omega
+        cuda_array<cuda::real_t, cuda::real_t> strmf, strmf_x, strmf_y; ///< Real fields assoc.with stream function
+        cuda_array<cuda::real_t, cuda::real_t> tmp_array; ///< temporary data
+        cuda_array<cuda::real_t, cuda::real_t> theta_rhs, omega_rhs; ///< Real fields for RHS, for debugging
 
-        cuda_array<cuda::cmplx_t> theta_hat, theta_x_hat, theta_y_hat; ///< Fourier fields assoc. with theta
-        cuda_array<cuda::cmplx_t> omega_hat, omega_x_hat, omega_y_hat; ///< Fourier fields assoc. with omega
-        cuda_array<cuda::cmplx_t> strmf_hat, strmf_x_hat, strmf_y_hat; ///< Fourier fields assoc. with strmf
-        cuda_array<cuda::cmplx_t> tmp_array_hat; ///< Temporary data, Fourier field
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> theta_hat, theta_x_hat, theta_y_hat; ///< Fourier fields assoc. with theta
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> omega_hat, omega_x_hat, omega_y_hat; ///< Fourier fields assoc. with omega
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> strmf_hat, strmf_x_hat, strmf_y_hat; ///< Fourier fields assoc. with strmf
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> tmp_array_hat; ///< Temporary data, Fourier field
 
-        cuda_array<cuda::cmplx_t> theta_rhs_hat; ///< non-linear RHS for time integration of theta
-        cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> theta_rhs_hat; ///< non-linear RHS for time integration of theta
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
 
         // Arrays that store data on CPU for diagnostic functions
         rhs_fun_ptr theta_rhs_fun; ///< Evaluate explicit part for time integrator
@@ -142,15 +143,15 @@ class slab_cuda
         cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration
         cuda::real_t* d_ss3_beta; ///< Coefficients for explicit part of time integration
         /// Get pointer to cuda_array<cuda::real_t> corresponding to field type 
-        cuda_array<cuda::real_t>* get_field_by_name(twodads::field_t);
+        cuda_array<cuda::real_t, cuda::real_t>* get_field_by_name(twodads::field_t);
         /// Get pointer to cuda_array<cuda::cmplx_t> corresponding to field type 
-        cuda_array<cuda::cmplx_t>* get_field_by_name(twodads::field_k_t);
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* get_field_by_name(twodads::field_k_t);
         /// Get pointer to cuda_array<cuda::real_t> corresponding to output field type 
-        cuda_array<cuda::real_t>* get_field_by_name(twodads::output_t);
+        cuda_array<cuda::real_t, cuda::real_t>* get_field_by_name(twodads::output_t);
         /// Get pointer to cuda_array<cuda::real_t> corresponding to dynamic field type 
-        cuda_array<cuda::cmplx_t>* get_field_by_name(twodads::dyn_field_t);
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* get_field_by_name(twodads::dyn_field_t);
         /// Get pointer to cuda_array<cuda::real_t> corresponding to RHS field type 
-        cuda_array<cuda::cmplx_t>* get_rhs_by_name(twodads::dyn_field_t);
+        cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* get_rhs_by_name(twodads::dyn_field_t);
 
         void theta_rhs_ns(uint); ///< Navier-Stokes 
         void theta_rhs_lin(uint); ///< Small amplitude blob

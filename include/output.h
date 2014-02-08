@@ -13,7 +13,7 @@
 #include "include/2dads_types.h"
 #include "include/cuda_types.h"
 //#include "array_base.h"
-#include "include/cuda_array2.h"
+#include "include/cuda_array3.h"
 #include <string>
 #include <vector>
 #include <H5Cpp.h>
@@ -34,7 +34,7 @@ public:
 
     // Interface to write output in given output resource
     // write_output is purely virtual and will only be defined in the derived class
-    virtual void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t) = 0;
+    virtual void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t) = 0;
 
     // Output counter and array dimensions
     uint output_counter;
@@ -51,7 +51,7 @@ public:
     ~output_h5();
     
     /// Write variable type var_type from passed slab_array to output file.
-    void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t);
+    void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t);
 
 private:
     string filename;
