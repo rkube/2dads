@@ -24,7 +24,6 @@ namespace twodads {
     // in c++98 (used by nvcc) just use f_theta
     // Make sure, all members of enums have a different name
     //enum class dyn_field_t {f_theta, f_omega};
-    /// dynamic fields
     enum dyn_field_t {d_theta, ///< theta, thermodynamic variable
                       d_omega  ///< oemga, vorticity
                       };
@@ -34,7 +33,7 @@ namespace twodads {
     enum field_t {f_theta, ///< theta
         f_theta_x,  ///< radial derivative of theta
         f_theta_y, ///< poloidal derivative of theta
-        f_omega, f_omega_x, f_omega_y,f_strmf, f_strmf_x, f_strmf_y, f_tmp, f_theta_rhs, f_omega_rhs};
+        f_omega, f_omega_x, f_omega_y, f_strmf, f_strmf_x, f_strmf_y, f_tmp, f_theta_rhs, f_omega_rhs};
 
     /// List of fields of Fourier coefficients
     //enum class field_k_t {f_theta_hat, f_theta_x_hat, f_theta_y_hat,
@@ -54,9 +53,11 @@ namespace twodads {
     //                       init_simple_sine, init_theta_mode, init_theta_const, init_file};
     enum init_fun_t {init_NA, ///< Not available, throws an error
         init_theta_gaussian,  ///< Initializes gaussian profile for theta, init_function = theta_gaussian
-        init_simple_sine,  ///< Initializes sinusoidal profile for theta
-        init_test, ///< Who knows?
         init_both_gaussian, ///< Initializes gaussian profile for both, theta and omega
+        init_theta_sine,  ///< Initializes sinusoidal profile for theta
+        init_omega_sine,  ///< Initializes sinusoidal profile for omega
+        init_both_sine,  ///< Initializes sinusoidal profile for theta and omega
+        init_test, ///< Who knows?
         init_theta_mode, ///< Initializes single modes for theta_hat
         init_omega_mode, ///< Initializes single modes for omega_hat
         init_both_mode, ///< Initializes single modes for theta_hat and omega_hat

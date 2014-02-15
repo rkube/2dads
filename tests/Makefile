@@ -17,46 +17,49 @@ test_array3:
 test_copy:
 	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array2.o test_copy.cpp $(IFLAGS) $(LFLAGS)
 
+# Run basic tests on slab structure
+# Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines
 test_slab:
-	$(CC) $(CFLAGS) -o test_slab $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_slab.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab/test_init $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o test_init.cpp $(IFLAGS) $(LFLAGS)
+# Test enumeration of derivation kernels d_dx, d_dy, inv_lapl and time integrator stiff_k
+	$(CC) $(CFLAGS) -o test_slab/test_enum $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_enum.cpp $(IFLAGS) $(LFLAGS)
 
-test_init:
-	$(CC) $(CFLAGS) -o test_init $(OBJ_DIR)/initialize.o  $(OBJ_DIR)/cuda_array2.o test_init.cpp $(IFLAGS) $(LFLAGS)
 
+# Test that Fourier transformation work 
 test_dft:
-	$(CUDACC) $(CUDACFLAGS) -o test_dft $(OBJ_DIR)/initialize.o test_dft.cu $(IFLAGS) $(CUDALFLAGS)
+	$(CUDACC) $(CUDACFLAGS) -o test_slab/test_dft $(OBJ_DIR)/initialize.o test_dft.cu $(IFLAGS) $(CUDALFLAGS)
 
+# Test that derivation routines work
 test_derivs:
-	$(CC) $(CFLAGS) -o test_derivs/test_derivs $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_derivs.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab/test_derivs $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_derivs.cpp $(IFLAGS) $(LFLAGS)
 
+# Test time integrator, solve diffusion problem and show how modes are integrated
+test_stiff:
+	$(CC) $(CFLAGS) -o test_stiff/test_stiff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_stiff.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_stiff/test_diff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_diff.cpp $(IFLAGS) $(LFLAGS)
+
+
+# Test HDF5 output routines
+test_output:
+	$(CC) $(CFLAGS) -o test_output/test_output $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_output.cpp $(IFLAGS) $(LFLAGS)
+
+
+# Test diagnostics
+test_diag:
+	$(CC) $(CFLAGS) -o test_diag $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_diag.cpp $(IFLAGS) $(LFLAGS)
+
+# Toy around with memcpu
 test_memcpy:
 	$(CUDACC) -arch=sm_30 -O0 -o test_memcpy test_memcpy.cu $(IFLAGS) 
-
-test_output:
-	$(CC) $(CFLAGS) -DDEBUG -o test_output $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_output.cpp $(IFLAGS) $(LFLAGS)
-
-test_stiff:
-	$(CC) $(CFLAGS) -DDEBUG -o test_stiff/test_stiff $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_stiff.cpp $(IFLAGS) $(LFLAGS)
-
-test_diff:
-	$(CC) $(CFLAGS) -o test_diff/test_diff $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_diff.cpp $(IFLAGS) $(LFLAGS)
 
 test_blob:
 	$(CC) $(CFLAGS) -o test_blob/test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_blob.cpp $(IFLAGS) $(LFLAGS)
 
 test_hw:
-	$(CC) $(CFLAGS) -o test_hw/test_hw $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_hw.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_hw/test_hw $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_hw.cpp $(IFLAGS) $(LFLAGS)
 
-test_diagarray:
-	$(CC) $(CFLAGS) -o test_diagarray $(OBJ_DIR)/cuda_array2.o test_diagarray.cpp $(IFLAGS) $(LFLAGS)
 
 clean:
 	rm test_array2 test_arrayc test_slab test_init test_arith test_deriv test_diff
-
-
-
-#test_array2: 
-#	$(CC) $(CFLAGS) -o test_array2 $(OBJ_DIR)/cuda_array2.o test_array2.cpp $(IFLAGS) $(LFLAGS) 
-
 
 

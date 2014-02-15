@@ -17,6 +17,6 @@ int main(void)
     slab_cuda slab(my_config);
     slab.dump_stiff_params();
     slab.initialize();
-    slab.integrate_stiff_debug(twodads::dyn_field_t::d_theta, 4);
+    slab.integrate_stiff_debug(twodads::field_k_t::f_theta_hat, uint(4), uint(2), uint(2));
     slab.dump_field(twodads::field_k_t::f_theta_hat);
 }

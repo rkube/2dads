@@ -13,23 +13,23 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
-#include <fftw3.h>
 
 
 using namespace std;
 using namespace H5;
 
 // Constructor of the base class
-output :: output(uint _nx, uint _my) :
+output :: output(slab_config config) :
     output_counter(0),
-    Nx(_nx),
-    My(_my)
+    Nx(config.get_nx()),
+    My(config.get_my())
 {
 }
 
 
-output_h5 :: output_h5(vector<twodads::output_t> o_list, uint _nx, uint _my) :
-    output(_nx, _my),
+//output_h5 :: output_h5(vector<twodads::output_t> o_list, uint _nx, uint _my) :
+output_h5 :: output_h5(slab_config config) :
+    output(config),
     filename("output.h5"),
     output_file(new H5File(H5std_string(filename.data()), H5F_ACC_TRUNC)),
 	group_theta(new Group(output_file -> createGroup("/T"))),
@@ -43,9 +43,9 @@ output_h5 :: output_h5(vector<twodads::output_t> o_list, uint _nx, uint _my) :
     group_strmf_y(new Group(output_file -> createGroup("/Sy"))),
     group_omega_rhs(new Group(output_file -> createGroup("/ORHS"))),
     group_theta_rhs(new Group(output_file -> createGroup("/TRHS"))),
-	dspace_file(NULL)
+	dspace_file(NULL),
+    o_list(config.get_output())
 {
-    cerr << "output_h5 :: output_h5\n";
 	// DataSpace dimension 
 	const hsize_t fdim[] = {Nx, My};
 	// Hyperslab parameter for ghost point array output
@@ -91,6 +91,25 @@ output_h5 :: ~output_h5()
 }
 
 
+/// @brief Call this routine to write output
+/// @detailed Note that get_field_by_name, when called with a twodads::output_t
+/// @detailed also calls cuda_array<%>.copy_device_to_host
+void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
+{
+    cuda_array<cuda::real_t, cuda::real_t>* arr;
+    // Iterate over list of fields we need to write output for
+    for(auto it : o_list)
+    {
+        arr = slab.get_field_by_name(it);
+        surface(it, arr, time);
+    }
+    output_counter++;
+}
+
+
+
+/// @brief Write output field
+/// @detailed This assumes that the host data src points to is up-to-date. 
 void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t, cuda::real_t>* src, const cuda::real_t time)
 {
     // Dataset name is /[OST]/[0-9]*
@@ -112,7 +131,6 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t,
     // Create time attribute for the Dataset
     Attribute att = dataset -> createAttribute("time", float_type, att_space);
     att.write(float_type, &time);
-    src -> copy_device_to_host();
 	dataset -> write( src -> get_array_h(), PredType::NATIVE_DOUBLE, *dspace_ptr );
 	delete dataset;
     delete output_file;

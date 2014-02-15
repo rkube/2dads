@@ -228,14 +228,16 @@ slab_config :: slab_config() :
     
 	if (init_function_str.compare(string("theta_gaussian")) == 0)
         init_function = twodads::init_fun_t::init_theta_gaussian;
-    
-    else if (init_function_str.compare(string("simple_sine")) == 0)
-        init_function = twodads::init_fun_t::init_simple_sine;
-    
-    else if (init_function_str.compare(string("init_test")) == 0)
-        init_function = twodads::init_fun_t::init_test;
     else if (init_function_str.compare(string("both_gaussian")) == 0)
         init_function = twodads::init_fun_t::init_both_gaussian;
+    else if (init_function_str.compare(string("theta_sine")) == 0)
+        init_function = twodads::init_fun_t::init_theta_sine;
+    else if (init_function_str.compare(string("omega_sine")) == 0)
+        init_function = twodads::init_fun_t::init_omega_sine;
+    else if (init_function_str.compare(string("both_sine")) == 0)
+        init_function = twodads::init_fun_t::init_both_sine;
+    else if (init_function_str.compare(string("init_test")) == 0)
+        init_function = twodads::init_fun_t::init_test;
     else if (init_function_str.compare(string("theta_mode")) == 0)
         init_function = twodads::init_fun_t::init_theta_mode;
     else if (init_function_str.compare(string("omega_mode")) == 0)

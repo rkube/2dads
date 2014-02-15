@@ -13,18 +13,12 @@
 #include "cuda_array3.h"
 #include "slab_config.h"
 #include "initialize.h"
-#include "cufft.h"
-#include <string>
-#include <fstream>
-
-
+//#include "output.h"
 
 class slab_cuda
 {
     public:
         typedef void (slab_cuda::*rhs_fun_ptr)(uint);
-        typedef cuda_array<cuda::cmplx_t, cuda::real_t> cuda_arr_cmplx;
-        typedef cuda_array<cuda::real_t, cuda::real_t> cuda_arr_real;
         slab_cuda(slab_config); ///< Standard constructors
         ~slab_cuda();
 
@@ -35,10 +29,9 @@ class slab_cuda
         void initialize(); ///< Initialize fields in a consistent manner. See docstring of the function
 
         void move_t(twodads::field_k_t, uint, uint); ///< move data for specified field from t_src to t_dst
-        //void move_t(twodads::field_t, uint, uint); ///< move data for real field form t_src to t_dst
+        void move_t(twodads::field_t, uint, uint); ///< move data for real field form t_src to t_dst
         void copy_t(twodads::field_k_t, uint, uint); ///< copy data for fourier field from t_src to t_dst
         void set_t(twodads::field_k_t, cuda::cmplx_t, uint); ///< set fourier field to fixed value at given tlev
-        void set_t(twodads::field_t, cuda::real_t); ///< set real field to fixed value at given tlev
 
         // compute spectral derivative
         void d_dx(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute x derivative 
@@ -60,21 +53,19 @@ class slab_cuda
         // time level
         void update_real_fields(uint); ///< Update all real fields
         // Compute new theta_hat, omega_hat into tlev0.
-        void integrate_stiff(twodads::field_k_t, uint); ///< Time step
-        void integrate_stiff_enumerate(twodads::field_k_t, uint);
-        void integrate_stiff_debug(twodads::field_k_t, uint, uint, uint);
+        void integrate_stiff(twodads::dyn_field_t, uint); ///< Time step
+        void integrate_stiff_enumerate(twodads::dyn_field_t, uint);
         // Carry out DFT
         void dft_r2c(twodads::field_t, twodads::field_k_t, uint); ///< Real to complex DFT
         void dft_c2r(twodads::field_k_t, twodads::field_t, uint); ///< Complex to real DFT
 
-        void dump_field(twodads::field_t); ///< Dump member cuda_array to terminal
-        void dump_field(twodads::field_t, string); ///< Dump member cuda_array to ascii file
-        void dump_field(twodads::field_k_t); ///< Dump member cuda_aray to terminal
-        void dump_field(twodads::field_k_t, string); ///< Dump member cuda_array<cmplx_t> to ascii file
+        void dump_field(twodads::field_t); ///< Dump member cuda_array
+        void dump_field(twodads::field_k_t); ///< Dump member cuda_aray
 
         // Output methods
         // Make output_h5 a pointer since we deleted the default constructor
-        friend class output_h5;
+        //void write_output(twodads::real_t); ///<Write output fields
+        friend class output;
         friend class diagnostics;
 
         void dump_address();
@@ -159,9 +150,9 @@ class slab_cuda
         /// Get pointer to cuda_array<cuda::real_t> corresponding to output field type 
         cuda_array<cuda::real_t, cuda::real_t>* get_field_by_name(twodads::output_t);
         /// Get pointer to cuda_array<cuda::real_t> corresponding to dynamic field type 
-        //cuda_array<cuda::cmplx_t, cuda::real_t>* get_field_by_name(twodads::field_k_t);
+        cuda_array<cuda::cmplx_t, cuda::real_t>* get_field_by_name(twodads::dyn_field_t);
         /// Get pointer to cuda_array<cuda::real_t> corresponding to RHS field type 
-        cuda_array<cuda::cmplx_t, cuda::real_t>* get_rhs_by_name(twodads::field_k_t);
+        cuda_array<cuda::cmplx_t, cuda::real_t>* get_rhs_by_name(twodads::dyn_field_t);
 
         void theta_rhs_ns(uint); ///< Navier-Stokes 
         void theta_rhs_lin(uint); ///< Small amplitude blob

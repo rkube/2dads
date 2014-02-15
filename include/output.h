@@ -7,16 +7,16 @@
  *
  */
 
-#ifndef __OUTPUT_CLASS
-#define __OUTPUT_CLASS
+#ifndef OUTPUT_CLASS
+#define OUTPUT_CLASS
 
-#include "include/2dads_types.h"
-#include "include/cuda_types.h"
-//#include "array_base.h"
-#include "include/cuda_array3.h"
 #include <string>
 #include <vector>
 #include <H5Cpp.h>
+#include "include/2dads_types.h"
+#include "include/cuda_types.h"
+#include "include/slab_cuda.h"
+#include "include/slab_config.h"
 
 #ifndef H5_NO_NAMESPACE
     using namespace H5;
@@ -29,13 +29,15 @@ using namespace std;
 
 class output {
 public:
-    output(uint, uint);
+    output(slab_config);
     //~output() {};
 
     // Interface to write output in given output resource
     // write_output is purely virtual and will only be defined in the derived class
-    virtual void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t) = 0;
+    //virtual void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t) = 0;
+    virtual void write_output(slab_cuda&, twodads::real_t) = 0;
 
+    //void update_array(slab_cuda&);
     // Output counter and array dimensions
     uint output_counter;
     const uint Nx, My;
@@ -46,11 +48,13 @@ public:
 class output_h5 : public output {
 public:
     /// Setup output for fields specified in configuration file of passed slab reference.
-    output_h5(vector<twodads::output_t>, uint, uint);
+    //output_h5(vector<twodads::output_t>, uint, uint);
+    output_h5(slab_config);
     /// Cleanup.
     ~output_h5();
     
     /// Write variable type var_type from passed slab_array to output file.
+    void write_output(slab_cuda&, twodads::real_t);
     void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t);
 
 private:
@@ -71,7 +75,7 @@ private:
 
     DataSpace* dspace_file;
     // Vector of output functions
-    //vector<ofun_ptr> o_funs_vec;
+    vector<twodads::output_t> o_list;
     
     DataSpace dspace_theta;
     DataSpace dspace_theta_x;
@@ -91,4 +95,4 @@ private:
     string get_fname_str_from_field(twodads::output_t);
 };
 
-#endif //__OUTPUT_H	
+#endif //OUTPUT_CLASS

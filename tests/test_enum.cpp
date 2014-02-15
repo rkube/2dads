@@ -30,6 +30,6 @@ int main(void)
     slab.dump_field(twodads::field_k_t::f_tmp_hat);
 
     cout << "Enumerating kernels for stiffk\n";
-    slab.integrate_stiff_enumerate(twodads::dyn_field_t::d_theta, 1);
+    slab.integrate_stiff_enumerate(twodads::field_k_t::f_theta_hat, 2);
     slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
 }

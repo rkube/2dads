@@ -25,13 +25,13 @@ class diagnostics {
         /// does nothing
 		~diagnostics();
 	
-		/// Initialize diagnostic routines: Write file headers
-		void init_diagnostic_output(string, string, bool&);
         void update_arrays(slab_cuda&);
 
         void write_diagnostics(twodads::real_t const, const slab_config&);
 
     private:
+		/// Initialize diagnostic routines: Write file headers
+		void init_diagnostic_output(string, string, bool&);
 
 		/// @brief Write blob diagnostics 
         void diag_blobs(twodads::real_t const);

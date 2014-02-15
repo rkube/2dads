@@ -5,8 +5,7 @@
 
 #include <iostream>
 #include <vector>
-#include "include/cuda_types.h"
-#include "include/cuda_array3.h"
+#include "include/initialize.h"
 
 
 __global__ 
@@ -78,12 +77,11 @@ void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, double* params
 
 /// Initialize gaussian profile around a single mode
 __global__
-//void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
-void d_init_mode_exp(CuCmplx<cuda::real_t>* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
+void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * layout.My + col;
+    const uint idx = row * (layout.My / 2 + 1) + col;
     if ((col >= layout.My) || (row >= layout.Nx))
         return;
     double n = double(row);
@@ -91,8 +89,7 @@ void d_init_mode_exp(CuCmplx<cuda::real_t>* array, cuda::slab_layout_t layout, d
     double damp = exp ( -((n-modex)*(n-modex) / sigma) - ((m-modey)*(m-modey) / sigma) ); 
     double phase = 0.56051 * 2.0 * cuda::PI;  
     
-    //array[idx] = make_cuDoubleComplex(damp * amp * cos(phase), damp * amp * sin(phase));
-    CuCmplx<cuda::real_t> foo(damp * amp * cos(phase), damp * amp * sin(phase));
+    cuda::cmplx_t foo(damp * amp * cos(phase), damp * amp * sin(phase));
     array[idx] = foo;
     //printf("sigma = %f, re = %f, im = %f\n", sigma, array[idx].x, array[idx].y);
 }
@@ -100,9 +97,9 @@ void d_init_mode_exp(CuCmplx<cuda::real_t>* array, cuda::slab_layout_t layout, d
 
 /// Initialize a single mode pointwise
 __global__
-void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, uint col, uint row)
+void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, uint row, uint col)
 {
-    const uint idx = row * layout.My + col;
+    const uint idx = row * (layout.My / 2 + 1) + col;
     const double phase = 0.56051 * cuda::TWOPI;
     CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
     array[idx] = foo;
@@ -111,24 +108,32 @@ void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, u
 }
 
 
-/// Initialize sinusoidal profile
-void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr, 
-        vector<double> initc,
-        const double delta_x,
-        const double delta_y,
-        const double x_left,
-        const double y_lo)
+/// Initialize all modes to given value
+__global__
+void d_init_all_modes(cuda::cmplx_t* array, cuda::slab_layout_t layout, double real, double imag)
 {
-    cout << "init_simple_sine()\n";
-    cuda::slab_layout_t layout = {x_left, delta_x, y_lo, delta_y, arr -> get_nx(), arr -> get_my()};
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * (layout.My / 2 + 1) + col;
+    if ((col >= layout.My / 2 + 1) || (row >= layout.Nx))
+        return;
 
+    array[idx] = cuda::cmplx_t(real, imag);
+}
+
+
+/// Initialize sinusoidal profile
+//void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr, 
+void init_simple_sine(cuda_arr_real* arr,
+        vector<double> initc,
+        cuda::slab_layout_t layout)
+{
     dim3 grid = arr -> get_grid();
     dim3 block = arr -> get_block();
 
     const double kx = initc[0] * cuda::TWOPI / double(layout.delta_x * double(arr -> get_nx()));
     const double ky = initc[1] * cuda::TWOPI / double(layout.delta_y * double(arr -> get_my()));
 
-    //d_init_sine<<<grid, block>>>(arr -> get_array_d(0), layout, d_params);
     d_init_sine<<<grid, block>>>(arr -> get_array_d(0), layout, kx, ky);
     cudaDeviceSynchronize();
 }
@@ -137,14 +142,9 @@ void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr,
 /// Initialize field with a guassian profile
 void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
         vector<double> initc,
-        const double delta_x,
-        const double delta_y,
-        const double x_left,
-        const double y_lo,
+        cuda::slab_layout_t layout,
         bool log_theta)
 {
-    cuda::slab_layout_t layout = {x_left, delta_x, y_lo, delta_y, arr -> get_nx(), arr -> get_my()};
-
     double* params = initc.data();
     double* d_params;
 
@@ -167,17 +167,12 @@ void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
 }
 
 
-
 /// Initialize real field with nabla^2 exp(-(x-x0)^2/ (2. * sigma^2) - (y - y0)^2 / (2. * sigma_y^2)
 void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
         vector<double> initc,
-        const double delta_x,
-        const double delta_y,
-        const double x_left,
-        const double y_lo)
+        cuda::slab_layout_t layout)
 {
     cout << "init_invlapl\n";
-    cuda::slab_layout_t layout = {x_left, delta_x, y_lo, delta_y, arr -> get_nx(), arr -> get_my()};
 
     double* params = initc.data();
     double* d_params;
@@ -191,31 +186,37 @@ void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
     cudaDeviceSynchronize();
 }
 
-
-
-void init_mode(cuda_array<CuCmplx<cuda::real_t>, cuda::real_t>* arr,
-        vector<double> initc,
-        const double delta_x,
-        const double delta_y,
-        const double x_left,
-        const double y_lo)
+// Initialize all modes with constant value
+void init_all_modes(cuda_arr_cmplx* arr, vector<double> initc, cuda::slab_layout_t layout, uint tlev)
 {
-    // We call arr -> get_my() which is alreade reduced to My/2+1 from the slab since arr is of
-    // type cuda_array<cuda::cmplx_t>
-    cuda::slab_layout_t layout = {x_left, delta_x, y_lo, delta_y, arr -> get_nx(), arr -> get_my()};
-
-    const unsigned int num_modes = initc.size() / 4;
-    
-    //(*arr) = make_cuDoubleComplex(0.0, 0.0);
-    (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
-    for(uint n = 0; n < num_modes; n++)
-    {
-        cout << "mode " << n << ": amp=" << initc[4*n] << " ky=" << initc[4*n+1] << ", kx=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
-        d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
-    }
-    cudaDeviceSynchronize();
+    double real = initc[0];
+    double imag = initc[1];
+    cout << "init_all_modes to (" << real << "," << imag << "\n";
+    d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
 }
 
 
+/// Initialize single mode from input.ini
+/// Use 
+/// init_function  = *_mode
+/// initial_conditions = amp_0 kx_0 ky_0 sigma_0   amp_1 kx_1 ky_1 sigma_1 .... amp_N kx_N ky_N sigma_N 
+/// kx -> row, ky -> column. 
+/// kx is the x-mode number: kx = 0, 1, ...Nx -1
+/// ky is the y-mode number: ky = 0... My / 2
+void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
+        vector<double> initc,
+        cuda::slab_layout_t layout,
+        uint tlev)
+{
+    const unsigned int num_modes = initc.size() / 4;
+    (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
+
+    for(uint n = 0; n < num_modes; n++)
+    {
+        cout << "mode " << n << ": amp=" << initc[4*n] << " kx=" << initc[4*n+1] << ", ky=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
+        d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
+        //d_init_mode<<<1, 1>>>(arr -> get_array_d(0), layout, initc[4*n], uint(initc[4*n+1]), uint(initc[4*n+2])); 
+    }
+}
 
 // End of file initialize.cu

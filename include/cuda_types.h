@@ -4,6 +4,8 @@
 #include "vector_types.h"
 #include "cufft.h"
 #include "cucmplx.h"
+#include <ostream>
+
 
 namespace cuda
 {
@@ -22,26 +24,58 @@ namespace cuda
     /// Do this, otherwise you get differently aligned structures when
     /// compiling in g++ and nvcc. Also, don't forget the -maligned-double flag
     /// in g++
-    struct slab_layout_t
+    class slab_layout_t
     {
-        real_t x_left;
-        real_t delta_x;
-        real_t y_lo;
-        real_t delta_y;
-        unsigned int Nx;
-        unsigned int My;
+    public:
+        // Provide standard ctor for pre-C++11
+        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, unsigned int n, unsigned int m) :
+            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), Nx(n), My(m) {};
+        const real_t x_left;
+        const real_t delta_x;
+        const real_t y_lo;
+        const real_t delta_y;
+        const unsigned int Nx;
+        const unsigned int My;
+
+        friend std::ostream& operator<<(std::ostream& os, const slab_layout_t s)
+        {
+            os << "x_left = " << s.x_left << "\t";
+            os << "delta_x = " << s.delta_x << "\t";
+            os << "y_lo = " << s.y_lo << "\t";
+            os << "delta_y = " << s.delta_y << "\t";
+            os << "Nx = " << s.Nx << "\t";
+            os << "My = " << s.My << "\n";
+            return os;
+        }
     } __attribute__ ((aligned (8)));
 
-    struct stiff_params_t
+    class stiff_params_t
     {
-        real_t delta_t;
-        real_t length_x;
-        real_t length_y;
-        real_t diff;
-        real_t hv;
-        unsigned int Nx;
-        unsigned int My;
-        unsigned int level;
+    public:
+        // Provide a standard constructor for pre-C++11
+        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int n, unsigned int m, unsigned int l) :
+        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), Nx(n), My(m), level(l) {};
+        const real_t delta_t;
+        const real_t length_x;
+        const real_t length_y;
+        const real_t diff;
+        const real_t hv;
+        const unsigned int Nx;
+        const unsigned int My;
+        const unsigned int level;
+        friend std::ostream& operator<<(std::ostream& os, const stiff_params_t s)
+        {
+            os << "delta_t = " << s.delta_t << "\t";
+            os << "length_x = " << s.length_x << "\t";
+            os << "length_y = " << s.length_y << "\t";
+            os << "diff = " << s.diff << "\t";
+            os << "hv = " << s.hv << "\t";
+            os << "Nx = " << s.Nx << "\t";
+            os << "My = " << s.My << "\t";
+            os << "level = " << s.level << "\n";
+            return os;
+        }
+
     } __attribute__ ((aligned (8)));
 
     const real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
