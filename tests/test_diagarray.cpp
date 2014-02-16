@@ -6,10 +6,10 @@ using namespace std;
 
 int main(void)
 {
-    const unsigned int Nx = 512;
-    const unsigned int My = 512;
+    const unsigned int Nx = 16;
+    const unsigned int My = 16;
     const unsigned int tlevs = 1;
-    const unsigned int nthreads = 4;
+    const unsigned int nthreads = 8;
 
     // Create cuda arrays
     cuda_array<double, double> arr1(tlevs, Nx, My);
@@ -30,11 +30,6 @@ int main(void)
     {
         da1(n,3) = -2.7;
         da2(3,n) = 5.7;
-    }
-    for(int i = 0; i < 100000; i++)
-    {
-        cout << "darr : mean = " << da1.get_mean() << "\tthreaded:" << da1.get_mean_t() << "\n";
-        cout << "darr : mean = " << da2.get_mean() << "\tthreaded:" << da2.get_mean_t() << "\n";
     }
     // And access to negative indices
     cout << "Accessing da(-1, -2): " << da1(-1, -2) << "\n";
@@ -74,7 +69,8 @@ int main(void)
     //diag_array<double> resy(da1.d3_dy3(Lx));
     //cout << "res = " << resy << "\n";
 
-    // Test profile function
+    // Test profile function: f(x,y) = x + 0.38 * sin(2 pi y / Ly)
+    cout << "Comparing mean, max, min : single vs multithread on sinusoidal profile:\n";
     for(int n = 0; n < int(Nx); n++)
     {
         x = double(n) * dx;
@@ -85,9 +81,24 @@ int main(void)
         }
     }
 
+    cout << "da1 = " << da1 << "\n";
     cout << "da1.mean() = " << da1.get_mean() << "\tda1.mean_t() = " << da1.get_mean_t() << "\n";
     cout << "da1.max() = " << da1.get_max() << "\tda1.max_t() = " << da1.get_max_t() << "\n";
     cout << "da1.min() = " << da1.get_min() << "\tda1.min_t() = " << da1.get_min_t() << "\n";
 
 
+    cout << "Computing profile\n";
+    cout << "Singlethreaded:\n";
+    da1.dump_profile();
+
+    cout << "\nMultithreaded\n";
+    da1.dump_profile_t();
+
+    cout << "Mean value array\n";
+    cout << "Single threaded:\n" << da1.bar() << "\n";
+    cout << "Multi threaded:\n" << da1.bar_t() << "\n";
+
+    cout << "Fluctuations\n";
+    cout << "Single threaded:\n" << da1.tilde() << "\n";
+    cout << "Multi threaded:\n" << da1.tilde_t() << "\n";
 }

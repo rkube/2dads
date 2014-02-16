@@ -5,10 +5,10 @@
 
 template class cuda_array<double, double>;
 
-class cuarr_container{
-    public:
-        cuda_array<double, double> arr1;
-        cuda_array<double, double> arr2;
-};
+//class cuarr_container{
+//    public:
+//        cuda_array<double, double> arr1;
+//        cuda_array<double, double> arr2;
+//};
 
 

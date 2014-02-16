@@ -13,9 +13,17 @@ test_cucmplx:
 test_array3:
 	$(CUDACC) $(CUDACFLAGS) -o test_array3 test_array3.cu $(IFLAGS) $(CUDALFLAGS)
 
+# Test member functions of diag_array
+# Compile a program that instantiates a cuda_array with NVCC first
+test_diagarray:
+	$(CUDACC) $(CUDACFLAGS) -c -o ../obj/instant_cuda.o  instant_cuda.cu $(IFLAGS) 
+	$(CC) $(CFLAGS) -o test_diagarray test_diagarray.cpp ../obj/instant_cuda.o $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_diagarray2 test_diagarray2.cpp ../obj/instant_cuda.o $(IFLAGS) $(LFLAGS)
+
+
 # Test copy, move and advance operators of cuda_array3
 test_copy:
-	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array2.o test_copy.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array.o test_copy.cpp $(IFLAGS) $(LFLAGS)
 
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines

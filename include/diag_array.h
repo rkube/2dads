@@ -7,6 +7,12 @@
 /// @detailed ugly using hack
 /// @detailed Paragraph 14.6/3 of the C++11 Standard:
 
+#ifndef DIAG_ARRAY_H
+#define DIAG_ARRAY_H
+
+// Define periodic so array_base uses index wrapping
+#define PERIODIC
+
 #include <cstring>
 #include <iostream>
 #include <cassert>
@@ -23,18 +29,12 @@
 using namespace std;
 
 
-
-#ifndef DIAG_ARRAY_H
-#define DIAG_ARRAY_H
-
-#define PERIODIC
-
 // Each thread computes total mean over [n_start : n_end-1] x [0:My]
 template <class R, class T>
-void thr_add_to_mean(R* array, T& result, unsigned int n_start, unsigned int n_end)
+void thr_add_to_mean(R* array, T& result, int n_start, int n_end)
 {
-    const unsigned int My{array -> get_my()};
-    unsigned int n, m;
+    const int My{int(array -> get_my())};
+    int n{0}, m{0};
     for(n = n_start; n < n_end; n++)
         for(m = 0; m < My; m++)
             result += (*array)(n, m);
@@ -42,11 +42,11 @@ void thr_add_to_mean(R* array, T& result, unsigned int n_start, unsigned int n_e
 
 
 template <class R, class T>
-void thr_get_max(R* array, T& result, unsigned int n_start, unsigned int n_end)
+void thr_get_max(R* array, T& result, int n_start, int n_end)
 {
-    const unsigned int My{array -> get_my()};
-    unsigned int n, m;
-    T f_max{-1.0};
+    const int My{int(array -> get_my())};
+    int n{0}, m{0};
+    T f_max{-1000.0};
     for(n = n_start; n < n_end; n++)
         for(m = 0; m < My; m++)
             f_max = ((*array)(n, m) > f_max ? (*array)(n, m) : f_max);
@@ -55,15 +55,15 @@ void thr_get_max(R* array, T& result, unsigned int n_start, unsigned int n_end)
 
 
 template <class R, class T>
-void thr_get_min(R* array, T& result, unsigned int n_start, unsigned int n_end)
+void thr_get_min(R* array, T& result, int n_start, int n_end)
 {
-    const unsigned int My{array -> get_my()};
-    unsigned int n {0.0};
-    unsigned int m {0.0};
+    const int My{int(array -> get_my())};
+    int n {0};
+    int m {0};
     T f_min{1000.0};
     for(n = n_start; n < n_end; n++)
         for(m = 0; m < My; m++)
-            f_min = ((*array)(n, m) < f_min ? (array)(n, m) : f_min);
+            f_min = ((*array)(n, m) < f_min ? (*array)(n, m) : f_min);
     result = f_min; 
 }
 
@@ -71,11 +71,11 @@ void thr_get_min(R* array, T& result, unsigned int n_start, unsigned int n_end)
 // Thread kernel to compute the poloidal average (y-direction) 
 // Each thread computes mean over [n_start : n_end-1] 
 template <class R, class T>
-void thr_pol_avg(R* array, T* profile, unsigned int n_start, unsigned int n_end)
+void thr_pol_avg(R* array, T* profile, int n_start, int n_end)
 {
     T pol_avg{0.0};
-    unsigned int n, m;
-    const unsigned int My{array -> get_my()};
+    int n{0}, m{0};
+    const int My{int(array -> get_my())};
     for(n = n_start; n < n_end; n++)
     {
         pol_avg = 0.0;
@@ -87,6 +87,47 @@ void thr_pol_avg(R* array, T* profile, unsigned int n_start, unsigned int n_end)
     }
 }
 
+
+// Set each y-value to profile[n]
+template <class R, class T>
+void thr_set_polavg(R* array, int n_start, int n_end)
+{
+    T pol_avg{0.0};
+    int n{0}, m{0};
+    const int My{int(array -> get_my())};
+
+    for(n = n_start; n < n_end; n++)
+    {
+        pol_avg = 0.0;
+        for(m = 0; m < My; m++)
+            pol_avg += (*array)(n, m);
+        pol_avg /= T(My);
+
+        for(m = 0; m < My; m++)
+            (*array)(n, m) = pol_avg;
+    }
+}
+
+
+// Subtract y-average from each radial position
+template <class R, class T>
+void thr_set_tilde(R* array, int n_start, int n_end)
+{
+    T pol_avg{0.0};
+    int n{0}, m{0};
+    const int My{int(array -> get_my())};
+
+    for(n = n_start; n < n_end; n++)
+    {
+        pol_avg = 0.0;
+        for(m = 0; m < My; m++)
+            pol_avg += (*array)(n, m);
+        pol_avg /= T(My);
+
+        for(m = 0; m < My; m++)
+            (*array)(n, m) -= pol_avg;
+    }
+}
 
 
 template <class T>
@@ -100,8 +141,10 @@ using array_base<T, diag_array<T> >::nelem;
 using array_base<T, diag_array<T> >:: array;
 using array_base<T, diag_array<T> >:: array_t;
 public:
-        // Create dummy array Nx*My
+        // Create dummy array Nx*My, nthreads, tlevs = 1
         diag_array(uint, uint);
+        // Create array nthreads, tlevs, Nx, My
+        diag_array(uint, uint, uint, uint);
         // Create array from cuda_array
         diag_array(cuda_array<T, T>&);
         // Create array from base class
@@ -149,6 +192,9 @@ public:
         inline diag_array<T> tilde() const;
         inline diag_array<T> tilde_t() const;
 
+        inline void dump_profile() const;
+        inline void dump_profile_t() const;
+
         inline void update(cuda_array<T, T>&);
         inline diag_array<T> d1_dx1(const double);
         inline diag_array<T> d2_dx2(const double);
@@ -188,6 +234,16 @@ diag_array<T> :: diag_array(uint Nx, uint My) :
 }
 
 
+/// @brief Calls corresponding constructor from array_base
+/// @param nthreads Number of working threads for threaded member functions
+/// @param tlevs: Number of time levels, use tlevs = 1
+template <class T>
+diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint Nx, uint My) :
+    array_base<T, diag_array<T>>(nthreads, tlevs, Nx, My)
+{
+}
+
+
 /// @Copy data pointed to by in to memory localtion pointed to by array
 /// @details assumes that nthreads=1, tlevs=1
 template <class T>
@@ -210,11 +266,11 @@ void diag_array<T> :: update(cuda_array<T, T>& in)
 
 
 /// @brief Returns maximum of array
-template<>
-inline twodads::real_t diag_array<twodads::real_t> :: get_max() const
+template<typename T>
+inline T diag_array<T> :: get_max() const
 {
     int n{0}, m{0};
-    twodads::real_t f_max{-1.0};
+    T f_max{-1.0};
     for(n = 0; n < int(Nx); n++)
         for(m = 0; m < int(My); m++)
             if(f_max < (*this)(n, m))
@@ -224,26 +280,26 @@ inline twodads::real_t diag_array<twodads::real_t> :: get_max() const
 }
 
 
-template <>
-inline twodads::real_t diag_array<twodads::real_t> :: get_max_t() const
+template <typename T>
+inline T diag_array<T> :: get_max_t() const
 {
     unsigned int n{0};
     // Hold maxima found by each thread
-    twodads::real_t result_nthreads[nthreads];
+    T result_nthreads[nthreads];
     for(n = 0; n < nthreads; n++)
         result_nthreads[n] = 0.0;
 
     // Spawn nthreads that compute the maximum over their domain
     std::vector<std::thread> thr;
     for(n = 0; n < nthreads; n++)
-        thr.push_back(std::thread(thr_get_max<diag_array<double>, double>, const_cast<diag_array<double>*> (this), std::ref(result_nthreads[n]), n * nelem, (n + 1) * nelem));
+        thr.push_back(std::thread(thr_get_max<diag_array<T>, T>, const_cast<diag_array<T>*> (this), std::ref(result_nthreads[n]), n * nelem, (n + 1) * nelem));
     for(auto &t: thr)
         t.join();
 
     // Find maximum over maxima
-    double f_max = -100.0;
+    double f_max = -1000.0;
     for(n = 0; n < nthreads; n++)
-         f_max = f_max > result_nthreads[n] ? f_max : result_nthreads[n];
+        f_max = f_max > result_nthreads[n] ? f_max : result_nthreads[n];
 
     return f_max;
 }
@@ -251,11 +307,11 @@ inline twodads::real_t diag_array<twodads::real_t> :: get_max_t() const
 
 
 /// @brief return minimum value of array
-template <>
-inline twodads::real_t diag_array<twodads::real_t> :: get_min() const
+template <typename T>
+inline T diag_array<T> :: get_min() const
 {
     int n{0}, m{0};
-    twodads::real_t min{1e10};
+    T min{1e10};
     for(n = 0; n < int(Nx); n++)
         for(m = 0; m < int(My); m++)
             if(min > (*this)(n, m))
@@ -263,6 +319,31 @@ inline twodads::real_t diag_array<twodads::real_t> :: get_min() const
     return(min);
 }
 
+
+template <typename T>
+inline T diag_array<T> :: get_min_t() const
+{
+    unsigned int n{0};
+    // Hold minima found by each threads
+    T result_nthreads[nthreads];
+    for(n = 0; n < nthreads; n++)
+        result_nthreads[n] = 0.0;
+
+    // Spawn nthreads threadsn that find the minimum over their domain
+    std::vector<std::thread> thr;
+    for(n = 0; n < nthreads; n++)
+        thr.push_back(std::thread(thr_get_min<diag_array<T>, T>, const_cast<diag_array<T>*> (this), std::ref(result_nthreads[n]), n * nelem, (n + 1) * nelem));
+    for(auto &t: thr)
+        t.join();
+
+    // Find maximum over maxima
+    double f_min = 1000.0;
+    for(n = 0; n < nthreads; n++)
+        f_min = f_min < result_nthreads[n] ? f_min : result_nthreads[n];
+
+    return f_min;
+}
+    
 
 /// @brief Compute mean of array, normalized by Nx*My
 template <class T> 
@@ -334,12 +415,33 @@ inline void diag_array<T> :: get_profile_t(T* profile) const
 }
 
 
+template <class T>
+inline void diag_array<T> :: dump_profile() const
+{
+    T* profile = (T*) malloc(Nx * sizeof(T));
+    get_profile(profile);
+    for(int n = 0; n < int(Nx); n++)
+        cout << profile[n] << "\t";
+
+}
+
+
+template <class T>
+inline void diag_array<T> :: dump_profile_t() const
+{
+    T* profile = (T*) malloc(Nx * sizeof(T));
+    get_profile_t(profile);
+    for(int n = 0; n < int(Nx); n++)
+        cout << profile[n] << "\t";
+
+}
+
 
 /// @brief Return an array with the radial profile, i.e. pol.avg at each radial position
 template <class T>
 inline diag_array<T> diag_array<T> :: bar() const
 {
-    diag_array<T> result(*this);
+    diag_array<T> result(nthreads, 1, Nx, My);
     T temp {0.0};
 
     int n{0}, m{0};
@@ -352,6 +454,24 @@ inline diag_array<T> diag_array<T> :: bar() const
         for(m = 0; m < My; m++)
             result(n, m) = temp;
     }
+    return(result);
+}
+
+
+template <class T>
+inline diag_array<T> diag_array<T> :: bar_t() const
+{
+    // Result copies data from this, we will work on this array only
+    diag_array<T> result(*this);
+    int n{0};
+
+    // Spawn threads that set result to poloidal average at each radial position
+    std::vector<std::thread> thr;
+    for(n = 0; n < nthreads; n++)
+        thr.push_back(std::thread(thr_set_polavg<diag_array<T>, T>, &result, n * nelem, (n + 1) * nelem));
+    for(auto &t: thr)
+        t.join();
+    
     return(result);
 }
 
@@ -380,10 +500,18 @@ inline diag_array<T> diag_array<T> :: tilde() const
 template <class T>
 inline diag_array<T> diag_array<T> :: tilde_t() const
 {
-    diag_array<T> result(Nx, My);
-    T* profile_vec = (T*) malloc(Nx * sizeof(T));
+    // Result array we will operate on
+    diag_array<T> result(*this);
+    int n{0};
 
+    // Spawn nthreads threads which subtract the poloidal average at each radial position
+    std::vector<std::thread> thr;
+    for(n = 0; n < nthreads; n++)
+        thr.push_back(std::thread(thr_set_tilde<diag_array<T>, T>, &result, n * nelem, (n + 1) * nelem));
+    for(auto &t: thr)
+        t.join();
 
+    return (result);
 }
 
 
@@ -392,7 +520,7 @@ inline diag_array<T> diag_array<T> :: tilde_t() const
 template <class T>
 inline diag_array<T> diag_array<T> :: d1_dx1(const double Lx)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double inv2dx{0.5 * double(Nx) / Lx};
 
@@ -409,7 +537,7 @@ inline diag_array<T> diag_array<T> :: d1_dx1(const double Lx)
 template <class T>
 inline diag_array<T> diag_array<T> :: d1_dy1(const double Ly)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double inv2dy{0.5 * double(My) / Ly};
 
@@ -426,7 +554,7 @@ inline diag_array<T> diag_array<T> :: d1_dy1(const double Ly)
 template <class T>
 inline diag_array<T> diag_array<T> :: d2_dx2(const double Lx)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double invdx2{double(Nx * Nx) / (Lx * Lx)};
 
@@ -443,7 +571,7 @@ inline diag_array<T> diag_array<T> :: d2_dx2(const double Lx)
 template <class T>
 inline diag_array<T> diag_array<T> :: d2_dy2(const double Ly)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double invdy2{double(My * My) / (Ly * Ly)};
 
@@ -460,7 +588,7 @@ inline diag_array<T> diag_array<T> :: d2_dy2(const double Ly)
 template <class T>
 inline diag_array<T> diag_array<T> :: d3_dx3(const double Lx)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double inv2dx3{0.5 * double(Nx * Nx * Nx) / double(Lx * Lx * Lx)};
 
@@ -476,7 +604,7 @@ inline diag_array<T> diag_array<T> :: d3_dx3(const double Lx)
 template <class T>
 inline diag_array<T> diag_array<T> :: d3_dy3(const double Ly)
 {
-    diag_array<T> result(Nx, My);
+    diag_array<T> result(nthreads, 1, Nx, My);
     int n{0}, m{0};
     const double inv2dy3{0.5 * double(My * My * My) / double(Ly * Ly * Ly)};
 
