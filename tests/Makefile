@@ -23,7 +23,7 @@ test_diagarray:
 
 # Test copy, move and advance operators of cuda_array3
 test_copy:
-	$(CC) $(CFLAGS) -o test_copy $(OBJ_DIR)/cuda_array.o test_copy.cpp $(IFLAGS) $(LFLAGS)
+	$(CUDACC) $(CUDACFLAGS) -DDEBUG -o test_copy test_copy.cu $(IFLAGS) $(LFLAGS)
 
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines
@@ -64,7 +64,7 @@ test_blob:
 	$(CC) $(CFLAGS) -o test_blob/test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_blob.cpp $(IFLAGS) $(LFLAGS)
 
 test_hw:
-	$(CC) $(CFLAGS) -o test_hw/test_hw $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_hw.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_hw/test_hw $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_hw.cpp $(IFLAGS) $(LFLAGS) -I/usr/local/cuda
 
 
 clean:

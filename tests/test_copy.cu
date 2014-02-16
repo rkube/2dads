@@ -14,7 +14,8 @@
 
 #include <iostream>
 #include "include/cuda_types.h"
-#include "include/cuda_array2.h"
+#include "include/cucmplx.h"
+#include "include/cuda_array3.h"
 
 using namespace std;
 
@@ -24,11 +25,11 @@ int main(void)
     const int My = 8;
     const int tlevs = 3;
 
-    cuda_array<cuda::cmplx_t> arr_1(tlevs, Nx, My);
-    cuda_array<cuda::cmplx_t> arr_2(tlevs, Nx, My);
+    cuda_array<cuda::cmplx_t, cuda::real_t> arr_1(tlevs, Nx, My);
+    cuda_array<cuda::cmplx_t, cuda::real_t> arr_2(tlevs, Nx, My);
 
-    arr_1 = make_cuDoubleComplex(4.0, 2.7);
-    arr_2 = make_cuDoubleComplex(-2.0, -3.0);
+    arr_1 = CuCmplx<cuda::real_t>(4.0, 2.7);
+    arr_2 = CuCmplx<cuda::real_t>(-2.0, -3.0);
 
     cout << "arr_1 = " << arr_1;
     cout << "arr_2 = " << arr_2;

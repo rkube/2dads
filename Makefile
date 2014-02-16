@@ -29,6 +29,7 @@ tests: cuda_array2 slab_cuda initialize output diagnostics
 
 dist:
 	cp -R *.cpp *.cu Makefile Makefile.inc include/ dist
+	cp tests/test_hw.cpp dist/main.cpp
 	mv dist/Makefile dist/Makefile_nemesis
 	mv dist/Makefile.inc dist/Makefile_nemesis.inc
 

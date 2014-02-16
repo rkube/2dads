@@ -2,6 +2,7 @@
 #include "include/slab_cuda.h"
 #include "include/diagnostics.h"
 #include "include/output.h"
+#include "cuda_runtime_api.h"
 extern template class diag_array<double>;
 
 
@@ -160,6 +161,7 @@ int main(void)
         if(t % 10000 == 0)
             cout << t << "/" << num_tsteps << "\n";
     }
+    cudaDeviceReset();
     return(0);
 }
 

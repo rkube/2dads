@@ -122,7 +122,7 @@ class cuda_array{
         inline void copy_host_to_device();
 
         // Advance time levels
-        inline void advance();
+        inline void advance(); 
         
         inline void copy(uint, uint);
         inline void copy(uint, const cuda_array<U, T>&, uint);
@@ -251,24 +251,23 @@ __global__ void d_alloc_array_d_t(U** array_d_t, U* array,  uint tlevs,  uint Nx
 
 template <typename U>
 __global__ void d_advance(U** array_t, int tlevs)
+//__global__ void d_advance(U** array_t, int tlevs)
 {
 	U* tmp = array_t[tlevs - 1];
-	uint t = 0;
-   
+	int t = 0;
+
 #ifdef DEBUG 
-	printf("Before:\n");
-	for(t = tlevs - 1; t > 0; t--)
+	printf("__global__ d_advance: Before:\n");
+	for(t = tlevs - 1; t >= 0; t--)
 		printf("array_t[%d] at %p\n", t, array_t[t]);
-	printf("array_t[0] at %p\n", array_t[0]);
 #endif
 	for(t = tlevs - 1; t > 0; t--)
 		array_t[t] = array_t[t - 1];
 	array_t[0] = tmp;
 #ifdef DEBUG
-	printf("After:\n");
-	for(t = tlevs - 1; t > 0; t--)
+	printf("__global__ d_advance: After:\n");
+	for(t = tlevs - 1; t >= 0; t--)
 		printf("array_t[%d] at %p\n", t, array_t[t]);
-	printf("array_t[0] at %p\n", array_t[0]);
 #endif
 }
 
@@ -789,18 +788,55 @@ U cuda_array<U, T> :: operator()(uint t, uint n, uint m) const
 	return (*(array_h_t[t] + address(n, m)));
 }
 
+// Hardcodde for tlevs = 4.
+/*
+template <typename U, typename T>
+void cuda_array<U, T> :: advance4()
+{
+    d_advance<<<1, 1>>>(array_d_t, 4);
+    d_set_constant_t<<<grid, block>>>(array_d_t, 0.0, 0, Nx, My);
+
+    cout << "advance\n";
+    cout << "before advancing\n";
+    for(int t = tlevs ; t >= 0; t--)
+        cout << "array_d_t_host["<<t<<"] = " << array_d_t_host[t] << "\n";
+
+    U* tmp = array_d_t_host[3];
+    array_d_t_host[3] = array_d_t_host[2];
+    array_d_t_host[2] = array_d_t_host[1];
+    array_d_t_host[1] = array_d_t_host[0];
+    array_d_t_host[0] = tmp;
+    cout << "after advancing\n";
+    for(int t = tlevs; t >= 0; t--)
+        cout << "array_d_t_host["<<t<<"] = " << array_d_t_host[t] << "\n";
+
+
+}
+*/
 
 template <typename U, typename T>
 void cuda_array<U, T> :: advance()
 {
 	//Advance array_d_t pointer on device
+    //cout << "advance\n";
+    //cout << "before advancing\n";
+    //for(int t = tlevs - 1; t >= 0; t--)
+    //    cout << "array_d_t_host["<<t<<"] = " << array_d_t_host[t] << "\n";
+
+    // Cycle pointer array on device and zero out last time level
 	d_advance<<<1, 1>>>(array_d_t, tlevs);
-    // Update array_d_t_host
-    gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(U*) * tlevs, cudaMemcpyDeviceToHost));
-	cudaDeviceSynchronize();
+    d_set_constant_t<<<grid, block>>>(array_d_t, 0.0, 0, Nx, My);
+    // Cycle pointer array on host
+    U* tmp = array_d_t_host[tlevs - 1];
+    for(int t = tlevs - 1; t > 0; t--)
+        array_d_t_host[t] = array_d_t_host[t - 1];
+    array_d_t_host[0] = tmp;
+
+    //cout << "after advancing\n";
+    //for(int t = tlevs - 1; t >= 0; t--)
+    //     cout << "array_d_t_host["<<t<<"] = " << array_d_t_host[t] << "\n";
 
     // Zero out last time level 
-    d_set_constant_t<<<grid, block>>>(array_d_t, 0.0, 0, Nx, My);
 }
 
 

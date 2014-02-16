@@ -110,19 +110,19 @@ class array_base{
         // Operators
         // use -DPERIODIC, to wrap indices on array boundaries, i.e. n = -1 -> Nx - 1, etc...
 #ifdef PERIODIC
-        T& operator()(const uint, int, int); ///< Write-access with boundary wrapping for spatial indices
-        T operator() (const uint, int, int) const; ///< Read access with boundary wrapping for spatial indices
+        inline T& operator()(const uint, int, int); ///< Write-access with boundary wrapping for spatial indices
+        inline T operator() (const uint, int, int) const; ///< Read access with boundary wrapping for spatial indices
 
-        T& operator()(int, int);  ///< Write-access with boundary wrapping for spatial indices
-        T operator() (int, int) const;  ///< Read access with boundary wrapping for spatial indices
+        inline T& operator()(int, int);  ///< Write-access with boundary wrapping for spatial indices
+        inline T operator() (int, int) const;  ///< Read access with boundary wrapping for spatial indices
 #endif // PERIODIC
         // Use const uint as input since nx... is not modified in operator() implementation
 #ifndef PERIODOC
-        T& operator()(const uint, const uint, const uint); ///< Write access to elements, t=0
-        T operator() (const uint, const uint, const uint) const; ///< Write access to elements, t=0
+        inline T& operator()(const uint, const uint, const uint); ///< Write access to elements, t=0
+        inline T operator() (const uint, const uint, const uint) const; ///< Write access to elements, t=0
 
-        T& operator()(const uint, const uint); ///< Write access to elements
-        T operator() (const uint, const uint) const; ///< Read-access to elements
+        inline T& operator()(const uint, const uint); ///< Write access to elements
+        inline T operator() (const uint, const uint) const; ///< Read-access to elements
 #endif
 
         Derived& operator=(const T&); ///< Set elements for tlev=1
@@ -347,37 +347,45 @@ void array_base<T, Derived> :: set_numthreads(unsigned int nthr)
 
 #ifndef PERIODIC
 template <class T, class Derived>
-T array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m) const
+inline T array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m) const
 {
+#ifdef DEBUG
     if(!bounds(t, n, m))
         throw out_of_bounds_err(string("T array_base<T, Derived> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array_t[t] + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T& array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m)
+inline T& array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m)
 {
+#ifdef DEBUG
     if(!bounds(t, n, m))
         throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array_t[t] + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T array_base<T, Derived> :: operator()(const uint n, const uint m) const
+inline T array_base<T, Derived> :: operator()(const uint n, const uint m) const
 {
+#ifdef DEBUG
     if(!bounds(n, m))
         throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T& array_base<T, Derived> :: operator()(const uint n, const uint m)
+inline T& array_base<T, Derived> :: operator()(const uint n, const uint m)
 {
+#ifdef DEBUG
     if(!bounds(n, m))
         throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif 
     return (*(array + address(n,m)));
 }
 #endif //PERIODIC
@@ -385,53 +393,61 @@ T& array_base<T, Derived> :: operator()(const uint n, const uint m)
 
 #ifdef PERIODIC
 template <class T, class Derived>
-T array_base<T, Derived> :: operator()(const uint t, int n_in, int m_in) const
+inline T array_base<T, Derived> :: operator()(const uint t, int n_in, int m_in) const
 {
     uint n = (n_in > 0 ? n_in : Nx + n_in) % Nx;
     uint m = (m_in > 0 ? m_in : My + m_in) % My;
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
+#ifdef DEBUG
     if(!bounds(t, n, m))
         throw out_of_bounds_err(string("T array_base<T, Derived> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array_t[t] + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T& array_base<T, Derived> :: operator()(const uint t, int n_in, int m_in)
+inline T& array_base<T, Derived> :: operator()(const uint t, int n_in, int m_in)
 {
     uint n = (n_in > 0 ? n_in : Nx + n_in) % Nx;
     uint m = (m_in > 0 ? m_in : My + m_in) % My;
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
+#ifdef DEBUG
     if(!bounds(t, n, m))
         throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array_t[t] + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T array_base<T, Derived> :: operator()(int n_in, int m_in) const
+inline T array_base<T, Derived> :: operator()(int n_in, int m_in) const
 {
     uint n = (n_in > 0 ? n_in : Nx + n_in) % Nx;
     uint m = (m_in > 0 ? m_in : My + m_in) % My;
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
+#ifdef DEBUG
     if(!bounds(n, m))
         throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array + address(n,m)));
 }
 
 
 template <class T, class Derived>
-T& array_base<T, Derived> :: operator()(int n_in, int m_in)
+inline T& array_base<T, Derived> :: operator()(int n_in, int m_in)
 {
     uint n = (n_in > 0 ? n_in : Nx + n_in) % Nx;
     uint m = (m_in > 0 ? m_in : My + m_in) % My;
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
+#ifdef DEBUG
     if(!bounds(n, m))
         throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array + address(n,m)));
 }
 
