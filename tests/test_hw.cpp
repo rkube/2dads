@@ -28,57 +28,53 @@ int main(void)
     slab.init_dft();
     slab.initialize();
     slab_output.write_output(slab, time);
-    cout << "Main routine:\n";
-    cout << "theta_rhs_hat = \n";
-    slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
-    cout << "theta_hat = \n";
-    slab.dump_field(twodads::field_k_t::f_theta_hat);
-    cout << "omega_rhs_hat = \n";
-    slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
-    cout << "omega_hat = \n";
-    slab.dump_field(twodads::field_k_t::f_omega_hat);
-    cout << "theta=\n";
-    slab.dump_field(twodads::field_t::f_theta);
-    cout << "theta_x=\n";
-    slab.dump_field(twodads::field_t::f_theta_x);
-    cout << "theta_y=\n";
-    slab.dump_field(twodads::field_t::f_theta_y);
-    cout << "omega=\n";
-    slab.dump_field(twodads::field_t::f_omega);
-    cout << "omega_x=\n";
-    slab.dump_field(twodads::field_t::f_omega_x);
-    cout << "omega_y=\n";
-    slab.dump_field(twodads::field_t::f_omega_y);
-    cout << "strmf=\n";
-    slab.dump_field(twodads::field_t::f_strmf);
-    cout << "strmf_x=\n";
-    slab.dump_field(twodads::field_t::f_strmf_x);
-    cout << "strmf_y=\n";
-    slab.dump_field(twodads::field_t::f_strmf_y);
+#ifdef DEBUG
+    //cout << "Main routine:\n";
+    //cout << "theta_rhs_hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
+    //cout << "theta_hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_theta_hat);
+    //cout << "omega_rhs_hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
+    //cout << "omega_hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_omega_hat);
+    //cout << "theta=\n";
+    //slab.dump_field(twodads::field_t::f_theta);
+    //cout << "theta_x=\n";
+    //slab.dump_field(twodads::field_t::f_theta_x);
+    //cout << "theta_y=\n";
+    //slab.dump_field(twodads::field_t::f_theta_y);
+    //cout << "omega=\n";
+    //slab.dump_field(twodads::field_t::f_omega);
+    //cout << "omega_x=\n";
+    //slab.dump_field(twodads::field_t::f_omega_x);
+    //cout << "omega_y=\n";
+    //slab.dump_field(twodads::field_t::f_omega_y);
+    //cout << "strmf=\n";
+    //slab.dump_field(twodads::field_t::f_strmf);
+    //cout << "strmf_x=\n";
+    //slab.dump_field(twodads::field_t::f_strmf_x);
+    //cout << "strmf_y=\n";
+    //slab.dump_field(twodads::field_t::f_strmf_y);
+#endif // DEBUG
 
-    cout << "Output every " << tout_full << " steps\n";
     // Integrate the first two steps with a lower order scheme
     for(t = 1; t < tlevs - 1; t++)
     {
-        cout << "========================================t = " << t << "========================================\n";
-        //cout << "integrate_stiff(Theta)\n";
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, t + 1);
-        //cout << "Integrate_stiff(Omega)\n";
-        slab.integrate_stiff(twodads::field_k_t::f_omega_hat, t + 1);
         time += delta_t;
-        cout << "Computing strmf and real fields from tlev=" << my_config.get_tlevs() - t - 1 << "\n";
         slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, my_config.get_tlevs() - t - 1);
         slab.update_real_fields(my_config.get_tlevs() - t - 1);
         slab.rhs_fun(my_config.get_tlevs() - t - 1);
-
-        cout << "theta_hat=\n";
-        slab.dump_field(twodads::field_k_t::f_theta_hat);
-        cout << "omega_hat=\n";
-        slab.dump_field(twodads::field_k_t::f_omega_hat);
-        cout << "theta_rhs_hat = \n";
-        slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
-        cout << "omega_rhs_Hat = \n";
-        slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
+#ifdef DEBUG
+        //cout << "theta_hat=\n";
+        //slab.dump_field(twodads::field_k_t::f_theta_hat);
+        //cout << "omega_hat=\n";
+        //slab.dump_field(twodads::field_k_t::f_omega_hat);
+        //cout << "theta_rhs_hat = \n";
+        //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
+        //cout << "omega_rhs_Hat = \n";
+        //slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
         //cout << "theta=\n";
         //slab.dump_field(twodads::field_t::f_theta);
         //cout << "theta_x=\n";
@@ -99,24 +95,23 @@ int main(void)
         //slab.dump_field(twodads::field_t::f_strmf_y);
 
         //slab.write_output(time);
+#endif //DEBUG
         if ( t == 1)
         {
-            cout << "copying RHS to tlev " << my_config.get_tlevs() - t - 2 << " from " << 0 << "\n";
             slab.move_t(twodads::field_k_t::f_theta_rhs_hat, my_config.get_tlevs() - t - 2, 0);
             slab.move_t(twodads::field_k_t::f_omega_rhs_hat, my_config.get_tlevs() - t - 2, 0);
         }
-        //cout << "omega_rhs_hat = \n";
-        //slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
     }
-    cout << "Done integrating first two time steps. Status:\n";
-    cout << "theta_hat=\n";
-    slab.dump_field(twodads::field_k_t::f_theta_hat);
-    cout << "omega_hat=\n";
-    slab.dump_field(twodads::field_k_t::f_omega_hat);
-    cout << "theta_rhs_hat = \n";
-    slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
-    cout << "omega_rhs_Hat = \n";
-    slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
+#ifdef DEBUG
+    //cout << "Done integrating first two time steps. Status:\n";
+    //cout << "theta_hat=\n";
+    //slab.dump_field(twodads::field_k_t::f_theta_hat);
+    //cout << "omega_hat=\n";
+    //slab.dump_field(twodads::field_k_t::f_omega_hat);
+    //cout << "theta_rhs_hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
+    //cout << "omega_rhs_Hat = \n";
+    //slab.dump_field(twodads::field_k_t::f_omega_rhs_hat);
     //cout << "theta_x=\n";
     //slab.dump_field(twodads::field_k_t::f_theta_x_hat);
     //cout << "theta_y=\n";
@@ -133,44 +128,37 @@ int main(void)
     //slab.dump_field(twodads::field_k_t::f_strmf_x_hat);
     //cout << "strmf_y=\n";
     //slab.dump_field(twodads::field_k_t::f_strmf_y_hat);
+#endif //DEBUG
 
     for(; t < num_tsteps + 1; t++)
     {
         //cout << "========================================t = " << t << "========================================\n";
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, tlevs);
         slab.integrate_stiff(twodads::field_k_t::f_omega_hat, tlevs);
+        time += delta_t;
         slab.advance();
+        // Compute all fields from theta_hat(1,:), omega_hat(1,:) since we called advance
+        slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, 1);
+        slab.update_real_fields(1);
+        slab.rhs_fun(1);
+#ifdef DEBUG
         //cout << "theta_hat = \n";
         //slab.dump_field(twodads::field_k_t::f_theta_hat);
         //cout << "theta_rhs_hat = \n";
         //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat); 
-        time += delta_t;
-        // Compute all fields from theta_hat(1,:), omega_hat(1,:) since we called advance
-        slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, 1);
-        slab.update_real_fields(1);
-        // Result of RHS_fun is put in theta_rhs_hat(0,:)
-        slab.rhs_fun(1);
-        //cout << "===Updated RHS and real fields, RHS...\n";
-        //cout << "theta_rhs_hat = \n";
-        //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat); 
+#endif //DEBUG
 
         if(t % tout_full == 0)
         {
-            //cout << "theta=\n";
-            //slab.dump_field(twodads::field_k_t::f_theta_hat);
-            //cout << "theta_rhs_hat=\n";
-            //slab.dump_field(twodads::field_k_t::f_theta_rhs_hat);
-            cout << t << "/" << num_tsteps << "...writing output\n";
-            //slab.write_output(time);
             slab_output.write_output(slab, time);
         }
         if(t % tout_diag == 0)
         {
-            cout << t << "/" << num_tsteps << "...writing diagnostics\n";
             slab_diag.update_arrays(slab);
             slab_diag.write_diagnostics(time, my_config);
-            //slab.write_diagnostics(time);
         }
+        if(t % 10000 == 0)
+            cout << t << "/" << num_tsteps << "\n";
     }
     return(0);
 }

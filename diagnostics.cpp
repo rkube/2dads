@@ -196,9 +196,10 @@ void diagnostics::write_diagnostics(const twodads::real_t time, const slab_confi
             case twodads::diagnostic_t::diag_probes:
                 diag_probes(time);
                 break;
+            case twodads::diagnostic_t::diag_rhs:
+                diag_rhs(time);
         }
     }
-    diag_rhs(time);
 }
 
 
@@ -326,37 +327,44 @@ void diagnostics::diag_energy(const twodads::real_t time)
     double Ly = slab_layout.delta_y * double(slab_layout.My);
     double Lx = slab_layout.delta_x * double(slab_layout.Nx);
 
-    const double A{(theta_x * (theta * strmf_y).bar()).get_mean()};
-    const double B{0.5 * (theta.bar() * theta.bar()).get_mean()};
-    const double C{omega.get_mean()};
-    const double D{0.5 * (theta_x.bar() * theta_x.bar()).get_mean()}; 
-    const double E{0.5 * (omega.tilde() * omega.tilde()).get_mean()};
-    const double F{-1.0 * (theta * strmf_y).get_mean()};
-    const double H{theta.get_mean()};
-    const double G{0.0}; // ???
-    const double K{0.5 * (strmf_x.tilde()*strmf_x.tilde() + strmf_y*strmf_y).get_mean()};
-    const double O{(omega_x.bar()).get_mean()};
-    const double P{(theta.tilde() * theta.tilde()).get_mean()};
-    const double Q{((theta_x.tilde() * theta_x.tilde()) + (theta_y * theta_y)).get_mean()};
-    const double S{-1.0 * (omega * strmf_y).get_mean()};
-    const double T{((strmf_x * strmf_y) * omega.bar()).get_mean()};
-    const double U{0.5 * (strmf_x.bar() * strmf_x.bar()).get_mean()};
-    const double W{0.5 * (omega.bar() * omega.bar()).get_mean()};
-    const double V{0.5 * (omega_x.tilde()*omega_x.tilde() + omega_y * omega_y).get_mean()};
 
-    const double D1{0.5 * (theta * theta).get_mean()};
-    const double D2{0.5 * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
-    const double D3{0.5 * (omega * omega).get_mean()};
-    const double D4{-1.0 * (theta.tilde() * strmf_y.tilde()).get_mean()};
-    const double D5{((theta.bar() - strmf.bar()) *  (theta.bar() - strmf.bar())).get_mean()};
-    const double D6{( (theta.tilde() - strmf.tilde()) *  (theta.tilde() - strmf.tilde()) ).get_mean()};
-    const double D7{(strmf.bar() * (strmf.bar() - theta.bar())).get_mean()};
-    const double D8{(strmf.tilde() * (strmf.tilde() - theta.tilde())).get_mean()};
+    // Multiply by 0.25 to get the integral:
+    // get_mean returns the average, i.e. U.get_man() = sum_{n,m} u(n,m) / (Nx*My)
+    // Domain is [-Lx:Lx] x [-Ly:Ly], thus
+    // 1/A int_A u(x) dA = 1 / (4*Lx*Ly) sum_{n,m} u(x_n, y_m) delta_x delta_y
+    // where delta_x = Lx/Nx and delta_y = Ly/My
+
+    const double A{0.25 * (theta_x * (theta * strmf_y).bar()).get_mean()};
+    const double B{0.125 * (theta.bar() * theta.bar()).get_mean()};
+    const double C{0.25 * omega.get_mean()};
+    const double D{0.125 * (theta_x.bar() * theta_x.bar()).get_mean()}; 
+    const double E{0.5 * (omega.tilde() * omega.tilde()).get_mean()};
+    const double F{-0.25 * (theta * strmf_y).get_mean()};
+    const double H{0.25 * theta.get_mean()};
+    const double G{0.0}; // ???
+    const double K{0.125 * (strmf_x.tilde()*strmf_x.tilde() + strmf_y*strmf_y).get_mean()};
+    const double O{0.25 * omega_x.bar().get_mean()};
+    const double P{0.25 * (theta.tilde() * theta.tilde()).get_mean()};
+    const double Q{0.25 * ((theta_x.tilde() * theta_x.tilde()) + (theta_y * theta_y)).get_mean()};
+    const double S{-0.125 * (omega * strmf_y).get_mean()};
+    const double T{0.25 * ((strmf_x * strmf_y) * omega.bar()).get_mean()};
+    const double U{0.125 * (strmf_x.bar() * strmf_x.bar()).get_mean()};
+    const double W{0.125 * (omega.bar() * omega.bar()).get_mean()};
+    const double V{0.125 * (omega_x.tilde()*omega_x.tilde() + omega_y * omega_y).get_mean()};
+
+    const double D1{0.125 * (theta * theta).get_mean()};
+    const double D2{0.125 * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+    const double D3{0.125 * (omega * omega).get_mean()};
+    const double D4{-0.25 * (theta.tilde() * strmf_y.tilde()).get_mean()};
+    const double D5{0.25 * ((theta.bar() - strmf.bar()) *  (theta.bar() - strmf.bar())).get_mean()};
+    const double D6{0.25 * ( (theta.tilde() - strmf.tilde()) *  (theta.tilde() - strmf.tilde()) ).get_mean()};
+    const double D7{0.25 * (strmf.bar() * (strmf.bar() - theta.bar())).get_mean()};
+    const double D8{0.25 * (strmf.tilde() * (strmf.tilde() - theta.tilde())).get_mean()};
     const double D9{0.0};
-    const double D10{(theta_x * theta_x + theta_y * theta_y).get_mean()};
-    const double D11{(strmf_x * omega_x + strmf_y * omega_y).get_mean()};
-    const double D12{((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
-    const double D13{((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
+    const double D10{0.25 * (theta_x * theta_x + theta_y * theta_y).get_mean()};
+    const double D11{0.25 * (strmf_x * omega_x + strmf_y * omega_y).get_mean()};
+    const double D12{0.25 * ((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
+    const double D13{0.25 * ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
     // Compute the Reynolds stress
     //slab_array v(*theta);
@@ -408,8 +416,8 @@ void diagnostics::diag_energy(const twodads::real_t time)
     if ( output.is_open() ) {
         output << time << "\t";
         output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
-        output << setw(12) << D6 << "\t" << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t";
-        output << setw(12) << D9 << "\t" << setw(12) << D10 << "\t" << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n";
+        output << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t" << setw(12) << D10 << "\t";
+        output << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n";
         output.close();
     }
 
