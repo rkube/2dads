@@ -21,7 +21,15 @@ int main(void)
     // Initialize diagnostic arrays from cuda arrays 
     diag_array<double> da1(arr1);
     diag_array<double> da2(arr2);
-  
+
+    // Initialize from another diag_Array
+    diag_array<double> da3(move(da1.bar()));
+
+    cout << "da1 = " << da1 << "\n";
+    cout << "da3 = " << da3 << "\n";
+
+    return(0);
+
     da1.set_numthreads(nthreads);
     da2.set_numthreads(nthreads);
 

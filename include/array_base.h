@@ -97,7 +97,7 @@ class array_base{
         // Copy constructor
         array_base(const array_base<T, Derived>&); ///<Copy constructor 
         array_base(array_base<T, Derived>&&); ///<Move constructor 
-        array_base(array_base<T, Derived>*); ///< Copy constructor
+        array_base(const array_base<T, Derived>*); ///< Copy constructor
         // Move constructor
         array_base(const uint, const uint, const uint, const uint); ///< Specify number of threads, tlevs, Nx, My
         array_base(const uint, const uint, const uint); ///< Create with tlevs = 1
@@ -118,11 +118,11 @@ class array_base{
 #endif // PERIODIC
         // Use const uint as input since nx... is not modified in operator() implementation
 #ifndef PERIODOC
-        inline T& operator()(const uint, const uint, const uint); ///< Write access to elements, t=0
-        inline T operator() (const uint, const uint, const uint) const; ///< Write access to elements, t=0
+        inline T& operator()(uint, uint, uint); ///< Write access to elements, t=0
+        inline T operator() (uint, uint, uint) const; ///< Write access to elements, t=0
 
-        inline T& operator()(const uint, const uint); ///< Write access to elements
-        inline T operator() (const uint, const uint) const; ///< Read-access to elements
+        inline T& operator()(uint, uint); ///< Write access to elements
+        inline T operator() (uint, uint) const; ///< Read-access to elements
 #endif
 
         Derived& operator=(const T&); ///< Set elements for tlev=1
@@ -219,7 +219,7 @@ class array_base{
 /// @param n Nx
 /// @param m My
 template<class T, class Derived>
-array_base<T, Derived> :: array_base(uint nthr, uint t, uint n, uint m) :
+array_base<T, Derived> :: array_base(const uint nthr, const uint t, const uint n, const uint m) :
     nthreads(nthr), 
     tlevs(t),
     Nx(n),
@@ -229,8 +229,8 @@ array_base<T, Derived> :: array_base(uint nthr, uint t, uint n, uint m) :
     array_t(nullptr)
 {
     // Allocate memory
-    array = (T*) malloc(sizeof(T) * tlevs * Nx * My);
-    array_t = (T**) malloc(sizeof(T*) * tlevs);
+    array = new T[tlevs * Nx * My];
+    array_t = new T*[tlevs];
     for(uint tl = 0; tl < tlevs; tl++)
         array_t[tl] = &array[tl * Nx * My];
     
@@ -239,15 +239,15 @@ array_base<T, Derived> :: array_base(uint nthr, uint t, uint n, uint m) :
     assert(Nx % nthreads == 0);
     nelem = Nx / nthreads;
 
-#ifdef DEBUG 
-    cout << "array_base<T>::array_base(uint, uint, uint)\n";
-    cout << "\t\ttlevs = " << tlevs << "\tNx = " << Nx << "\tMy = " << My << "\n";
-    cout << "\t\tarray: " << sizeof(T) * tlevs * Nx * My << " bytes at " << array << "\n";
-    cout << "\t\tarray_t: " << sizeof(T*) * tlevs << " bytes at " << array_t << "\n";
-    for(uint tl = 0; tl < tlevs; tl++)
-        cout << "\t\tarray_t[" << tl << "] at " << array_t[tl] << "\n";
-    cout << "\t\tnthreads = " << nthreads << " threads, nelem = " << nelem << "\n";
-#endif 
+//#ifdef DEBUG 
+//    cout << "array_base<T>::array_base(uint, uint, uint)\n";
+//    cout << "\t\ttlevs = " << tlevs << "\tNx = " << Nx << "\tMy = " << My << "\n";
+//    cout << "\t\tarray: " << sizeof(T) * tlevs * Nx * My << " bytes at " << array << "\n";
+//    cout << "\t\tarray_t: " << sizeof(T*) * tlevs << " bytes at " << array_t << "\n";
+//    for(uint tl = 0; tl < tlevs; tl++)
+//        cout << "\t\tarray_t[" << tl << "] at " << array_t[tl] << "\n";
+//    cout << "\t\tnthreads = " << nthreads << " threads, nelem = " << nelem << "\n";
+//#endif 
 }
 
 
@@ -256,7 +256,7 @@ array_base<T, Derived> :: array_base(uint nthr, uint t, uint n, uint m) :
 /// @param n Nx
 /// @param m My
 template<class T, class Derived>
-array_base<T, Derived> :: array_base(uint n, uint m) :
+array_base<T, Derived> :: array_base(const uint n, const uint m) :
     array_base(1, 1, n, m)
 {
 }
@@ -278,7 +278,7 @@ array_base<T, Derived> :: array_base(const array_base<T, Derived>& src) :
 /// @details values from src
 /// @param src Source
 template<class T, class Derived>
-array_base<T, Derived> :: array_base(array_base<T, Derived>* src) :
+array_base<T, Derived> :: array_base(const array_base<T, Derived>* src) :
     array_base((*src).nthreads, (*src).tlevs, (*src).Nx, (*src).My)
 {
     memcpy(array, (*src).array, sizeof(T) * tlevs * Nx * My);
@@ -310,12 +310,11 @@ array_base<T, Derived> :: array_base(array_base<T, Derived>&& rhs) :
     My(rhs.My),
     bounds(tlevs, Nx, My)
 {
-    T* tmp_array = array;
-    T** tmp_array_t = array_t;
+    // See Stroustrup C++, 17.5.2
     array = rhs.array;
     array_t = rhs.array_t;
-    rhs.array = tmp_array;
-    rhs.array_t = tmp_array_t;
+    rhs.array = nullptr;
+    rhs.array_t = nullptr;
 }
 
 
@@ -323,8 +322,8 @@ array_base<T, Derived> :: array_base(array_base<T, Derived>&& rhs) :
 template<class T, class Derived>
 array_base<T, Derived> :: ~array_base()
 {
-    free(array_t);
-    free(array);
+    delete[] array;
+    delete[] array_t;
 }
 
 
@@ -347,7 +346,18 @@ void array_base<T, Derived> :: set_numthreads(unsigned int nthr)
 
 #ifndef PERIODIC
 template <class T, class Derived>
-inline T array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m) const
+inline T& array_base<T, Derived> :: operator()(uint t, uint n, uint m)
+{
+#ifdef DEBUG
+    if(!bounds(t, n, m))
+        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
+    return (*(array_t[t] + address(n,m)));
+}
+
+
+template <class T, class Derived>
+inline T array_base<T, Derived> :: operator()(uint t, uint n, uint m) const
 {
 #ifdef DEBUG
     if(!bounds(t, n, m))
@@ -358,34 +368,23 @@ inline T array_base<T, Derived> :: operator()(const uint t, const uint n, const 
 
 
 template <class T, class Derived>
-inline T& array_base<T, Derived> :: operator()(const uint t, const uint n, const uint m)
-{
-#ifdef DEBUG
-    if(!bounds(t, n, m))
-        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
-#endif
-    return (*(array_t[t] + address(n,m)));
-}
-
-
-template <class T, class Derived>
-inline T array_base<T, Derived> :: operator()(const uint n, const uint m) const
-{
-#ifdef DEBUG
-    if(!bounds(n, m))
-        throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
-#endif
-    return (*(array + address(n,m)));
-}
-
-
-template <class T, class Derived>
-inline T& array_base<T, Derived> :: operator()(const uint n, const uint m)
+inline T& array_base<T, Derived> :: operator()(uint n, uint m)
 {
 #ifdef DEBUG
     if(!bounds(n, m))
         throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
 #endif 
+    return (*(array + address(n,m)));
+}
+
+
+template <class T, class Derived>
+inline T array_base<T, Derived> :: operator()(uint n, uint m) const
+{
+#ifdef DEBUG
+    if(!bounds(n, m))
+        throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+#endif
     return (*(array + address(n,m)));
 }
 #endif //PERIODIC

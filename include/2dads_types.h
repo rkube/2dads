@@ -88,7 +88,6 @@ namespace twodads {
     enum diagnostic_t {diag_blobs,  ///< Information on blob dynamics
         diag_energy, ///< Energetics for turbulence simulations
         diag_probes, ///< Time series from probes
-        diag_rhs ///< Prints max,min,mean of RHS to stdout
     };
     /// Available full output of fields
     //enum class output_t {theta, theta_x, theta_y, omega, omega_x, omega_y, strmf};

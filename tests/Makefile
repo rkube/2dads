@@ -28,18 +28,15 @@ test_copy:
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines
 test_slab:
-	$(CC) $(CFLAGS) -o test_slab/test_init $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o test_init.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab/test_init $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_init.cpp $(IFLAGS) $(LFLAGS)
 # Test enumeration of derivation kernels d_dx, d_dy, inv_lapl and time integrator stiff_k
-	$(CC) $(CFLAGS) -o test_slab/test_enum $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_enum.cpp $(IFLAGS) $(LFLAGS)
-
-
-# Test that Fourier transformation work 
-test_dft:
-	$(CUDACC) $(CUDACFLAGS) -o test_slab/test_dft $(OBJ_DIR)/initialize.o test_dft.cu $(IFLAGS) $(CUDALFLAGS)
-
+	$(CC) $(CFLAGS) -o test_slab/test_enum $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_enum.cpp $(IFLAGS) $(LFLAGS)
+# Initialization
+	$(CC) $(CFLAGS) -o test_slab/test_init $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_init.cpp $(IFLAGS) $(LFLAGS)
+# Test Fourier transformation 
+#	$(CC) $(CCFLAGS) -o test_slab/test_dft $(OBJ_DIR)/initialize.o test_dft.cu $(IFLAGS) $(CUDALFLAGS)
 # Test that derivation routines work
-test_derivs:
-	$(CC) $(CFLAGS) -o test_slab/test_derivs $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_derivs.cpp $(IFLAGS) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_slab/test_derivs $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_derivs_space.cpp $(IFLAGS) $(LFLAGS)
 
 # Test time integrator, solve diffusion problem and show how modes are integrated
 test_stiff:
@@ -50,7 +47,6 @@ test_stiff:
 # Test HDF5 output routines
 test_output:
 	$(CC) $(CFLAGS) -o test_output/test_output $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_output.cpp $(IFLAGS) $(LFLAGS)
-
 
 # Test diagnostics
 test_diag:

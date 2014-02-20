@@ -24,7 +24,7 @@ void d_init_sine(cuda::real_t* array, cuda::slab_layout_t layout, double kx, dou
 
 
 __global__
-void d_init_exp(cuda::real_t* array, cuda::slab_layout_t layout, double* params)
+void d_init_exp(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -35,13 +35,13 @@ void d_init_exp(cuda::real_t* array, cuda::slab_layout_t layout, double* params)
     if ((col >= layout.My) || (row >= layout.Nx))
         return;
 
-    array[idx] = params[0] + params[1] * exp( -(x - params[2]) * (x - params[2]) / (2.0 * params[3] * params[3]) 
-                                              -(y - params[4]) * (y - params[4]) / (2.0 * params[5] * params[5]));
+    array[idx] = params.i1 + params.i2 * exp( -(x - params.i3) * (x - params.i3) / (2.0 * params.i4 * params.i4) 
+                                              -(y - params.i5) * (y - params.i5) / (2.0 * params.i6 * params.i6));
 }
 
 
 __global__
-void d_init_exp_log(cuda::real_t* array, cuda::slab_layout_t layout, double* params)
+void d_init_exp_log(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -52,14 +52,14 @@ void d_init_exp_log(cuda::real_t* array, cuda::slab_layout_t layout, double* par
     if ((col >= layout.My) || (row >= layout.Nx))
         return;
 
-    array[idx] = params[0] + params[1] * exp( -(x - params[2]) * (x - params[2]) / (2.0 * params[3] * params[3]) 
-                                              -(y - params[4]) * (y - params[4]) / (2.0 * params[5] * params[5]));
+    array[idx] = params.i1 + params.i2 * exp( -(x - params.i3) * (x - params.i3) / (2.0 * params.i4 * params.i4) 
+                                              -(y - params.i5) * (y - params.i5) / (2.0 * params.i6 * params.i6));
     array[idx] = log(array[idx]);
 }
 
 
 __global__
-void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, double* params)
+void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -70,8 +70,8 @@ void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, double* params
     if ((col >= layout.My) || (row >= layout.Nx))
         return;
 
-    array[idx] = exp(- 0.5 * (x * x + y * y)/(params[3] * params[3])) / (params[3] * params[3]) * 
-                 ((x * x + y * y)/(params[3] * params[3]) - 2.0);
+    array[idx] = exp(- 0.5 * (x * x + y * y)/(params.i4 * params.i4)) / (params.i4 * params.i4) * 
+                 ((x * x + y * y)/(params.i4 * params.i4) - 2.0);
 }
 
 
@@ -82,7 +82,7 @@ void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double am
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * (layout.My / 2 + 1) + col;
-    if ((col >= layout.My) || (row >= layout.Nx))
+    if ((col >= layout.My / 2 + 1) || (row >= layout.Nx))
         return;
     double n = double(row);
     double m = double(col);
@@ -145,24 +145,20 @@ void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
         cuda::slab_layout_t layout,
         bool log_theta)
 {
-    double* params = initc.data();
-    double* d_params;
+    cuda::init_params_t init_params;
+    init_params.i1 = (initc.size() > 1) ? initc[0] : 0.0;
+    init_params.i2 = (initc.size() > 2) ? initc[1] : 0.0;
+    init_params.i3 = (initc.size() > 3) ? initc[2] : 0.0;
+    init_params.i4 = (initc.size() > 4) ? initc[3] : 0.0;
+    init_params.i5 = (initc.size() > 5) ? initc[4] : 0.0;
+    init_params.i6 = (initc.size() > 6) ? initc[5] : 0.0;
 
-    gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
-    gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
 
     if (log_theta)
-    {
-        cout << "Initializing logarithmic theta\n";
-        d_init_exp_log<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, d_params);
-    }
+        d_init_exp_log<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
     else
-    {
-        cout << "Initializing theta\n";
-        d_init_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, d_params);
-    }
-    cout << "initc = (" << params[0] << ", " << params[1] << ", " << params[2] << ", ";
-    cout << params[3] << ", " << params[4] << ", " << params[5] << ")\n";
+        d_init_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
+
     cudaDeviceSynchronize();
 }
 
@@ -172,17 +168,20 @@ void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
         vector<double> initc,
         cuda::slab_layout_t layout)
 {
-    cout << "init_invlapl\n";
 
-    double* params = initc.data();
-    double* d_params;
-    cout << "initc = (" << params[0] << ", " << params[1] << ", " << params[2] << ", ";
-    cout << params[3] << ", " << params[4] << ", " << params[5] << ")\n";
+    cuda::init_params_t init_params;
+    init_params.i1 = (initc.size() > 1) ? initc[0] : 0.0;
+    init_params.i2 = (initc.size() > 2) ? initc[1] : 0.0;
+    init_params.i3 = (initc.size() > 3) ? initc[2] : 0.0;
+    init_params.i4 = (initc.size() > 4) ? initc[3] : 0.0;
+    init_params.i5 = (initc.size() > 5) ? initc[4] : 0.0;
+    init_params.i6 = (initc.size() > 6) ? initc[5] : 0.0;
 
-    gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
-    gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
+    //gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
+    //gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
 
-    d_init_lapl<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, d_params);
+    d_init_lapl<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
+    //cudaFree(d_params);
     cudaDeviceSynchronize();
 }
 

@@ -142,13 +142,16 @@ using array_base<T, diag_array<T> >:: array;
 using array_base<T, diag_array<T> >:: array_t;
 public:
         // Create dummy array Nx*My, nthreads, tlevs = 1
-        diag_array(uint, uint);
+        diag_array(const uint, const uint);
         // Create array nthreads, tlevs, Nx, My
-        diag_array(uint, uint, uint, uint);
+        diag_array(const uint, const uint, const uint, const uint);
         // Create array from cuda_array
         diag_array(cuda_array<T, T>&);
         // Create array from base class
-        diag_array(array_base<T, diag_array<T> >*);
+        diag_array(const array_base<T, diag_array<T> >*);
+        // Create from diag_Array
+        diag_array(const diag_array<T>&);
+        diag_array(diag_array<T>&&);
 
         diag_array<T>& operator=(const T&);
         diag_array<T>& operator=(const diag_array<T>&);
@@ -223,7 +226,13 @@ diag_array<T> :: diag_array(cuda_array<T, T>& in) :
 
 /// @brief Calls corresponding constructor from array_base
 template <class T>
-diag_array<T> :: diag_array(array_base<T, diag_array<T>>* in) : array_base<T, diag_array<T>>(in) {}
+diag_array<T> :: diag_array(const array_base<T, diag_array<T>>* in) : array_base<T, diag_array<T>>(in) {}
+
+template <class T>
+diag_array<T> :: diag_array(const diag_array<T>& in) : array_base<T, diag_array<T>>(static_cast<const array_base<T, diag_array<T> >&> (in)) {}
+
+template <class T>
+diag_array<T> :: diag_array(diag_array<T>&& in) : array_base<T, diag_array<T>>(static_cast<array_base<T, diag_array<T> >&& >(in)) {}
 
 
 /// @brief Calls corresponding constructor from array_base
@@ -253,9 +262,9 @@ void diag_array<T> :: update(cuda_array<T, T>& in)
     if(!(*this).bounds(in.get_tlevs(), in.get_nx(), in.get_my()))
         throw out_of_bounds_err(string("diag_array<T> :: update(cuda_array<T, T>& in): dimensions do not match!\n"));
     gpuErrchk(cudaMemcpy(array, in.get_array_d(), memsize * sizeof(T), cudaMemcpyDeviceToHost));
-#ifdef DEBUG
-    cout << "diag_array::update(), host address: " << array << "\n";
-#endif
+//#ifdef DEBUG
+//    cout << "diag_array::update(), host address: " << array << "\n";
+//#endif
 }
 
 /*
@@ -418,22 +427,22 @@ inline void diag_array<T> :: get_profile_t(T* profile) const
 template <class T>
 inline void diag_array<T> :: dump_profile() const
 {
-    T* profile = (T*) malloc(Nx * sizeof(T));
+    T* profile = new T[Nx];
     get_profile(profile);
     for(int n = 0; n < int(Nx); n++)
         cout << profile[n] << "\t";
-
+    delete[] profile;
 }
 
 
 template <class T>
 inline void diag_array<T> :: dump_profile_t() const
 {
-    T* profile = (T*) malloc(Nx * sizeof(T));
+    T* profile = new T[Nx];
     get_profile_t(profile);
     for(int n = 0; n < int(Nx); n++)
         cout << profile[n] << "\t";
-
+    delete[] profile;
 }
 
 
@@ -451,7 +460,7 @@ inline diag_array<T> diag_array<T> :: bar() const
         for(m = 0; m < int(My); m++)
             temp += (*this)(n, m);
         temp = temp / T(My);
-        for(m = 0; m < My; m++)
+        for(m = 0; m < int(My); m++)
             result(n, m) = temp;
     }
     return(result);
@@ -482,7 +491,7 @@ inline diag_array<T> diag_array<T> :: tilde() const
 {
     diag_array<T> result(*this);
 
-    T* profile = (T*) malloc(Nx * sizeof(T));
+    T* profile = new T[Nx];
     get_profile(profile);
 
     int n{0}, m{0};
@@ -492,6 +501,7 @@ inline diag_array<T> diag_array<T> :: tilde() const
         for(m = 0; m < int(My); m++)
             result(n, m) -= profile[n];
     }
+    delete[] profile;
     return(result);
 }
 
@@ -558,8 +568,8 @@ inline diag_array<T> diag_array<T> :: d2_dx2(const double Lx)
     int n{0}, m{0};
     const double invdx2{double(Nx * Nx) / (Lx * Lx)};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
+    for(n = 0; n < (int)Nx; n++)
+        for(m = 0; m < (int)My; m++)
             result(n, m) = ((*this)(n - 1, m) - 2.0 * (*this)(n, m) + (*this)(n + 1, m)) * invdx2;
 
     return result;
@@ -575,8 +585,8 @@ inline diag_array<T> diag_array<T> :: d2_dy2(const double Ly)
     int n{0}, m{0};
     const double invdy2{double(My * My) / (Ly * Ly)};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
+    for(n = 0; n < int(Nx); n++)
+        for(m = 0; m < int(My); m++)
             result(n, m) = ((*this)(n, m - 1) - 2.0 * (*this)(n, m) + (*this)(n, m + 1)) * invdy2;
 
     return result;

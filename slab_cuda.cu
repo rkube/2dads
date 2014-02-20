@@ -26,8 +26,6 @@ void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
     // (a + ib) * (0.0 + ik) = -(b * k) + i(a * k)
     cuda::cmplx_t factor(0.0, two_pi_L * double(row));
     out[index] = in[index] * factor;
-    //out[index].real = -1.0 * two_pi_L * double(row) * in[index].imag;
-    //out[index].imag = two_pi_L * double(row) * in[index].real;
 }
 
 
@@ -42,8 +40,6 @@ void d_d_dx_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My
 
     cuda::cmplx_t factor(100000 + 1 * 1000 * col + row, row);
     out[index] = factor;
-    //out[index].x = double(100000 + 1 * 1000 * col + row);
-    //out[index].y = double(row);
 }
 
 
@@ -52,7 +48,6 @@ __global__
 void d_d_dx_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
 {
     const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    //const int row = blockIdx.x * blockDim.x + threadIdx.x;
     const uint row = Nx / 2;
     const uint index = row * My + col;
 
@@ -75,8 +70,6 @@ void d_d_dx_mid_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint M
 
     cuda::cmplx_t factor(200000 + 1000 * col + row);
     out[index] = factor;
-    //out[index].x = double(200000 + 1000 * col + row);
-    //out[index].y = 0.0;
 }
 
 
@@ -96,8 +89,6 @@ void d_d_dx_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
     //(a + ib) * (0.0 + ik) = -(b * k) + i * (a * k)
     cuda::cmplx_t factor(0.0, two_pi_L * (double(row) - double(Nx)));
     out[index] = in[index] * factor;
-    //out[index].x = -1.0 * two_pi_L * (double(row) - double(Nx)) * in[index].y;
-    //out[index].y = two_pi_L * (double(row) - double(Nx)) * in[index].x;
 }
 
 
@@ -130,8 +121,6 @@ void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
     //(a + ib) * ik = -(b * k) + i(a * k)
     cuda::cmplx_t factor(0.0, two_pi_L * double(col));
     out[index] = factor * in[index];
-    //out[index].x = -1.0 * two_pi_L * double(col) * in[index].y;
-    //out[index].y = two_pi_L * double(col) * in[index].x; 
 }
 
 
@@ -161,8 +150,6 @@ void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
         return;
     cuda::cmplx_t factor(0.0, 0.0);
     out[index] = factor;
-    //out[index].x = 0.0;
-    //out[index].y = 0.0;
 }
 
 
@@ -228,13 +215,8 @@ void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My,
     if ((col >= My) || (row >= Nx))
         return;
 
-    //double factor = -cuda::FOURPIS * (double(row * row) * inv_Lx2 + double(col * col) * inv_Ly2);
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
     cuda::cmplx_t factor(-cuda::FOURPIS * (double(row * row) * inv_Lx2 + double(col * col) * inv_Ly2), 0.0);
     out[idx] = in[idx] / factor;
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
 }
 
 
@@ -260,18 +242,11 @@ void d_inv_laplace_sec2(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My,
     const uint idx = row * My + col;
     if ((col >= My) || (row >= Nx))
         return;
-    //double factor = -cuda::FOURPIS * (
-    //        ((double(row) - double(Nx)) * (double(row) - double(Nx))) * inv_Lx2 +
-    //        (double(col * col) * inv_Ly2));
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
 
     cuda::cmplx_t factor(-cuda::FOURPIS * (
             ((double(row) - double(Nx)) * (double(row) - double(Nx))) * inv_Lx2 +
             (double(col * col) * inv_Ly2)), 0.0);
     out[idx] = in[idx] / factor;
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
 }
 
 
@@ -286,8 +261,6 @@ void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx
 
     cuda::cmplx_t factor(200000.0 + 1000.0 * double(col) + double(row), 1000.0 * double(col) + (double(row) - double(Nx)) ); 
     out[idx] = factor;
-    //out[idx].x = double(200000 + 1000 * col + row);
-    //out[idx].y = 1000.0 * (double(row) - double(Nx)) + double(col);
 }
 
 
@@ -302,15 +275,9 @@ void d_inv_laplace_sec3(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My,
     if (row > Nx / 2 + 1)
         return;
 
-    //double factor = -cuda::FOURPIS * (
-    //        (double(row * row) * inv_Lx2 + double(col * col) * inv_Ly2));
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
     cuda::cmplx_t factor(-cuda::FOURPIS * (
             (double(row * row) * inv_Lx2 + double(col * col) * inv_Ly2)), 0.0);
     out[idx] = in[idx] / factor;
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
 }
 
 
@@ -325,8 +292,6 @@ void d_inv_laplace_sec3_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx
 
     cuda::cmplx_t factor(300000 + 1000 * col + row, 1000 * col + row);
     out[idx] = factor;
-    //out[idx].x = double(300000 + 1000 * col + row);
-    //out[idx].y = 1000. * double(row) + double(col);
 }
 
 
@@ -341,10 +306,6 @@ void d_inv_laplace_sec4(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My,
     if (row >= Nx)
         return;
 
-    //double factor = -cuda::FOURPIS * (
-    //        ((double(row) - double(Nx)) * (double(row) - double(Nx)) * inv_Lx2 + double(col * col) * inv_Ly2));
-    //out[idx].x = in[idx].x / factor;
-    //out[idx].y = in[idx].y / factor;
     cuda::cmplx_t factor(-cuda::FOURPIS * (
             ((double(row) - double(Nx)) * (double(row) - double(Nx)) * inv_Lx2 + double(col * col) * inv_Ly2)), 0.0);
     out[idx] = in[idx] / factor;
@@ -354,8 +315,6 @@ void d_inv_laplace_sec4(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My,
 __global__
 void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double inv_Lx2, double inv_Ly2) 
 {
-    //const uint row = blockIdx.x * blockDim.x + threadIdx.x + Nx / 2 + 1;
-    //const uint idx = (row + 1) * My - 1;
     const uint col = My - 1;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x + Nx / 2 + 1;
     const uint idx = row * My + col; 
@@ -365,8 +324,6 @@ void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx
 
     cuda::cmplx_t factor(double(400000 + 1000 * col + row), 1000. * double(col) + (double(row) - double(Nx)) ); 
     out[idx] = factor;
-    //out[idx].x = double(400000 + 1000 * col + row);
-    //out[idx].y = 1000. *(double(row) - double(Nx)) + double(col);
 }
 
 
@@ -429,9 +386,6 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev- 1;
     cuda::real_t kx = cuda::real_t(row) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
-    //cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
     cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
@@ -442,13 +396,7 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     {
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
         sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
-        //sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
-        //sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
-        //sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
-        //sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
     }
-    //A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div; 
-    //A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div; 
     A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div; 
 }
 
@@ -479,24 +427,15 @@ void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = (cuda::real_t(row) - cuda::real_t(p.Nx)) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
-    //cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
     cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
-        //sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
-        //sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
-        //sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
-        //sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
         sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
     }
-    //A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
-    //(A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
     A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) *temp_div;
 }
 
@@ -527,23 +466,15 @@ void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = cuda::real_t(row) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI/ p.length_y;
-    //cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
     cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
-        //sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
-        //sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
-        //sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
-        //sum1_beta.y += + A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
         sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
     }
-    //A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
-    //A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
     A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 }
 
@@ -574,23 +505,15 @@ void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = (cuda::real_t(row) - cuda::real_t(p.Nx)) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(col) * cuda::TWOPI / p.length_y;
-    //cuda::cmplx_t sum1_alpha = make_cuDoubleComplex(0.0, 0.0);
-    //cuda::cmplx_t sum1_beta = make_cuDoubleComplex(0.0, 0.0);
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
     cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
-        //sum1_alpha.x += A[p.level - k][idx].x * alpha[off_a - k];
-        //sum1_alpha.y += A[p.level - k][idx].y * alpha[off_a - k];
-        //sum1_beta.x += A_rhs[p.level - 1 - k][idx].x * beta[off_b - k];
-        //sum1_beta.y += A_rhs[p.level - 1 - k][idx].y * beta[off_b - k];
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
         sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
     }
-    //A[p.level - tlev][idx].x = (sum1_alpha.x + p.delta_t * sum1_beta.x) * temp_div;
-    //A[p.level - tlev][idx].y = (sum1_alpha.y + p.delta_t * sum1_beta.y) * temp_div;
     A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 }
 
@@ -692,9 +615,6 @@ void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
 __global__
 void d_theta_rhs_hw_debug(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, cuda::real_t C, uint Nx, uint My)
 {
-    //const uint col = 2;
-    //const uint row = 0;
-    //const uint idx = row * My + col;
     const uint idx = 2;
 
     cuda::cmplx_t dummy = (theta_rhs_hat[idx] + (strmf_hat[idx] - theta_hat[idx]) * C - strmf_y_hat[idx]);
@@ -875,31 +795,32 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     grid_sec3 = dim3(num_blocks_sec3);
     grid_sec4 = dim3(num_blocks_sec4);
 
-#ifdef DEBUG
-    cout << "block_my21_sec1 = (" << block_my21_sec1.x << ", " << block_my21_sec1.y << ")\t";
-    cout << "grid_my21_sec1 = (" << grid_my21_sec1.x << ", " << grid_my21_sec1.y << ")\n";
-    cout << "block_my21_sec2 = (" << block_my21_sec2.x << ", " << block_my21_sec2.y << ")\t";
-    cout << "grid_my21_sec2 = (" << grid_my21_sec2.x << ", " << grid_my21_sec2.y << ")\n";
-    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
-    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ")\t";
-    cout << "block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ")\t";
-    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
-    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
-    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
-    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
-#endif //DEBUG
+//#ifdef DEBUG
+//    cout << "block_my21_sec1 = (" << block_my21_sec1.x << ", " << block_my21_sec1.y << ")\t";
+//    cout << "grid_my21_sec1 = (" << grid_my21_sec1.x << ", " << grid_my21_sec1.y << ")\n";
+//    cout << "block_my21_sec2 = (" << block_my21_sec2.x << ", " << block_my21_sec2.y << ")\t";
+//    cout << "grid_my21_sec2 = (" << grid_my21_sec2.x << ", " << grid_my21_sec2.y << ")\n";
+//    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
+//    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ")\t";
+//    cout << "block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ")\t";
+//    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
+//    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
+//    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
+//    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
+//#endif //DEBUG
 }
 
 
 slab_cuda :: ~slab_cuda()
 {
+    gpuErrchk(cudaFree(d_ss3_alpha));
+    gpuErrchk(cudaFree(d_ss3_beta));
     finish_dft();
 }
 
 
 bool slab_cuda :: init_dft()
 {
-    cout << "slab_cuda :: init_dft()\n";
     cufftResult err;
     err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z);
     if (err != 0)
@@ -1071,6 +992,9 @@ void slab_cuda :: initialize()
 void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     arr -> move(t_dst, t_src);
 }
 
@@ -1082,6 +1006,9 @@ void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     arr -> copy(t_dst, t_src);
 }
 
@@ -1093,6 +1020,9 @@ void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     arr -> set_t(val, t_src);
 }
 
@@ -1103,6 +1033,9 @@ void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 void slab_cuda::set_t(twodads::field_t fname, cuda::real_t val)
 {
     cuda_array<cuda::real_t, cuda::real_t>* arr = get_field_by_name(fname);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     arr -> set_t(val, 0);
 }
 
@@ -1507,6 +1440,9 @@ void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name,
     d_d_dx_lo<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
     d_d_dx_mid<<<grid_dx_single, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
     d_d_dx_up<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1521,6 +1457,9 @@ void slab_cuda :: d_dx_enumerate(twodads::field_k_t src_name, twodads::field_k_t
     d_d_dx_lo_enumerate<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
     d_d_dx_mid_enumerate<<<grid_dx_single, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
     d_d_dx_up_enumerate<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1535,6 +1474,9 @@ void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name,
 
     d_d_dy_lo<<<arr_in -> get_grid(), arr_out -> get_block()>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
     d_d_dy_up<<<grid_my21_sec2, block_my21_sec2>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 // Compute poloidal derivative from src_name using time index t_src, store in dst_name, time index 0
@@ -1548,6 +1490,9 @@ void slab_cuda :: d_dy_enumerate(twodads::field_k_t src_name, twodads::field_k_t
 
     d_d_dy_lo_enumerate<<<arr_in -> get_grid(), arr_out -> get_block()>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
     d_d_dy_up_enumerate<<<grid_my21_sec2, block_my21_sec2>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), Nx, my21, Ly);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1561,22 +1506,25 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
     const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
 
-#ifdef DEBUG
-    cout << "slab_cuda::inv_laplace(...)\n";
-    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
-    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ")\t";
-    cout << "block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ")\t";
-    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
-    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
-    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
-    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
-#endif //DEBUG
+//#ifdef DEBUG
+//    cout << "slab_cuda::inv_laplace(...)\n";
+//    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
+//    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ")\t";
+//    cout << "block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ")\t";
+//    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
+//    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
+//    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
+//    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
+//#endif //DEBUG
 
     d_inv_laplace_sec1<<<grid_sec1, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec2<<<grid_sec2, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec3<<<grid_sec3, block_sec3>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec4<<<grid_sec4, block_sec4>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
@@ -1589,22 +1537,14 @@ void slab_cuda :: inv_laplace_enumerate(twodads::field_k_t src_name, twodads::fi
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
     const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
 
-#ifdef DEBUG
-    cout << "slab_cuda::inv_laplace_enumerate(...)\n";
-    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\n";
-    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec4.y << ")\n";
-    cout << "block_sec4 = (" << block_sec3.x << ", " << block_sec4.y << ")\n";
-    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
-    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
-    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
-    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
-#endif //DEBUG
-
     d_inv_laplace_sec1_enumerate<<<grid_sec1, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec2_enumerate<<<grid_sec2, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec3_enumerate<<<grid_sec3, block_sec3>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec4_enumerate<<<grid_sec4, block_sec4>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1617,6 +1557,9 @@ void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
     d_integrate_stiff_sec2<<<grid_sec2, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3<<<grid_sec3, block_sec3>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec4<<<grid_sec4, block_sec4>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1629,6 +1572,9 @@ void slab_cuda :: integrate_stiff_enumerate(twodads::field_k_t fname, uint tlev)
     d_integrate_stiff_sec2_enumerate<<<grid_sec2, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3_enumerate<<<grid_sec3, block_sec3>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec4_enumerate<<<grid_sec4, block_sec4>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     cudaDeviceSynchronize();
 } 
 
@@ -1655,6 +1601,9 @@ void slab_cuda :: integrate_stiff_debug(twodads::field_k_t fname, uint tlev, uin
 
     cout << "Debug information for stiffk\n";
     d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, row, col, kx, ky);
+#ifdef DEBUG
+    gpuStatus();
+#endif
         
         //(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev, uint row, uint col, cuda::real_t kx, cuda::real_t ky)
 }
@@ -1665,6 +1614,9 @@ void slab_cuda :: theta_rhs_ns(uint t_src)
 {
     //cout << "theta_rhs_ns\n";
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
 }
 
@@ -1672,6 +1624,9 @@ void slab_cuda :: theta_rhs_ns(uint t_src)
 void slab_cuda :: theta_rhs_lin(uint t_src)
 {
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
 }
 
@@ -1682,16 +1637,15 @@ void slab_cuda :: theta_rhs_hw(uint t_src)
 {
     cuda::real_t C = config.get_model_params(2);
     // Poisson bracket is on the RHS: dn/dt = {n, phi} + ...
-    //cout << "theta_rhs_hw: theta_x = " << theta_x << "\n";
-    //cout << "theta_rhs_hw: theta_y = " << theta_y << "\n";
-    //cout << "theta_rhs_hw: strmf_x = " << strmf_x << "\n";
-    //cout << "theta_rhs_hw: strmf_y = " << strmf_y << "\n";
-    //cout << "theta_rhs_hw: tmp_array = \n" << tmp_array << "\n";
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
-    //d_theta_rhs_hw_debug<<<1, 1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(), C, Nx, My / 2 + 1);
     d_theta_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(0), C, Nx, My / 2 + 1);
-    //cout << "theta_rhs_hw: theta_rhs_Hat = \n" << theta_rhs_hat << "\n";
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1705,6 +1659,9 @@ void slab_cuda :: theta_rhs_hwmod(uint t_src)
     // Neglect ky=0 modes for in coupling term
     d_coupling_hwmod<<<grid_my21_sec1, block_my21_sec1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, Nx, My / 2 + 1);
     theta_rhs_hat -= strmf_y_hat; 
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 void slab_cuda :: theta_rhs_log(uint t_src)
@@ -1712,6 +1669,9 @@ void slab_cuda :: theta_rhs_log(uint t_src)
     d_pbracket<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     d_theta_rhs_log<<<grid_nx_my, block_nx_my>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1719,7 +1679,9 @@ void slab_cuda :: omega_rhs_ns(uint t_src)
 {
     d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
-    //cout << "omega_rhs_ns\n";
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 /// @brief RHS for the Hasegawa-Wakatani model
@@ -1730,6 +1692,9 @@ void slab_cuda :: omega_rhs_hw(uint t_src)
     d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
     d_omega_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, Nx, My / 2 + 1);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -1739,6 +1704,9 @@ void slab_cuda :: omega_rhs_hwmod(uint t_src)
     d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
     d_coupling_hwmod<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, Nx, My / 2 + 1);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 void slab_cuda::omega_rhs_ic(uint t_src)
@@ -1757,6 +1725,9 @@ void slab_cuda::omega_rhs_ic(uint t_src)
 #endif //DEBUG
     //d_omega_ic_dummy<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
     d_omega_ic_sec1<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(t_src), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 

@@ -161,7 +161,8 @@ int main(void)
         if(t % 10000 == 0)
             cout << t << "/" << num_tsteps << "\n";
     }
-    cudaDeviceReset();
+    //slab.~slab_cuda();
+    //cudaDeviceReset();
     return(0);
 }
 

@@ -40,19 +40,11 @@ diagnostics :: diagnostics(slab_config const config) :
     use_log_theta(config.get_log_theta()), 
     theta_bg(config.get_initc(0)),
     init_flag_blobs(false),
-    init_flag_kinetic(false),
-    init_flag_thermal(false),
-    init_flag_flow(false),
+    init_flag_energy(false),
     init_flag_particles(false),
     init_flag_tprobe(false),
     init_flag_oprobe(false)
 {
-
-	#ifdef DEBUG
-		cout << "Initializing diagnostic output\n";
-		cout << "Diagnostic routines specified: ";
-	# endif
-	
     stringstream filename;
     string header;
 	
@@ -66,28 +58,21 @@ diagnostics :: diagnostics(slab_config const config) :
                 init_diagnostic_output(string("blobs.dat"), header, init_flag_blobs);
                 break;
 		
-            case twodads::diagnostic_t::diag_energy:
-        
-                header = string("# 1: time\t 2: C\t3: E\t4: W\t5: S\t6: V\t7: O\t8: T\t9: K\t 10: U\t11: CFL\n");
-                init_diagnostic_output(string("kinetic.dat"), header, init_flag_kinetic);
-
-                header = string("# 1: time\t 2: H\t3: P\t4: B\t5: F\t6: Q\t7: D\t8: A\t9: G\t 10: L\t11: R\n");
-                init_diagnostic_output(string("thermal.dat"), header, init_flag_thermal);
-
-                header = string("#1: time\t 2: D1\t3: D2\t4: D3\t5: D4\t6: D5\t7: D6\t8: D7\t9: D8\t10: D9\n");
-                init_diagnostic_output(string("flows.dat"), header, init_flag_flow);
-        
-                break;
-		
             case twodads::diagnostic_t::diag_probes:
         
                 header = string("#1: time\t#2: n_tilde\t#3: n\t#4: phi\t#5: phi_tilde\t#6: Omega\t#7: Omega_tilde\t#8: v_x\t#9: v_y\t#10: v_y_tilde\t#11: Gamma_r\n");
-                for ( unsigned int n = 0; n < n_probes; n++ ){
-                    filename << "probe" << setw(2) << setfill('0') << n << ".dat";
+                for (unsigned int n = 0; n < n_probes * n_probes; n++ ){
+                    filename << "probe" << setw(3) << setfill('0') << n << ".dat";
                     init_diagnostic_output(filename.str(), header, init_flag_tprobe);
                     init_flag_tprobe = false;
                     filename.str(string());
                 }
+                init_flag_tprobe = true;
+                break;
+            case twodads::diagnostic_t::diag_energy:
+                cout << "diag_energy\n";
+                header = string("#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: W\t#07: D1\t#08: D2\t#09: D3\t:#10: D4\t#11: D5\t#12:D6\t#13: D7\t#14: D8\t#15: D9\t#16: D10\t#17: D11\t#18: D12\t#19: D13\n");
+                init_diagnostic_output(string("energy.dat"), header, init_flag_energy);
                 break;
         /*
         else if ( (*it).compare(string("strmf_max")) == 0 ) 
@@ -103,9 +88,6 @@ diagnostics :: diagnostics(slab_config const config) :
                 break;
 		}
 	}
-	#ifdef DEBUG
-		cout << "\n";
-	#endif
 }
 
 
@@ -202,8 +184,6 @@ void diagnostics::write_diagnostics(const twodads::real_t time, const slab_confi
             case twodads::diagnostic_t::diag_probes:
                 diag_probes(time);
                 break;
-            case twodads::diagnostic_t::diag_rhs:
-                diag_rhs(time);
         }
     }
 }
@@ -308,7 +288,7 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 ///@brief Compute energy integrals for various turbulence models
 ///@param time Time of output
-///@detailed flows.dat: t D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13
+///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13
 ///@detailed $D_{1} = \frac{1}{2A} \int \mathrm{d}A n^2$
 ///@detailed $D_{2} = \frac{1}{2A} \int \mathrm{d}A \left\nabla_\perp \phi\right)^2$
 ///@detailed $D_{3} = \frac{1}{2A} \int \mathrm{d}A \Omega^2$
@@ -323,112 +303,55 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 ///@detailed $D_{12} = \frac{1}{A} \int \mathrm{d}A n_{xxx}^2 + n_{yyy}^2$
 ///@detailed $D_{13} = \frac{1}{A} \int \mathrm{d}A \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}$
 
+
 void diagnostics::diag_energy(const twodads::real_t time)
 {
-	ofstream output;
-
-    // Energy transfer integrals for interchange model
-    double max1 = 0.0, max2 = 0.0, cfl = 0.0;
-
-    double Ly = slab_layout.delta_y * double(slab_layout.My);
-    double Lx = slab_layout.delta_x * double(slab_layout.Nx);
+    ofstream output;
+    double Lx = slab_layout.delta_y * double(slab_layout.My);
+    double Ly = slab_layout.delta_x * double(slab_layout.Nx);
 
 
-    // Multiply by 0.25 to get the integral:
-    // get_mean returns the average, i.e. U.get_man() = sum_{n,m} u(n,m) / (Nx*My)
-    // Domain is [-Lx:Lx] x [-Ly:Ly], thus
-    // 1/A int_A u(x) dA = 1 / (4*Lx*Ly) sum_{n,m} u(x_n, y_m) delta_x delta_y
-    // where delta_x = Lx/Nx and delta_y = Ly/My
+    diag_array<double> strmf_tilde(move(strmf.tilde()));
+    diag_array<double> strmf_bar(move(strmf.bar()));
+    diag_array<double> strmf_x_tilde(move(strmf_x.tilde()));
+    diag_array<double> omega_tilde(move(omega.tilde()));
+    diag_array<double> omega_bar(move(omega.bar()));
+    diag_array<double> theta_tilde(move(theta.tilde()));
+    diag_array<double> theta_bar(move(theta.bar())); 
 
-    const double A{0.25 * (theta_x * (theta * strmf_y).bar()).get_mean()};
-    const double B{0.125 * (theta.bar() * theta.bar()).get_mean()};
-    const double C{0.25 * omega.get_mean()};
-    const double D{0.125 * (theta_x.bar() * theta_x.bar()).get_mean()}; 
-    const double E{0.5 * (omega.tilde() * omega.tilde()).get_mean()};
-    const double F{-0.25 * (theta * strmf_y).get_mean()};
-    const double H{0.25 * theta.get_mean()};
-    const double G{0.0}; // ???
-    const double K{0.125 * (strmf_x.tilde()*strmf_x.tilde() + strmf_y*strmf_y).get_mean()};
-    const double O{0.25 * omega_x.bar().get_mean()};
-    const double P{0.25 * (theta.tilde() * theta.tilde()).get_mean()};
-    const double Q{0.25 * ((theta_x.tilde() * theta_x.tilde()) + (theta_y * theta_y)).get_mean()};
-    const double S{-0.125 * (omega * strmf_y).get_mean()};
-    const double T{0.25 * ((strmf_x * strmf_y) * omega.bar()).get_mean()};
-    const double U{0.125 * (strmf_x.bar() * strmf_x.bar()).get_mean()};
-    const double W{0.125 * (omega.bar() * omega.bar()).get_mean()};
-    const double V{0.125 * (omega_x.tilde()*omega_x.tilde() + omega_y * omega_y).get_mean()};
+    const double E{(omega_tilde * omega_tilde).get_mean()};
+    const double K{(strmf_x_tilde * strmf_x_tilde + strmf_y * strmf_y).get_mean()};
+    const double T{(strmf_x_tilde * strmf_y.tilde() * omega_bar).get_mean()};
+    const double U{(strmf_x.bar() * strmf_x.bar()).get_mean()};
+    const double W{(omega_bar * omega_bar).get_mean()};
 
-    const double D1{0.125 * (theta * theta).get_mean()};
-    const double D2{0.125 * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
-    const double D3{0.125 * (omega * omega).get_mean()};
-    const double D4{-0.25 * (theta.tilde() * strmf_y.tilde()).get_mean()};
-    const double D5{0.25 * ((theta.bar() - strmf.bar()) *  (theta.bar() - strmf.bar())).get_mean()};
-    const double D6{0.25 * ( (theta.tilde() - strmf.tilde()) *  (theta.tilde() - strmf.tilde()) ).get_mean()};
-    const double D7{0.25 * (strmf.bar() * (strmf.bar() - theta.bar())).get_mean()};
-    const double D8{0.25 * (strmf.tilde() * (strmf.tilde() - theta.tilde())).get_mean()};
+    const double D1{0.5 * (theta * theta).get_mean()};
+    const double D2{0.5 * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+    const double D3{0.5 * (omega * omega).get_mean()};
+    const double D4{-1.0 * (theta_tilde * strmf_y.tilde()).get_mean()};
+    const double D5{ ((theta_bar - strmf_bar) *  (theta_bar - strmf_bar)).get_mean()};
+    const double D6{ ( (theta_tilde - strmf_tilde) * (theta_tilde - strmf_tilde)).get_mean()};
+    const double D7{ (strmf_bar * (strmf_bar - theta_bar)).get_mean()};
+    const double D8{ (strmf_tilde * (strmf_tilde - theta_tilde)).get_mean()};
     const double D9{0.0};
-    const double D10{0.25 * (theta_x * theta_x + theta_y * theta_y).get_mean()};
-    const double D11{0.25 * (strmf_x * omega_x + strmf_y * omega_y).get_mean()};
-    const double D12{0.25 * ((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
-    const double D13{0.25 * ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
+    const double D10{ (theta_x * theta_x + theta_y * theta_y).get_mean()};
+    const double D11{ (strmf_x * omega_x + strmf_y * omega_y).get_mean()};
+    const double D12{ ((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
+    const double D13{ ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
-    // Compute the Reynolds stress
-    //slab_array v(*theta);
-    //for ( int n = 0; n < Nx; n++ ){
-    //    for ( int m = 0; m < My; m++ ){
-    //        v(n,m) = sqrt( (*strmf_x)(n,m) * (*strmf_x)(n,m) + (*strmf_y)(n,m) * (*strmf_y)(n,m) ); 
-    //    }
-    //}
-
-    //slab_array rs2 = (strmf_y -> tilde()) * (strmf_x -> tilde());
-    //fftw_array rs2_hat(1, Nx, My); 
-    //// Derive w.r.t x
-    //plan_fw = fftw_plan_dft_r2c_2d( Nx, My, rs2.get_array(), (fftw_complex*) rs2_hat.get_array(), FFTW_ESTIMATE);
-    //plan_bw = fftw_plan_dft_c2r_2d( Nx, My, (fftw_complex*) rs2_hat.get_array(), rs2.get_array(), FFTW_ESTIMATE);
-    //fftw_execute(plan_fw);
-    //rs2_hat.d_dx( Lx );
-    //fftw_execute(plan_bw);
-    //rs2.normalize();
-
-    //fftw_destroy_plan( plan_fw );
-    //fftw_destroy_plan( plan_bw );
-
-    //D9 = (v * rs2).get_mean();
-    //D9 = -123.45;
-
-	// Compute the CFL number
-	max1 = max(strmf_x.get_max(), -1.0 * strmf_x.get_min());
-	max2 = max(strmf_y.get_max(), -1.0 * strmf_y.get_min());
-	cfl = max(max1, max2) * slab_layout.delta_t / slab_layout.delta_x;
-	// Open file object
-	output.open("kinetic.dat", ios::app);
+	output.open("energy.dat", ios::app);
 	if ( output.is_open() ) {
 		output << time << "\t";
-		output << setw(12) << C << "\t" << setw(12) << E << "\t" << setw(12) << W << "\t" << setw(12) << S << "\t" << setw(12) << V << "\t";
-        output << setw(12) << O << "\t" << setw(12) << T << "\t" << setw(12) << K << "\t" << setw(12) << U << "\t" << setw(12) << cfl << "\n";
+		output << setw(12) << E << "\t" << setw(12) << K << "\t" << setw(12) << T << "\t" << setw(12) << U << "\t" << setw(12) << W << "\t";
+		output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
+		output << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t" << setw(12) << D10 << "\t";
+		output << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n"; 
 		output.close();
 	}
 
-    output.open("thermal.dat", ios::app);
-    if ( output.is_open() ) {
-        output.width(12);
-        output << time << "\t";
-        output << setw(12) << H << "\t" << setw(12) << P << "\t" << setw(12) << B << "\t" << setw(12) << F << "\t" << setw(12) << Q << "\t";
-        output << setw(12) << D << "\t" << setw(12) << A << "\t" << setw(12) << G << "\n";
-        output.close();
-    }
-
-    output.open("flows.dat", ios::app);
-    if ( output.is_open() ) {
-        output << time << "\t";
-        output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
-        output << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t" << setw(12) << D10 << "\t";
-        output << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n";
-        output.close();
-    }
-
-	
 }
+
+
 
 /// Write poloidal profile of phi at X_com of a blob
 //void diagnostics::strmf_max(slab const * myslab, double const t) {
@@ -498,52 +421,52 @@ void diagnostics::diag_energy(const twodads::real_t time)
 //    }
 //}
 
-
+/// @brief write output for probes
+/// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
+/// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
+/// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
 void diagnostics::diag_probes(const twodads::real_t time)
 {
 	ofstream output;
     stringstream filename;	
-	const unsigned int delta_n = slab_layout.Nx / (1 + n_probes);
-    const unsigned int delta_m = slab_layout.My / (1 + n_probes);
-    unsigned npr2 = n_probes * n_probes;
+	const int delta_n {int(slab_layout.Nx) / int(n_probes)};
+    const int delta_m {int(slab_layout.My) / int(n_probes)};
+    int np;
+    int mp;
 
-    // Put probes in a square
-    int np[npr2];
-    int mp[npr2];
-
-    for (uint i = 0; i < n_probes; i++ )
-    {
-        for(uint j = 0; j < n_probes; j++)
-        {
-            np[i * n_probes + j] = i * delta_n;
-            mp[i * n_probes + j] = j * delta_m;
-        }
-    }
-
+    diag_array<double> theta_tilde(theta.tilde());
+    diag_array<double> strmf_tilde(strmf.tilde());
+    diag_array<double> omega_tilde(omega.tilde());
+    diag_array<double> strmf_y_tilde(strmf_y.tilde());
+    diag_array<double> strmf_x_tilde(strmf_x.tilde());
 
     // Write out this for n probes
     // #1: time    #2: n_tilde    #3: n    #4: phi    #5: phi_tilde    #6: Omega    #7: Omega_tilde    #8: v_x    #9: v_y    #10: v_y_tilde    #11: Gamma_r
-
-    for (unsigned int n = 0; n < npr2 ; n++ ){
-        filename << "probe" << setw(2) << setfill('0') << n << ".dat";
-        output.open(filename.str().data(), ofstream::app );
-        if ( output.is_open() ){
-            output << time << "\t";                                                           // time
-            output << setw(12) << (theta.tilde()  )( np[n], mp[n] ) << "\t";     // n_tilde
-            output << setw(12) << (theta          )( np[n], mp[n] ) << "\t";     // n
-            output << setw(12) << (strmf          )( np[n], mp[n] ) << "\t";     // phi
-            output << setw(12) << (strmf.tilde()  )( np[n], mp[n] ) << "\t";     // phi_tilde
-            output << setw(12) << (omega          )( np[n], mp[n] ) << "\t";     // Omega
-            output << setw(12) << (omega.tilde()  )( np[n], mp[n] ) << "\t";     // Omega_tilde
-            output << setw(12) << (strmf_y.tilde())( np[n], mp[n] ) << "\t";     // v_x
-            output << setw(12) << (strmf_x        )( np[n], mp[n] ) << "\t";     // v_y
-            output << setw(12) << (strmf_x.tilde())( np[n], mp[n] ) << "\t";     // v_y_tilde
-            output << setw(12) << (theta*strmf_y  )( np[n], mp[n] ) << "\t";     // Gamma_r
-            output << "\n";
-            output.close();
-        }
-        filename.str(string());   // Delete current string member variable
-	}	
+    for (int n = 0; n < (int) n_probes; n++ )
+    {
+        np = n * delta_n;
+        for(int m = 0; m < (int) n_probes; m++)
+        {
+            mp = n * delta_m;
+            filename << "probe" << setw(3) << setfill('0') << n * n_probes + m << ".dat";
+            output.open(filename.str().data(), ofstream::app );
+            if ( output.is_open() ){
+                output << time << "\t";                                                           // time
+                output << setw(12) << theta_tilde  (np, mp) << "\t";     // n_tilde
+                output << setw(12) << theta        (np, mp) << "\t";     // n
+                output << setw(12) << strmf        (np, mp) << "\t";     // phi
+                output << setw(12) << strmf_tilde  (np, mp) << "\t";     // phi_tilde
+                output << setw(12) << omega        (np, mp) << "\t";     // Omega
+                output << setw(12) << omega_tilde  (np, mp) << "\t";     // Omega_tilde
+                output << setw(12) << strmf_y_tilde(np, mp) << "\t";     // -v_x
+                output << setw(12) << strmf_x      (np, mp) << "\t";     // v_y
+                output << setw(12) << strmf_x_tilde(np, mp) << "\t";     // v_y_tilde
+                output << "\n";
+                output.close();
+            }
+            filename.str(string());   // Delete current string member variable
+        }	
+    }
 }
 
-// End of file diagnostics.cpp
+    // End of file diagnostics.cpp

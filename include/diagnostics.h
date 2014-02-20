@@ -10,7 +10,6 @@
 #include "include/cuda_types.h"
 #include "include/error.h"
 #include "include/slab_config.h"
-//#include "include/cuda_array3.h"
 #include "include/slab_cuda.h"
 #include "include/diag_array.h"
 
@@ -62,9 +61,7 @@ class diagnostics {
         twodads::real_t theta_bg; /// Subtract uniform background on theta
 		// Flags which output files have been initialized
 		bool init_flag_blobs; /// True if blobs.dat has been initialized
-		bool init_flag_kinetic; /// True if kinetic.dat has been initialized
-        bool init_flag_thermal; /// True if thermal.dat has been initialized
-        bool init_flag_flow; /// True of flows.dat has been initialized
+        bool init_flag_energy; /// True if energy.dat has been initialized
         bool init_flag_particles; /// Not implemented yet
         bool init_flag_tprobe; /// Not implemented yet
         bool init_flag_oprobe; /// Not implemented yet

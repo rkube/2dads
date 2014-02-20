@@ -20,6 +20,8 @@ namespace cuda
     const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
     const real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
 
+    const int max_initc = 6; /// < Maximal number of initial conditions
+
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when
     /// compiling in g++ and nvcc. Also, don't forget the -maligned-double flag
@@ -48,6 +50,20 @@ namespace cuda
             return os;
         }
     } __attribute__ ((aligned (8)));
+
+    /// Class to store initialization parameters, up to 6 doubles
+    class init_params_t
+    {
+    public:
+        init_params_t() : i1(0.0), i2(0.0), i3(0.0), i4(0.0), i5(0.0), i6(0.0) {};
+        real_t i1;
+        real_t i2;
+        real_t i3;
+        real_t i4;
+        real_t i5;
+        real_t i6;
+    } __attribute__ ((aligned (8)));
+
 
     class stiff_params_t
     {

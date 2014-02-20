@@ -44,6 +44,21 @@ inline void gpuAssert(cudaError_t code, const char *file, int line)
 }
 
 
+// Verify last kernel launch
+#define gpuStatus() { gpuVerifyLaunch(__FILE__, __LINE__); }
+inline void gpuVerifyLaunch(const char* file, int line)
+{
+     cudaThreadSynchronize();
+     cudaError_t error = cudaGetLastError();
+     if(error != cudaSuccess)
+     {
+        stringstream err_str;
+        err_str << "GPUassert: " << cudaGetErrorString(error) << "\t file: " << file << ", line: " << line << "\n";
+        throw gpu_error(err_str.str());
+     }
+}
+
+
 
 /// U is the data type for this array, f.ex. CuCmplx<double>
 /// T is the base type of U, for example U=CuCmplx<double>, T = double
@@ -88,8 +103,8 @@ class cuda_array{
         // Set array to constant value for specified time level
         cuda_array<U, T>& set_t(const U&, uint);
         // Access operator to host array
-        U& operator()(uint, uint, uint);
-        U operator()(uint, uint, uint) const;
+        inline U& operator()(uint, uint, uint);
+        inline U operator()(uint, uint, uint) const;
 
         // Copy device memory to host and print to stdout
         friend std::ostream& operator<<(std::ostream& os, cuda_array<U, T> src)
@@ -226,7 +241,6 @@ __global__ void d_enumerate_t(U** array_t, uint t, uint Nx, uint My)
     }
 }
 
-
 template <typename U, typename T>
 __global__ void d_set_constant_t(U** array_t, T val, uint t, uint Nx, uint My)
 {
@@ -256,19 +270,19 @@ __global__ void d_advance(U** array_t, int tlevs)
 	U* tmp = array_t[tlevs - 1];
 	int t = 0;
 
-#ifdef DEBUG 
-	printf("__global__ d_advance: Before:\n");
-	for(t = tlevs - 1; t >= 0; t--)
-		printf("array_t[%d] at %p\n", t, array_t[t]);
-#endif
+//#ifdef DEBUG 
+//	printf("__global__ d_advance: Before:\n");
+//	for(t = tlevs - 1; t >= 0; t--)
+//		printf("array_t[%d] at %p\n", t, array_t[t]);
+//#endif
 	for(t = tlevs - 1; t > 0; t--)
 		array_t[t] = array_t[t - 1];
 	array_t[0] = tmp;
-#ifdef DEBUG
-	printf("__global__ d_advance: After:\n");
-	for(t = tlevs - 1; t >= 0; t--)
-		printf("array_t[%d] at %p\n", t, array_t[t]);
-#endif
+//#ifdef DEBUG
+//	printf("__global__ d_advance: After:\n");
+//	for(t = tlevs - 1; t >= 0; t--)
+//		printf("array_t[%d] at %p\n", t, array_t[t]);
+//#endif
 }
 
 
@@ -456,10 +470,12 @@ cuda_array<U, T> :: cuda_array(uint t, uint nx, uint my) :
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
+    gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
     array_h = (U*) calloc(nelem, sizeof(U));
+    //cerr << "cuda_array :: cuda_array() at " << this << " allocated array_d at " << array_d << "\t";
+    //cerr << "array_d_t at " << array_d_t << "\n";
 
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
-    gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
     array_h_t = (U**) calloc(tlevs, sizeof(U*));
     array_d_t_host = (U**) calloc(tlevs, sizeof(U*));
     // array_t[i] points to the i-th time level
@@ -472,24 +488,24 @@ cuda_array<U, T> :: cuda_array(uint t, uint nx, uint my) :
         array_h_t[tl] = &array_h[tl * Nx * My];
     set_all(0.0);
     cudaDeviceSynchronize();
-#ifdef DEBUG
-    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
-    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
-    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
-    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
-    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
-    cout << "Device data at " << array_d << "\t";
-    cout << "Host data at " << array_h << "\t";
-    cout << nelem << " bytes of data\n";
-    for (uint tl = 0; tl < tlevs; tl++)
-    {
-        cout << "time level " << tl << " at ";
-        cout << array_h_t[tl] << "(host)\t";
-        cout << array_d_t_host[tl] << "(device)\n";
-    }
-    cout << "Testing allocation of array_d_t:\n";
-    test_alloc<<<1, 1>>>(array_d_t, tlevs);
-#endif // DEBUG
+//#ifdef DEBUG
+//    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
+//    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
+//    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
+//    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
+//    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
+//    cout << "Device data at " << array_d << "\t";
+//    cout << "Host data at " << array_h << "\t";
+//    cout << nelem << " bytes of data\n";
+//    for (uint tl = 0; tl < tlevs; tl++)
+//    {
+//        cout << "time level " << tl << " at ";
+//        cout << array_h_t[tl] << "(host)\t";
+//        cout << array_d_t_host[tl] << "(device)\n";
+//    }
+//    cout << "Testing allocation of array_d_t:\n";
+//    test_alloc<<<1, 1>>>(array_d_t, tlevs);
+//#endif // DEBUG
 }
 
 
@@ -507,6 +523,7 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>& rhs) :
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
+    cerr << "cuda_array :: cuda_array() : allocated array_d at " << array_d << "\n";
     array_h = (U*) calloc(nelem, sizeof(U));
 
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
@@ -542,8 +559,10 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>* rhs) :
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
+    //cerr << "cuda_array :: cuda_array() : allocated array_d at " << array_d << "\n";
     array_h = (U*) calloc(nelem, sizeof(U));
 
+    //cerr << "cuda_array :: cuda_array() : allocated array_d_t at " << array_d << "\n";
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
     array_h_t = (U**) calloc(tlevs, sizeof(U*));
     array_d_t_host = (U**) calloc(tlevs, sizeof(U*));
@@ -564,11 +583,16 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>* rhs) :
 
 template <typename U, typename T>
 cuda_array<U, T> :: ~cuda_array(){
-    cudaFree(array_d);
-    free(array_h);
-    cudaFree(array_d_t);
-    free(array_h_t);
     free(array_d_t_host);
+    free(array_h_t);
+    //cerr << "cuda_array :: ~cuda_array()  at " << this << " freeing array_d_t at " << array_d_t << "\t";
+    cudaFree(array_d_t);
+    //gpuErrchk(cudaFree(array_d_t));
+    free(array_h);
+    //cerr << " freeing array_d at " << array_d << "\n";
+    //gpuErrchk(cudaFree(&array_d));
+    cudaFree(array_d);
+    cudaDeviceSynchronize();
 }
 
 
@@ -590,7 +614,9 @@ void cuda_array<U, T> :: enumerate_array_t(const uint t)
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("cuda_array<U, T> :: enumerate_array_t(const int): out of bounds\n"));
 	d_enumerate_t<<<grid, block >>>(array_d_t, t, Nx, My);
-	cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 // Operators
@@ -607,7 +633,6 @@ cuda_array<U, T>& cuda_array<U, T> :: operator= (const cuda_array<U, T>& rhs)
         return *this;
     
     // Copy data from other array
-    //gpuErrchk(cudaMemcpy(array_d, rhs.get_array_d(), sizeof(T*) * tlevs * Nx * My, cudaMemcpyDeviceToDevice));
     gpuErrchk(cudaMemcpy(array_d_t_host[0], rhs.get_array_d(0), sizeof(T) * Nx * My, cudaMemcpyDeviceToDevice));
     // Leave the pointer to the time leves untouched!!!
     return *this;
@@ -618,7 +643,9 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator= (const U& rhs)
 {
     d_set_constant_t<<<grid, block>>>(array_d_t, rhs, 0, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
 
@@ -628,10 +655,13 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: set_all(const U& rhs)
 {
 	for(uint t = 0; t < tlevs; t++)
-	{
+    {
 		d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, Nx, My);
-		cudaDeviceSynchronize();
-	}
+#ifdef DEBUG
+        gpuStatus();
+#endif
+    }
+	
 	return *this;
 }
 
@@ -641,7 +671,6 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: set_t(const U& rhs, uint t)
 {
     d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, Nx, My);
-    cudaDeviceSynchronize();
     return *this;
 }
 
@@ -655,7 +684,9 @@ cuda_array<U, T>& cuda_array<U, T> :: operator+=(const cuda_array<U, T>& rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator+= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
     d_add_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
 
@@ -664,7 +695,9 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator+=(const U& rhs)
 {
     d_add_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
 
@@ -687,7 +720,9 @@ cuda_array<U, T>& cuda_array<U, T> :: operator-=(const cuda_array<U, T>& rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator-= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
     
     d_sub_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
 
@@ -696,6 +731,9 @@ template<typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator-=(const U& rhs)
 {
     d_sub_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
 
@@ -718,7 +756,9 @@ cuda_array<U, T>& cuda_array<U, T> :: operator*=(const cuda_array<U, T>& rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator*= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
     
     d_mul_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
       
@@ -727,6 +767,9 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator*=(const U& rhs)
 {
     d_mul_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return (*this);
 }
 
@@ -749,7 +792,9 @@ cuda_array<U, T>& cuda_array<U, T> :: operator/=(const cuda_array<U, T>& rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator*= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
     
     d_div_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, Nx, My);
-    cudaDeviceSynchronize();
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return *this;
 }
       
@@ -758,6 +803,9 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator/=(const U& rhs)
 {
     d_div_scalar<<<grid, block>>>(array_d_t, rhs, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
     return (*this);
 }
 
@@ -772,7 +820,7 @@ cuda_array<U, T> cuda_array<U, T> :: operator/(const cuda_array<U, T>& rhs)
 
 
 template <typename U, typename T>
-U& cuda_array<U, T> :: operator()(uint t, uint n, uint m)
+inline U& cuda_array<U, T> :: operator()(uint t, uint n, uint m)
 {
 	if (!bounds(t, n, m))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: operator()(uint, uint, uint): out of bounds\n"));
@@ -781,7 +829,7 @@ U& cuda_array<U, T> :: operator()(uint t, uint n, uint m)
 
 
 template <typename U, typename T>
-U cuda_array<U, T> :: operator()(uint t, uint n, uint m) const
+inline U cuda_array<U, T> :: operator()(uint t, uint n, uint m) const
 {
 	if (!bounds(t, n, m))
 		throw out_of_bounds_err(string("T cuda_array<T> :: operator()(uint, uint, uint): out of bounds\n"));
@@ -886,6 +934,9 @@ inline void cuda_array<U, T> :: move(uint t_dst, uint t_src)
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
     // Clear source
     d_set_constant_t<<<grid, block>>>(array_d_t, 0.0, t_src, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -902,6 +953,9 @@ template <typename U, typename T>
 inline void cuda_array<U, T> :: kill_kx0()
 {
     d_kill_kx0<<<grid.x, block.x>>>(array_d, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -910,6 +964,9 @@ template <typename U, typename T>
 inline void cuda_array<U, T> :: kill_ky0()
 {
     d_kill_ky0<<<grid.y, block.y>>>(array_d, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 
@@ -918,6 +975,9 @@ template <typename U, typename T>
 inline void cuda_array<U, T> :: kill_k0()
 {
     d_kill_k0<<<1, 1>>>(array_d);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 /// Do this for U = double, T = double
@@ -926,6 +986,9 @@ inline void cuda_array<U, T> :: normalize()
 {
     cuda::real_t norm = 1. / U(Nx * My);
     d_mul_scalar<<<grid, block>>>(array_d_t, norm, Nx, My);
+#ifdef DEBUG
+    gpuStatus();
+#endif
 }
 
 #endif // CUDA_CC
