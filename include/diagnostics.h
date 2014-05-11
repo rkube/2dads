@@ -47,7 +47,6 @@ class diagnostics {
         diag_array<double> theta, theta_x, theta_y;
         diag_array<double> omega, omega_x, omega_y;
         diag_array<double> strmf, strmf_x, strmf_y;
-        diag_array<double> theta_rhs, omega_rhs;
 
 		twodads::real_t time; /// Real time 
 		twodads::real_t old_com_x; /// Old radial COM velocity of the blob

@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-.PHONY: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_output test_stiff test_memcpy test_diff test_blob test_hw test_diagarray
+.PHONY: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_output test_stiff test_memcpy test_diff test_blob test_hw test_diagarray test_perf
 
 all: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_stiff test_memcpy test_diff test_blob test_hw
 
@@ -12,6 +12,7 @@ test_cucmplx:
 # Test instantiation of cuda_array3: instantiation of real and complex type, arithmetic and output operators
 test_array3:
 	$(CUDACC) $(CUDACFLAGS) -o test_array3 test_array3.cu $(IFLAGS) $(CUDALFLAGS)
+
 
 # Test member functions of diag_array
 # Compile a program that instantiates a cuda_array with NVCC first
@@ -55,9 +56,10 @@ test_diag:
 # Toy around with memcpu
 test_memcpy:
 	$(CUDACC) -arch=sm_30 -O0 -o test_memcpy test_memcpy.cu $(IFLAGS) 
+# Performance tests
+test_perf:
+	$(CC) $(CFLAGS) -o test_perf/test_perf_arraybase test_arrayperf.cpp -pthread $(IFLAGS) $(LFLAGS) 
 
-test_blob:
-	$(CC) $(CFLAGS) -o test_blob/test_blob $(OBJ_DIR)/cuda_array2.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_cuda2.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_blob.cpp $(IFLAGS) $(LFLAGS)
 
 test_hw:
 	$(CC) $(CFLAGS) -o test_hw/test_hw $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_hw.cpp $(IFLAGS) $(LFLAGS) -I/usr/local/cuda

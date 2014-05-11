@@ -29,7 +29,6 @@ diagnostics :: diagnostics(slab_config const config) :
     strmf(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
     strmf_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
     strmf_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
-    theta_rhs(config.get_nx(), config.get_my()), omega_rhs(config.get_nx(), config.get_my()),
     time(0.0),
     old_com_x(0.0),
     old_com_y(0.0),
@@ -88,6 +87,18 @@ diagnostics :: diagnostics(slab_config const config) :
                 break;
 		}
 	}
+#ifdef PINNED_HOST_MEMORY
+    const size_t mem_size = theta.get_nx() * theta.get_my() * sizeof(double);
+    cudaHostRegister(static_cast<void*>(theta.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(theta_x.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(theta_y.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(omega.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(omega_x.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(omega_y.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(strmf.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(strmf_x.get_array()), mem_size, cudaHostRegisterPortable);
+    cudaHostRegister(static_cast<void*>(strmf_y.get_array()), mem_size, cudaHostRegisterPortable);
+#endif
 }
 
 
@@ -146,25 +157,11 @@ void diagnostics :: update_arrays(slab_cuda& slab)
     strmf.update(slab.strmf);
     strmf_x.update(slab.strmf_x);
     strmf_y.update(slab.strmf_y);
-    theta_rhs.update(slab.theta_rhs);
-    omega_rhs.update(slab.omega_rhs);
 }
 
 /*
  *************************** Diagnostic routines *******************************
  */ 
-
-
-void diagnostics::diag_rhs(const twodads::real_t time)
-{
-    cout << "diag_rhs:\n";
-    cout << "theta_rhs.max = " << theta_rhs.get_max() << "\t";
-    cout << "theta_rhs.min = " << theta_rhs.get_min() << "\t";
-    cout << "theta_rhs.mean = " << theta_rhs.get_mean() << "\t";
-    cout << "omega_rhs.max = " << omega_rhs.get_max() << "\t";
-    cout << "omega_rhs.min = " << omega_rhs.get_min() << "\t";
-    cout << "omega_rhs.mean = " << omega_rhs.get_mean() << "\n";
-}
 
 
 void diagnostics::write_diagnostics(const twodads::real_t time, const slab_config& config)
@@ -192,22 +189,23 @@ void diagnostics::write_diagnostics(const twodads::real_t time, const slab_confi
 void diagnostics::diag_blobs(const twodads::real_t time)
 {  
 
-	double theta_max = -1.0;
-	double theta_max_x = 0.0;
-	double theta_max_y = 0.0;
-	double theta_int = 0.0;
-	double theta_int_x = 0.0;
-	double theta_int_y = 0.0;
-	double strmf_max = -1.0;
-	double strmf_max_x = 0.0;
-	double strmf_max_y = 0.0;
-	double wxx = 0.0, wyy = 0.0, dxx = 0.0, dyy = 0.0;
-	double com_vx = 0.0, com_vy = 0.0;
-	double x,y;
-	
+	double theta_max{-1.0};
+	double theta_max_x{0.0};
+	double theta_max_y{0.0};
+	double theta_int{0.0};
+	double theta_int_x{0.0};
+	double theta_int_y{0.0};
+	double strmf_max{-1.0};
+	double strmf_max_x{0.0};
+	double strmf_max_y{0.0};
+	double wxx{0.0}, wyy{0.0}, dxx{0.0}, dyy{0.0};
+	double com_vx{0.0}, com_vy{0.0};
+	double x{0.0}, y{0.0};
+
+    double theta_val{0.0};    
 	ofstream output;
 	// Copy theta array from slab, without ghost points
-	//slab_array theta( myslab -> get_theta() );
+    /*
     if ( use_log_theta ){
         for (int n = 0; n < int(slab_layout.Nx); n++){
             for (int m = 0; m < int(slab_layout.My); m++){
@@ -215,6 +213,7 @@ void diagnostics::diag_blobs(const twodads::real_t time)
             }
         }
     }
+    */
 	
     theta_max_x = slab_layout.x_left;
     theta_max_y = slab_layout.y_lo;
@@ -227,12 +226,13 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
 		for(int m = 0; m < int(slab_layout.My); m++){
 			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-			theta_int += theta(n,m);
-			theta_int_x += theta(n,m) * x;
-			theta_int_y += theta(n,m) * y;
+            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
+			theta_int += theta_val;
+			theta_int_x += theta_val * x;
+			theta_int_y += theta_val * y;
  
-			if ( fabs(theta(n,m)) >= theta_max) {
-				theta_max = fabs(theta(n,m));
+			if ( fabs(theta_val) >= theta_max) {
+				theta_max = fabs(theta_val);
 				theta_max_x = x;
 				theta_max_y = y;
 			}
@@ -250,8 +250,9 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
 		for(int m = 0; m < int(slab_layout.My); m++){
 			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-			wxx = theta(n,m) * ( x - theta_int_x ) * (x - theta_int_x);
-			wyy = theta(n,m) * ( y - theta_int_y ) * (y - theta_int_y);
+            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
+			wxx = theta_val * ( x - theta_int_x ) * (x - theta_int_x);
+			wyy = theta_val * ( y - theta_int_y ) * (y - theta_int_y);
 		}
 	}
 	wxx /= theta_int;
@@ -260,8 +261,8 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 	// Compute center of mass velocities and diffusivities
 	com_vx = (theta_int_x - old_com_x) / t_probe;
 	com_vy = (theta_int_y - old_com_y) / t_probe;
-	dxx = 0.5*(wxx - old_wxx) / t_probe;
-	dyy = 0.5*(wyy - old_wyy) / t_probe;
+	dxx = 0.5 * (wxx - old_wxx) / t_probe;
+	dyy = 0.5 * (wyy - old_wyy) / t_probe;
 	
 	// Update center of mass coordinates and dispersion tensor elements
 	old_com_x = theta_int_x;
@@ -447,7 +448,7 @@ void diagnostics::diag_probes(const twodads::real_t time)
         np = n * delta_n;
         for(int m = 0; m < (int) n_probes; m++)
         {
-            mp = n * delta_m;
+            mp = m * delta_m;
             filename << "probe" << setw(3) << setfill('0') << n * n_probes + m << ".dat";
             output.open(filename.str().data(), ofstream::app );
             if ( output.is_open() ){

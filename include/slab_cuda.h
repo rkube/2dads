@@ -150,6 +150,10 @@ class slab_cuda
         dim3 grid_sec3;
         dim3 grid_sec4;
 
+        /// @brief Block and grid dimensions for access on all {kx, 0} modes
+        dim3 block_ky0;
+        dim3 grid_ky0;
+
         cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration
         cuda::real_t* d_ss3_beta; ///< Coefficients for explicit part of time integration
         /// Get pointer to cuda_array<cuda::real_t> corresponding to field type 
@@ -174,6 +178,7 @@ class slab_cuda
         void omega_rhs_lin(uint); ///< Linearized interchange model
         void omega_rhs_hw(uint); ///< Hasegawa-Wakatani model
         void omega_rhs_hwmod(uint); ///< Modified Hasegawa-Wakatani model
+        void omega_rhs_hwzf(uint); /// Modified Hasegawa-Wakatani, supress zonal flows
         void omega_rhs_null(uint); ///< Zero explicit term
         void omega_rhs_ic(uint); ///< Interchange turbulence
 };

@@ -146,19 +146,18 @@ void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
         bool log_theta)
 {
     cuda::init_params_t init_params;
-    init_params.i1 = (initc.size() > 1) ? initc[0] : 0.0;
-    init_params.i2 = (initc.size() > 2) ? initc[1] : 0.0;
-    init_params.i3 = (initc.size() > 3) ? initc[2] : 0.0;
-    init_params.i4 = (initc.size() > 4) ? initc[3] : 0.0;
-    init_params.i5 = (initc.size() > 5) ? initc[4] : 0.0;
-    init_params.i6 = (initc.size() > 6) ? initc[5] : 0.0;
 
+    init_params.i1 = (initc.size() > 0) ? initc[0] : 0.0;
+    init_params.i2 = (initc.size() > 1) ? initc[1] : 0.0;
+    init_params.i3 = (initc.size() > 2) ? initc[2] : 0.0;
+    init_params.i4 = (initc.size() > 3) ? initc[3] : 0.0;
+    init_params.i5 = (initc.size() > 4) ? initc[4] : 0.0;
+    init_params.i6 = (initc.size() > 5) ? initc[5] : 0.0;
 
     if (log_theta)
         d_init_exp_log<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
     else
         d_init_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
-
     cudaDeviceSynchronize();
 }
 
@@ -177,11 +176,7 @@ void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
     init_params.i5 = (initc.size() > 5) ? initc[4] : 0.0;
     init_params.i6 = (initc.size() > 6) ? initc[5] : 0.0;
 
-    //gpuErrchk(cudaMalloc( (double**) &d_params, initc.size() * sizeof(double)));
-    //gpuErrchk(cudaMemcpy(d_params, params, sizeof(double) * initc.size(), cudaMemcpyHostToDevice));
-
     d_init_lapl<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, init_params);
-    //cudaFree(d_params);
     cudaDeviceSynchronize();
 }
 
@@ -190,8 +185,7 @@ void init_all_modes(cuda_arr_cmplx* arr, vector<double> initc, cuda::slab_layout
 {
     double real = initc[0];
     double imag = initc[1];
-    cout << "init_all_modes to (" << real << "," << imag << "\n";
-    d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
+d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
 }
 
 
@@ -210,9 +204,14 @@ void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
     const unsigned int num_modes = initc.size() / 4;
     (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
 
+#ifdef DEBUG
+    cout << "Initializing modes:\n";
+#endif
     for(uint n = 0; n < num_modes; n++)
     {
+#ifdef DEBUG
         cout << "mode " << n << ": amp=" << initc[4*n] << " kx=" << initc[4*n+1] << ", ky=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
+#endif
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
         //d_init_mode<<<1, 1>>>(arr -> get_array_d(0), layout, initc[4*n], uint(initc[4*n+1]), uint(initc[4*n+2])); 
     }

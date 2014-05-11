@@ -14,6 +14,9 @@
  *
  * Datatype to hold 2d CUDA arrays with three time levels
  *
+ *  when PINNED_HOST_MEMORY is defined, memory for mirror copy of array in host
+ *  memory is pinned, i.e. non-pageable. This increases memory transfer rates
+ *  between host and device in exchange for more heavyweight memory allocation.
  */
 
 #include <iostream>
@@ -471,9 +474,18 @@ cuda_array<U, T> :: cuda_array(uint t, uint nx, uint my) :
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
+
+#ifdef PINNED_HOST_MEMORY
+    // Allocate pinned host memory for faster memory transfers
+    gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(U)));
+    // Initialize host memory all zero
+    for(int n = 0; n < Nx; n++)
+        for(int m = 0; m < My; m++)
+            array_h[n * My + m] = 0.0;
+#endif
+#ifndef PINNED_HOST_MEMORY
     array_h = (U*) calloc(nelem, sizeof(U));
-    //cerr << "cuda_array :: cuda_array() at " << this << " allocated array_d at " << array_d << "\t";
-    //cerr << "array_d_t at " << array_d_t << "\n";
+#endif
 
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
     array_h_t = (U**) calloc(tlevs, sizeof(U*));
@@ -487,7 +499,6 @@ cuda_array<U, T> :: cuda_array(uint t, uint nx, uint my) :
     for(uint tl = 0; tl < tlevs; tl++)
         array_h_t[tl] = &array_h[tl * Nx * My];
     set_all(0.0);
-    cudaDeviceSynchronize();
 //#ifdef DEBUG
 //    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
 //    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
@@ -523,8 +534,17 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>& rhs) :
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
-    cerr << "cuda_array :: cuda_array() : allocated array_d at " << array_d << "\n";
+    // Allocate pinned host memory
+#ifdef PINNED_HOST_MEMORY
+    gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(U)));
+    // Initialize host memory all zero
+    for(int n = 0; n < Nx; n++)
+        for(int m = 0; m < My; m++)
+            array_h[n * My + m] = 0.0;
+#endif
+#ifndef PINNED_HOST_MEMORY
     array_h = (U*) calloc(nelem, sizeof(U));
+#endif
 
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
     array_h_t = (U**) calloc(tlevs, sizeof(U*));
@@ -541,7 +561,7 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>& rhs) :
         gpuErrchk( cudaMemcpy(array_d_t_host[tl], rhs.get_array_d(tl), sizeof(U) * Nx * My, cudaMemcpyDeviceToDevice));
         array_h_t[tl] = &array_h[tl * Nx * My];
     }
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 }
 
 
@@ -559,9 +579,17 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>* rhs) :
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(U)));
-    //cerr << "cuda_array :: cuda_array() : allocated array_d at " << array_d << "\n";
+#ifdef PINNED_HOST_MEMORY
+    // Allocate host memory
+    gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(U)));
+    // Initialize host memory all zero
+    for(int n = 0; n < Nx; n++)
+        for(int m = 0; m < My; m++)
+            array_h[n * My + m] = 0.0;
+#endif // PINNED_HOST_MEMORY
+#ifndef PINNED_HOST_MEMORY
     array_h = (U*) calloc(nelem, sizeof(U));
-
+#endif //PINNED_HOST_MEMORY
     //cerr << "cuda_array :: cuda_array() : allocated array_d_t at " << array_d << "\n";
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(U*)));
     array_h_t = (U**) calloc(tlevs, sizeof(U*));
@@ -578,21 +606,25 @@ cuda_array<U, T> :: cuda_array(const cuda_array<U, T>* rhs) :
         gpuErrchk( cudaMemcpy(array_d_t_host[tl], rhs -> get_array_d(tl), sizeof(U) * Nx * My, cudaMemcpyDeviceToDevice));
         array_h_t[tl] = &array_h[tl * Nx * My];
     }
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 }
 
 template <typename U, typename T>
 cuda_array<U, T> :: ~cuda_array(){
     free(array_d_t_host);
     free(array_h_t);
-    //cerr << "cuda_array :: ~cuda_array()  at " << this << " freeing array_d_t at " << array_d_t << "\t";
     cudaFree(array_d_t);
     //gpuErrchk(cudaFree(array_d_t));
+#ifdef PINNED_HOST_MEMORY
+    cudaFreeHost(array_h);
+#endif
+#ifndef PINNED_HOST_MEMORY
     free(array_h);
+#endif
     //cerr << " freeing array_d at " << array_d << "\n";
     //gpuErrchk(cudaFree(&array_d));
     cudaFree(array_d);
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 }
 
 
@@ -604,7 +636,7 @@ void cuda_array<U, T> :: enumerate_array(const uint t)
 	if (!bounds(t, Nx-1, My-1))
 		throw out_of_bounds_err(string("cuda_array<U, T> :: enumerate_array(const int): out of bounds\n"));
 	d_enumerate<<<grid, block>>>(array_d, Nx, My);
-	cudaDeviceSynchronize();
+	//cudaDeviceSynchronize();
 }
 
 
@@ -945,7 +977,7 @@ inline void cuda_array<U, T> :: swap(uint t1, uint t2)
 {
     d_swap<<<1, 1>>>(array_d_t, t1, t2);
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(U*) * tlevs, cudaMemcpyDeviceToHost));
-	cudaDeviceSynchronize();
+	//cudaDeviceSynchronize();
 }
 
 

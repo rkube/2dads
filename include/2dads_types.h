@@ -77,6 +77,7 @@ namespace twodads {
         omega_rhs_std, ///< who knows?
         omega_rhs_hw, ///< Hasegawa-Wakatani model
         omega_rhs_hwmod,  ///< Modified Hasegawa-Wakatani model
+        omega_rhs_hwzf, ///< Modified Hasegawa-Wakatani model, supressed zonal flow
         omega_rhs_ic, ///< Interchange turbulence
         omega_rhs_NA, ///< Set if RHS specified in input.ini is not available, throws an error
         rhs_ns, ///< Navier-Stokes equation
