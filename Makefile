@@ -8,7 +8,7 @@ TEST_DIR = tests
 all: output initialize diagnostics slab_config slab_cuda 
 base: initialize diagnostics slab_config output slab_cuda 
 
-DEFINES	= -DPINNED_HOST_MEMORY
+DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))'
 
 slab_config:
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(IFLAGS)
