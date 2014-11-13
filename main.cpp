@@ -34,6 +34,7 @@ int main(void)
     for(t = 1; t < tlevs - 1; t++)
     {
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, t + 1);
+        slab.integrate_stiff(twodads::field_k_t::f_omega_hat, t + 1);
         time += delta_t;
         slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, my_config.get_tlevs() - t - 1);
         slab.update_real_fields(my_config.get_tlevs() - t - 1);

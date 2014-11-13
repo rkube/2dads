@@ -53,7 +53,7 @@ class slab_cuda
         void inv_laplace_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
         
         // Advance all fields with multiple time levels
-        void advance(); ///<Advance all member fields with multiple time levels theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
+        void advance(); ///<Advance all member fields with multiple time levels: theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
         // Compute RHS function into tlev0 of theta_rhs_hat, omega_rhs_hat
         void rhs_fun(uint); ///< Call RHS_fun pointers
         // Compute all real fields and spatial derivatives from Fourier coeffcients at specified
@@ -61,24 +61,26 @@ class slab_cuda
         void update_real_fields(uint); ///< Update all real fields
         // Compute new theta_hat, omega_hat into tlev0.
         void integrate_stiff(twodads::field_k_t, uint); ///< Time step
-        void integrate_stiff_enumerate(twodads::field_k_t, uint);
-        void integrate_stiff_debug(twodads::field_k_t, uint, uint, uint);
+        void integrate_stiff_ky0(twodads::field_k_t, uint); ///< Time integration of modes with ky=0
+        void integrate_stiff_enumerate(twodads::field_k_t, uint); ///< Only enumerate modes
+        void integrate_stiff_debug(twodads::field_k_t, uint, uint, uint); ///< Integrate, with full debugging output
         // Carry out DFT
         void dft_r2c(twodads::field_t, twodads::field_k_t, uint); ///< Real to complex DFT
         void dft_c2r(twodads::field_k_t, twodads::field_t, uint); ///< Complex to real DFT
 
-        void dump_field(twodads::field_t); ///< Dump member cuda_array to terminal
-        void dump_field(twodads::field_t, string); ///< Dump member cuda_array to ascii file
-        void dump_field(twodads::field_k_t); ///< Dump member cuda_aray to terminal
-        void dump_field(twodads::field_k_t, string); ///< Dump member cuda_array<cmplx_t> to ascii file
+        void print_field(twodads::field_t); ///< Print member cuda_array to terminal
+        void print_field(twodads::field_t, string); ///< Print member cuda_array to ascii file
+        void print_field(twodads::field_k_t); ///< Print member cuda_aray to terminal
+        void print_field(twodads::field_k_t, string); ///< Print member cuda_array<cmplx_t> to ascii file
+        void print_address(); ///< Print the addresses of member variables in host memory
+        void print_grids(); ///< Print the grid sizes used for cuda kernel calls
 
         // Output methods
         // Make output_h5 a pointer since we deleted the default constructor
         friend class output_h5;
         friend class diagnostics;
 
-        void dump_address();
-        void dump_stiff_params();
+
     private:
         slab_config config; ///< slab configuration
         const uint Nx; ///< Number of discretization points in x-direction

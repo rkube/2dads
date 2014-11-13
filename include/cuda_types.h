@@ -5,6 +5,8 @@
 #include "cufft.h"
 #include "cucmplx.h"
 #include <ostream>
+#include <assert.h>
+#include <vector>
 
 
 namespace cuda
@@ -14,7 +16,7 @@ namespace cuda
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
     const unsigned int cuda_blockdim_nx = 1; ///< Block dimension in radial (x) direction
-    const unsigned int cuda_blockdim_my = 256; ///< Block dimension in poloidal(y) direction
+    const unsigned int cuda_blockdim_my = 16; ///< Block dimension in poloidal(y) direction
     //const real_t PI = 3.14159265358979323846264338327950288;
     const real_t PI = 3.141592653589793; ///< $\pi$
     const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
@@ -52,10 +54,21 @@ namespace cuda
     } __attribute__ ((aligned (8)));
 
     /// Class to store initialization parameters, up to 6 doubles
+    /// Using this datatype avoids copying an array with values for init functions
+    /// And the init functions can have the same number of arguments
     class init_params_t
     {
     public:
         init_params_t() : i1(0.0), i2(0.0), i3(0.0), i4(0.0), i5(0.0), i6(0.0) {};
+        init_params_t(std::vector<real_t> initc) {
+            assert (initc.size() == 6);
+            i1 = initc[0];
+            i2 = initc[1];
+            i3 = initc[2];
+            i4 = initc[3];
+            i5 = initc[4];
+            i6 = initc[5];
+        }
         real_t i1;
         real_t i2;
         real_t i3;

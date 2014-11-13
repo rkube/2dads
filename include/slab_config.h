@@ -60,8 +60,6 @@ public:
 	inline bool dealias() const { return false;};
 	/// Use particle tracking?.
     inline int do_particle_tracking() const { return particle_tracking; };
-    /// Randomize modes?
-    //bool randomize_modes() const;
     /// Number of radial probes
     inline unsigned int get_nprobe() const { return nprobes; };
 
@@ -71,8 +69,6 @@ public:
 	inline vector<twodads::diagnostic_t> get_diagnostics() const { return diagnostics; };
 	/// List of variables to include in full output.
 	inline vector<twodads::output_t> get_output() const { return output; };
-    /// List of modes to randomize.
-    //inline vector<twodads::mode> get_mode_list() const { return mode_list; };
 
 	/// Vector of all model parameters.
 	inline vector<double> get_model_params() const { return model_params; };

@@ -73,14 +73,7 @@ diagnostics :: diagnostics(slab_config const config) :
                 header = string("#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: W\t#07: D1\t#08: D2\t#09: D3\t:#10: D4\t#11: D5\t#12:D6\t#13: D7\t#14: D8\t#15: D9\t#16: D10\t#17: D11\t#18: D12\t#19: D13\n");
                 init_diagnostic_output(string("energy.dat"), header, init_flag_energy);
                 break;
-        /*
-        else if ( (*it).compare(string("strmf_max")) == 0 ) 
-        {
-            cout << "Writing poloidal profile for phi at Xcom\n";
-            dfun_ptr diag_strmf( boost::bind(&diagnostics::strmf_max, this, _1, _2) );
-            d_funs_vec.push_back(diag_strmf);
-        }
-        */
+
             default:
                 string err_msg("diagnostics::diagnostics: unknown diagnostic function requested.");
                 throw name_error(err_msg);
@@ -121,7 +114,11 @@ void diagnostics::write_logfile() {
 	
 	logfile << "Slab type: spectral\n";
 	logfile << "Resolution: " << slab_layout.My << "x" << slab_layout.Nx  << "\n";
-	
+    logfile << "x_left: " << slab_layout.x_left << "\n";
+    logfile << "delta_x" << slab_layout.delta_x << "\n";
+    logfile << "y_lo: " << slab_layout.y_lo << "\n";
+    logfile << "delta_y: " << slab_layout.delta_y << "\n";
+
 	logfile.close();
 }
 
