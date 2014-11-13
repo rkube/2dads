@@ -34,7 +34,7 @@
 
 
 
-// Error checking macro for cuda calls
+/// Error checking macro for cuda calls
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line)
 { 
@@ -68,8 +68,7 @@ inline void gpuVerifyLaunch(const char* file, int line)
 template <typename U, typename T>
 class cuda_array{
     public:
-        // Explicitly declare construction operators that allocate memory
-        // on the device
+        /// @brief Default constructor. Allocates t*nx*my*sizeof(U) bytes on the device
         cuda_array(uint, uint, uint);
         cuda_array(const cuda_array<U, T>&);
         cuda_array(const cuda_array<U, T>*);

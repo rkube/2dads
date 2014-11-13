@@ -54,7 +54,8 @@ slab_config :: slab_config() :
     string theta_rhs_str;
     string omega_rhs_str;
     string init_function_str;
-    
+    string strmf_solver_str;    
+
     // Add recognized options to cf_opts
 	try{
 	cf_opts.add_options()
@@ -81,6 +82,7 @@ slab_config :: slab_config() :
 		("nthreads", po::value<int> (&nthreads), "Number of threads")
 		("chunksize", po::value<int> (&chunksize), "Chunksize")
 		("log_theta", po::value<bool> (&log_theta), "Use logarithmic particle density")
+        ("strmf_solver", po::value<string> (&strmf_solver_str), "Stream function solver")
         ("do_particle_tracking", po::value<int> (&particle_tracking), "Track particles")
         ("dealias", po::value<bool> (&do_dealiasing), "Set ambiguous frequencies to zero")
         ("nprobes", po::value<unsigned int> (&nprobes), "Number of radial probes");

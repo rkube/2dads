@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include "include/initialize.h"
+#include <stdio.h>
 
 
 __global__ 

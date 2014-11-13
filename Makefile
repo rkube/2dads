@@ -8,25 +8,25 @@ TEST_DIR = tests
 all: output initialize diagnostics slab_config slab_cuda 
 base: initialize diagnostics slab_config output slab_cuda 
 
-DEFINES	= -DPINNED_HOST_MEMORY
+DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))'
 
 slab_config:
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(IFLAGS)
+	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)
 
 output: 
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(IFLAGS)
+	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(INCLUDES)
 
 diagnostics:
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(IFLAGS)
+	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
 
 initialize: 
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/initialize.o initialize.cu $(IFLAGS)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/initialize.o initialize.cu $(INCLUDES)
 
 slab_cuda:
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(IFLAGS)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
 2dads: slab_config output diagnostics initialize slab_cuda
-	$(CC) $(CFLAGS) -o run/2dads $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o main.cpp $(IFLAGS) $(LFLAGS) 
+	$(CC) $(CFLAGS) -o run/2dads $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o main.cpp $(INCLUDES) $(LFLAGS) 
 
 tests: cuda_array2 slab_cuda initialize output diagnostics
 	$(MAKE) -C $(TEST_DIR)

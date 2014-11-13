@@ -2,8 +2,6 @@
 #include "include/slab_cuda.h"
 #include <algorithm>
 
-/// Standard constructor for slab_cuda
-
 using namespace std;
 /*****************************************************************************
  *
@@ -11,17 +9,22 @@ using namespace std;
  *
  ****************************************************************************/
 
-///d/dx: Frequencies 0 .. N/2 - 1
+//    d/dx: Compute spectral x-derivative for frequencies 0 .. N/2 - 1,
+//          stored in the columns 0..Nx/2-1
+//    Call:  d_d_dx_lo<<<grid_dx_half, block_my21_sec1>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, Lx);
+//    grid_dx_half    = dim3(Nx / 2, theta_hat.get_grid().y)),
+//    block_my21_sec1 =
+//    and get_grid = dim3(Nx, (My + (cuda::cuda_blockdim_my - 1)) / cuda::cuda_blockdim_my)
 __global__
-void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
 
     double two_pi_L = cuda::TWOPI / Lx;
     // Return if we don't have an item to work on
-    if((col >= My) || (row >= Nx))
+    if((col >= my21) || (row >= Nx / 2))
         return;
     // (a + ib) * (0.0 + ik) = -(b * k) + i(a * k)
     cuda::cmplx_t factor(0.0, two_pi_L * double(row));
@@ -30,29 +33,29 @@ void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
 
 
 __global__
-void d_d_dx_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-   const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
-    if((col >= My) || (row >= Nx))
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
+    if((col >= my21) || (row >= Nx / 2))
         return;
 
-    cuda::cmplx_t factor(100000 + 1 * 1000 * col + row, row);
+    cuda::cmplx_t factor(100000 + 1000 * col + row, row);
     out[index] = factor;
 }
 
 
 // Frequencies: Nx/2
 __global__
-void d_d_dx_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = Nx / 2;
-    const uint index = row * My + col;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
 
     // Return if we don't have an item to work on
-    if((col >= My) || (row >= Nx))
+    if(col >= my21)
         return;
     cuda::cmplx_t res(0.0, 0.0);
     out[index] = res;
@@ -60,12 +63,12 @@ void d_d_dx_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double 
 
 
 __global__
-void d_d_dx_mid_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_mid_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = Nx / 2;
-    const uint index = row * My + col;
-    if((col >= My) || (row >= Nx))
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
+    if(col >= my21)
         return;
 
     cuda::cmplx_t factor(200000 + 1000 * col + row);
@@ -73,32 +76,32 @@ void d_d_dx_mid_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint M
 }
 
 
-
 // Frequencies: Nx/2 + 1 ... Nx - 1
 __global__
-void d_d_dx_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x + Nx / 2 + 1;
-    const uint index = row * My + col;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
 
     double two_pi_L = cuda::TWOPI / Lx;
     // Return if we don't have an item to work on
-    if((col >= My) || (row >= Nx))
+    if((col >= my21) || (row >= Nx))
         return;
-    //(a + ib) * (0.0 + ik) = -(b * k) + i * (a * k)
+
     cuda::cmplx_t factor(0.0, two_pi_L * (double(row) - double(Nx)));
     out[index] = in[index] * factor;
 }
 
 
 __global__
-void d_d_dx_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Lx)
+void d_d_dx_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Lx)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x + Nx / 2 + 1;
-    const uint index = row * My + col;
-    if((col >= My) || (row >= Nx))
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
+
+    if((col >= my21) || (row >= Nx))
         return;
 
     cuda::cmplx_t factor(300000 + 1000 * col + double(row) - double(Nx), double(row) - double(Nx));
@@ -108,13 +111,13 @@ void d_d_dx_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My
 
 // Frequencies 0..My / 2
 __global__
-void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Ly)
+void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Ly)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
 
-    if ((col > My - 2) || (row >= Nx))
+    if ((col >= my21 - 1) || (row >= Nx))
         return;
     double two_pi_L = cuda::TWOPI / Ly;
     
@@ -125,12 +128,12 @@ void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
 
 
 __global__
-void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Ly)
+void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Ly)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
-    if ((col > My - 2) || (row >= Nx))
+    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint index = row * my21 + col;
+    if ((col >= my21 - 1) || (row >= Nx))
         return;
 
     cuda::cmplx_t factor(100000 + 1000 * col + row, col);
@@ -140,13 +143,13 @@ void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My
 
 
 __global__
-void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Ly)
+void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Ly)
 {
-    const uint col = My - 1;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
+    const uint col = my21 - 1;
+    const uint index = row * my21 + col;
 
-    if (col > Nx + 1)
+    if (col >= Nx)
         return;
     cuda::cmplx_t factor(0.0, 0.0);
     out[index] = factor;
@@ -154,30 +157,30 @@ void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double L
 
 
 __global__
-void d_d_dy_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double Ly)
+void d_d_dy_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint my21, double Ly)
 {
-    const uint col = My - 1;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * My + col;
-    //uint index = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint col = my21 - 1;
+    const uint index = row * my21 + col;
 
-    if (col > Nx + 1)
+    if (col >= Nx)
         return;
 
-    //index = (index + 1) * My - 1;
     cuda::cmplx_t factor(double(200000 + 1000 * col) + 0.0, 0.0);
     out[index] = factor;
 }
 
 
 __global__
-void d_kill_ky0(cuda::cmplx_t* in, uint Nx, uint My)
+void d_kill_ky0(cuda::cmplx_t* in, uint Nx, uint my21)
 {
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint col = 0;
+    const uint index = row * my21 + col;
     if (row > Nx - 1)
         return;
     cuda::cmplx_t factor(0.0, 0.0);
-    in[row] = factor;
+    in[index] = factor;
 }
 
 
@@ -187,7 +190,7 @@ void d_kill_ky0(cuda::cmplx_t* in, uint Nx, uint My)
 // In spectral space, 
 //                              / 4 pi^2 ((kx/Lx)^2 + (ky/Ly)^2 )  for kx, ky  <= N/2
 // phi(kx, ky) = omega(kx, ky)  
-//                              / 4 pi^2 (((kx-Nx)/Lx)^2 + (ky/Ly)^2) for kx > N/2 and ky <= N/2
+//                              \ 4 pi^2 (((kx-Nx)/Lx)^2 + (ky/Ly)^2) for kx > N/2 and ky <= N/2
 //
 // and phi(0,0) = 0 (to avoid division by zero)
 // Divide into 4 sectors:
@@ -209,8 +212,8 @@ void d_kill_ky0(cuda::cmplx_t* in, uint Nx, uint My)
 // 
 // sector I    : kx <= Nx/2, ky <= My/2  BS = (1, cuda_blockdim_my), GS = (Nx/2+1, My / (2 * cuda_blockdim_my)
 // sector II   : kx > Nx/2, ky <= My/2   BS = (1, cuda_blockdim_my), GS = (Nx/2-1, My / (2 * cuda_blockdim_my)
-// sector III  : kx <= Nx/2, ky = My/2   BS = cuda_blockdim_nx, GS = ^(Nx / 2 + 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
-// sector IV   : kx > Nx/2, ky = My/2    BS = cuda_blockdim_nx, GS = ^(Nx / 2 - 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
+// sector III  : kx <= Nx/2, ky = My/2   BS = (cuda_blockdim_nx, 1), GS = ^(Nx / 2 + 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
+// sector IV   : kx > Nx/2, ky = My/2    BS = (cuda_blockdim_nx, 1), GS = ^(Nx / 2 - 1) / cuda_blockdim_nx^ (round up, thread returns if out of bounds)
 //
 // Pro: wavenumbers can be computed from index without if-else blocks
 // Con: Diverging memory access
@@ -276,11 +279,11 @@ void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx
 
 // Pass Nx = Nx and My = My / 2 +1 for correct indexing
 __global__
-void d_inv_laplace_sec3(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My, double inv_Lx2, double inv_Ly2)
+void d_inv_laplace_sec3(cuda::cmplx_t* in, cuda::cmplx_t* out, uint Nx, uint My21, double inv_Lx2, double inv_Ly2)
 {
-    const uint col = My - 1;
+    const uint col = My21 - 1;
     const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * My + col; 
+    const uint idx = row * My21 + col; 
     if (row > Nx / 2 + 1)
         return;
 
@@ -363,8 +366,6 @@ void d_inv_laplace_zero(cuda::cmplx_t* out)
  */
 
 
-
-
 __global__
 void d_integrate_stiff_sec1_enumerate(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev) 
 
@@ -378,7 +379,6 @@ void d_integrate_stiff_sec1_enumerate(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, 
     cuda::cmplx_t value(100000 + 1000 * col + row, 1000 * col + row);
     A_rhs[p.level - tlev][idx] = value;
 }
-
 
 
 __global__
@@ -400,7 +400,7 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
     
 
-    // Add contribution from explicit / implicit parts
+    // Add contribution from explicit and implicit parts
     for(uint k = 1; k < tlev; k++)
     {
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
@@ -526,6 +526,32 @@ void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 }
 
+
+__global__
+void d_integrate_stiff_ky0(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
+{
+    const uint col = 0;
+    const uint row = blockIdx.x;
+    const uint idx = row * p.My + col;
+    if (row >= p.Nx)
+        return;
+
+    uint off_a = (tlev - 2) * p.level + tlev;
+    uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
+    cuda::real_t kx = (cuda::real_t(row) - cuda::real_t(p.Nx)) * cuda::TWOPI / p.length_x;
+    cuda::real_t ky = 0.0;
+    cuda::cmplx_t sum_alpha(0.0, 0.0);
+    cuda::cmplx_t sum_beta(0.0, 0.0);
+    cuda::real_t temp_div =  1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+
+    for (uint k = 1; k < tlev; k++)
+    {
+        sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
+        sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
+    }
+    A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
+
+}
 // Print very verbose debug information of what stiffk does
 // Do no update A!
 __global__
@@ -1123,15 +1149,15 @@ void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, 
 }
 
 
-/// @brief dump real field on terminal
-void slab_cuda :: dump_field(twodads::field_t field_name)
+/// @brief print real field on terminal
+void slab_cuda :: print_field(twodads::field_t field_name)
 {
     cuda_array<cuda::real_t, cuda::real_t>* field = get_field_by_name(field_name);
     cout << *field << "\n";
 }
 
-/// @brief dump real field to ascii file
-void slab_cuda :: dump_field(twodads::field_t field_name, string file_name)
+/// @brief print real field to ascii file
+void slab_cuda :: print_field(twodads::field_t field_name, string file_name)
 {
     cuda_arr_real* arr = get_field_by_name(field_name);
     ofstream output_file;
@@ -1142,19 +1168,19 @@ void slab_cuda :: dump_field(twodads::field_t field_name, string file_name)
 
 
 
-/// @brief dump complex field on terminal, all time levels
+/// @brief print complex field on terminal, all time levels
 /// @param field_name name of complex field
-void slab_cuda :: dump_field(twodads::field_k_t field_name)
+void slab_cuda :: print_field(twodads::field_k_t field_name)
 {
     cuda_arr_cmplx* field = get_field_by_name(field_name);
     cout << *field << "\n";
 }
 
 
-/// @brief dump complex field to ascii file
+/// @brief print complex field to ascii file
 /// @param field_name: type of field to dump
 /// @param file_name: name of the output file
-void slab_cuda :: dump_field(twodads::field_k_t field_name, string file_name)
+void slab_cuda :: print_field(twodads::field_k_t field_name, string file_name)
 {
     cuda_arr_cmplx* arr = get_field_by_name(field_name);
     ofstream output_file;
@@ -1179,7 +1205,7 @@ void slab_cuda :: write_output(twodads::real_t time)
 }
 */
 
-void slab_cuda ::dump_stiff_params()
+void slab_cuda :: print_address()
 {
     // Use this to test of memory is aligned between g++ and NVCC
     cout << "slab_cuda::dump_stiff_params()\n";
@@ -1189,9 +1215,18 @@ void slab_cuda ::dump_stiff_params()
     cout << "tlevs at " << (void*) &tlevs << "\n";
     cout << "plan_r2c at " << (void*) &plan_r2c << "\n";
     cout << "plan_c2r at " << (void*) &plan_c2r << "\n";
-    cout << "theta at " << (void*) &theta << "\n";
-    cout << "theta_x at " << (void*) &theta_x << "\n";
+    cout << "theta at " << (void*) &theta << "\t";
+    cout << "theta_x at " << (void*) &theta_x << "\t";
     cout << "theta_y at " << (void*) &theta_y << "\n";
+
+    cout << "omega at " << (void*) &omega << "\t";
+    cout << "omega_x at " << (void*) &omega_x << "\t";
+    cout << "omega_y at " << (void*) &omega_y << "\n";
+
+    cout << "strmf at " << (void*) &strmf << "\t";
+    cout << "strmf_x at " << (void*) &strmf_x << "\t";
+    cout << "strmf_y at " << (void*) &strmf_y << "\n";
+
     cout << "stiff_params at " << stiff_params << "\n";
 
     cout << "slab_cuda::slab_cuda()\n";
@@ -1205,6 +1240,42 @@ void slab_cuda ::dump_stiff_params()
     cout << "\n\n";
 }
 
+
+void slab_cuda :: print_grids()
+{
+    cout << "dim3 block_nx_my = (" << block_nx_my.x << ", " << block_nx_my.y << ", " << block_nx_my.z << ")\n";
+    cout << "dim3 grid_nx_my = (" << grid_nx_my.x << ", " << grid_nx_my.y << ", " << grid_nx_my.z << ")\n";
+    cout << "\n";
+
+    cout << "dim3 block_my21_sec1 = (" << block_my21_sec1.x << ", " << block_my21_sec1.y << ", " << block_my21_sec1.z << ")\n"; 
+    cout << "dim3 grid_my21_sec1 = (" << grid_my21_sec1.x << ", " << grid_my21_sec1.y << ", " << grid_my21_sec1.z << ")\n"; 
+    cout << "\n";
+
+    cout << "dim3 block_my21_sec2 = (" << block_my21_sec2.x << ", " << block_my21_sec2.y << ", " << block_my21_sec2.z << ")\n"; 
+    cout << "dim3 grid_my21_sec2 = (" << grid_my21_sec2.x << ", " << grid_my21_sec2.y << ", " << grid_my21_sec2.z << ")\n"; 
+    cout << "\n";
+
+    cout << "dim3 grid_dx_half = (" << grid_dx_half.x << ", " << grid_dx_half.y << ", " << grid_dx_half.z << ")\n"; 
+    cout << "dim3 grid_dx_single = (" << grid_dx_single.x << ", " << grid_dx_single.y << ", " << grid_dx_single.z << ")\n"; 
+    cout << "\n";
+
+    cout << "dim3 block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ", " << block_sec12.z << ")\n"; 
+    cout << "dim3 grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ", " << grid_sec1.z << ")\n"; 
+    cout << "dim3 grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ", " << grid_sec2.z << ")\n"; 
+    cout << "\n";
+
+    cout << "dim3 block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ", " << block_sec3.z << ")\n"; 
+    cout << "dim3 grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ", " << grid_sec3.z << ")\n";
+    cout << "\n";
+
+    cout << "dim3 block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ", " << block_sec4.z << ")\n"; 
+    cout << "dim3 grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ", " << grid_sec4.z << ")\n"; 
+    cout << "\n";
+
+    cout << "dim3 block_ky0 = (" << block_ky0.x << ", " << block_ky0.y << ", " << block_ky0.z << ")\n"; 
+    cout << "dim3 grid_ky0 = (" << grid_ky0.x << ", " << grid_ky0.y << ", " << grid_ky0.z << ")\n"; 
+    cout << "\n";
+}
 
 
 /// @brief convert field type to internal pointer
@@ -1511,17 +1582,6 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
     const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
 
-//#ifdef DEBUG
-//    cout << "slab_cuda::inv_laplace(...)\n";
-//    cout << "block_sec12 = (" << block_sec12.x << ", " << block_sec12.y << ")\t";
-//    cout << "block_sec3 = (" << block_sec3.x << ", " << block_sec3.y << ")\t";
-//    cout << "block_sec4 = (" << block_sec4.x << ", " << block_sec4.y << ")\t";
-//    cout << "grid_sec1 = (" << grid_sec1.x << ", " << grid_sec1.y << ")\n";
-//    cout << "grid_sec2 = (" << grid_sec2.x << ", " << grid_sec2.y << ")\n";
-//    cout << "grid_sec3 = (" << grid_sec3.x << ", " << grid_sec3.y << ")\n";
-//    cout << "grid_sec4 = (" << grid_sec4.x << ", " << grid_sec4.y << ")\n";
-//#endif //DEBUG
-
     d_inv_laplace_sec1<<<grid_sec1, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec2<<<grid_sec2, block_sec12>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec3<<<grid_sec3, block_sec3>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), Nx, my21, inv_Lx2, inv_Ly2);
@@ -1557,7 +1617,6 @@ void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname); 
     cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname); 
-    //d_integrate_stiff_debug<<<1, 1>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec1<<<grid_sec1, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec2<<<grid_sec2, block_sec12>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3<<<grid_sec3, block_sec3>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
@@ -1565,6 +1624,14 @@ void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
 #ifdef DEBUG
     gpuStatus();
 #endif
+}
+
+/// @brief Integrate only modes with ky=0
+void slab_cuda :: integrate_stiff_ky0(twodads::field_k_t fname, uint tlev)
+{
+    cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname);
+    cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
+    d_integrate_stiff_ky0<<<grid_ky0, block_ky0>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
 }
 
 
@@ -1723,7 +1790,7 @@ void slab_cuda :: omega_rhs_hwzf(uint t_src)
 {
     cuda::real_t C = config.get_model_params(2);
     d_pbracket<<<grid_nx_my, block_nx_my>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
-    d_kill_k0<<<grid_ky0, block_ky0>>>(tmp_array.get_array_d());
+    d_kill_ky0<<<grid_ky0, block_ky0>>>(tmp_array.get_array_d(), Nx, My / 2 + 1);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
     d_omega_rhs_hw<<<grid_my21_sec1, block_my21_sec1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, Nx, My / 2 + 1);
 #ifdef DEBUG
@@ -1751,27 +1818,6 @@ void slab_cuda::omega_rhs_ic(uint t_src)
 #ifdef DEBUG
     gpuStatus();
 #endif
-}
-
-
-
-void slab_cuda::dump_address()
-{
-    cout << "\nCompiled with NVCC\n";
-    cout << "slab_cuda::dump_address()\n";
-    cout << "\tconfig at " << (void*) &config << "\n";
-    cout << "\tNx at " << (void*) &Nx << "\n";
-    cout << "\tMy at " << (void*) &My << "\n";
-    cout << "\ttlevs at " << (void*) &tlevs << "\n";
-    cout << "\tplan_r2c at " << (void*) &plan_r2c << "\n";
-    cout << "\tplan_c2r at " << (void*) &plan_c2r << "\n";
-    //cout << "\tslab_output at " << (void*) &slab_output << "\n";
-    cout << "\ttheta at " << (void*) &theta << "\n";
-    cout << "\ttheta_x at " << (void*) &theta_x << "\n";
-    cout << "\ttheta_y at " << (void*) &theta_y << "\n";
-    //cout << "\tslab_output at " << (void*) &slab_output << "\n";
-    cout << "\tstiff_params at " << (void*) &stiff_params << "\n";
-
 }
 
 
