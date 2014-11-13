@@ -1,8 +1,8 @@
 #include <iostream>
-#include "include/slab_cuda.h"
-#include "include/diagnostics.h"
-#include "include/output.h"
 #include "cuda_runtime_api.h"
+#include "slab_cuda.h"
+#include "diagnostics.h"
+#include "output.h"
 extern template class diag_array<double>;
 
 

@@ -5,8 +5,8 @@
 
 #include <iostream>
 #include <vector>
-#include "include/initialize.h"
 #include <stdio.h>
+#include "initialize.h"
 
 
 __global__ 

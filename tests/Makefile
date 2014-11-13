@@ -11,7 +11,10 @@ test_cucmplx:
 
 # Test instantiation of cuda_array3: instantiation of real and complex type, arithmetic and output operators
 test_array3:
-	$(CUDACC) $(CUDACFLAGS) -o test_array3 test_array3.cu $(INCLUDES) $(CUDALFLAGS)
+	# Test of array arithmetic
+	$(CUDACC) $(CUDACFLAGS) -DDEBUG -o test_array3 test_array3.cu $(INCLUDES) $(CUDALFLAGS)
+	# Test of copy, move, advance operators
+	$(CUDACC) $(CUDACFLAGS) -DDEBUG -o test_copy test_copy.cu $(INCLUDES) $(CUDALFLAGS)
 
 
 # Test member functions of diag_array
@@ -21,10 +24,6 @@ test_diagarray:
 	$(CC) $(CFLAGS) -o test_diagarray test_diagarray.cpp ../obj/instant_cuda.o $(INCLUDES) $(LFLAGS)
 	$(CC) $(CFLAGS) -o test_diagarray2 test_diagarray2.cpp ../obj/instant_cuda.o $(INCLUDES) $(LFLAGS)
 
-
-# Test copy, move and advance operators of cuda_array3
-test_copy:
-	$(CUDACC) $(CUDACFLAGS) -DDEBUG -o test_copy test_copy.cu $(INCLUDES) $(LFLAGS)
 
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines

@@ -7,11 +7,11 @@
  *
  */
 
-#include "include/slab_config.h"
-#include "include/error.h"
-#include "include/2dads_types.h"
 #include <iostream>
 #include <fstream>
+#include "slab_config.h"
+#include "error.h"
+#include "2dads_types.h"
 
 using namespace std;
 namespace po = boost::program_options;

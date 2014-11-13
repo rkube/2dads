@@ -21,7 +21,7 @@
 
 
 #include <iostream>
-#include "include/cuda_array3.h"
+#include "cuda_array3.h"
 
 using namespace std;
 

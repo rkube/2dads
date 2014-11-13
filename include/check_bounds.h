@@ -8,31 +8,31 @@
 class check_bounds{
     public:
         //check_bounds() = delete;
-        check_bounds(unsigned int nx, unsigned int my) : tlevs(0), Nx(nx), My(my) {};
-        check_bounds(unsigned int t, unsigned int nx, unsigned int my) : tlevs(t), Nx(nx), My(my) {};
-        inline bool operator()(unsigned int nx, unsigned int my) const
+        check_bounds(unsigned int my, unsigned int nx) : tlevs(0), My(my), Nx(nx) {};
+        check_bounds(unsigned int t, unsigned int my, unsigned int nx) : tlevs(t), My(my), Nx(nx) {};
+        inline bool operator()(unsigned int my, unsigned int nx) const
         {
-            if (nx > Nx)
-                return false;
             if (my > My)
+                return false;
+            if (nx > Nx)
                 return false;
             return true;
         }
-        inline bool operator()(unsigned int t, unsigned int nx, unsigned int my) const
+        inline bool operator()(unsigned int t, unsigned int my, unsigned int nx) const
         {
             if (t > tlevs)
                 return false;
-            if (nx > Nx)
-                return false;
             if (my > My)
+                return false;
+            if (nx > Nx)
                 return false;
             return true;
         }
 
     private:
         const unsigned int tlevs;
-        const unsigned int Nx;
         const unsigned int My;
+        const unsigned int Nx;
 };
 
 #endif //CHECK_BOUNDS_H

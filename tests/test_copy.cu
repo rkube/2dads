@@ -13,20 +13,25 @@
  */
 
 #include <iostream>
-#include "include/cuda_types.h"
-#include "include/cucmplx.h"
-#include "include/cuda_array3.h"
+#include "cuda_types.h"
+#include "cucmplx.h"
+#include "cuda_array3.h"
 
 using namespace std;
 
 int main(void)
 {
-    const int Nx = 8;
-    const int My = 8;
+    int Nx = 0;
+    int My = 0;
+    cout << "Enter Nx: ";
+    cin >> Nx;
+    cout << "Enter My: ";
+    cin >> My;
+    cout << "\n";
     const int tlevs = 3;
 
-    cuda_array<cuda::cmplx_t, cuda::real_t> arr_1(tlevs, Nx, My);
-    cuda_array<cuda::cmplx_t, cuda::real_t> arr_2(tlevs, Nx, My);
+    cuda_array<cuda::cmplx_t, cuda::real_t> arr_1(tlevs, My, Nx);
+    cuda_array<cuda::cmplx_t, cuda::real_t> arr_2(tlevs, My, Nx);
 
     arr_1 = CuCmplx<cuda::real_t>(4.0, 2.7);
     arr_2 = CuCmplx<cuda::real_t>(-2.0, -3.0);
@@ -34,14 +39,14 @@ int main(void)
     cout << "arr_1 = " << arr_1;
     cout << "arr_2 = " << arr_2;
 
-    // Copy data in arr_2 from tlev=0 to tlev=2 
+    cout << " Copy data in arr_2 from tlev=0 to tlev=2\n";
     arr_2.copy(2, 0);
     cout << "arr_2 = " << arr_2;
-    // Copy data in arr_2, t=2 to arr_1, t=0
+    cout << " Copy data in arr_2, t=2 to arr_1, t=0\n";
     arr_1.copy(0, arr_2, 2);
     cout << "arr_1 = " << arr_1;
-    // Move data in arr_1 from t=0 to t=2
-    arr_1.move(2, 0);
+    cout << " Move data in arr_1 from t=0 -> t=1\n";
+    arr_1.move(1, 0);
     cout << "arr_1 = " << arr_1;
 
     // Advance arr_1, zero it out and start again
@@ -49,12 +54,13 @@ int main(void)
     // 0              1 
     // 1              2 
     // 2              0
+    cout << "advance arr1\n";
     arr_1.advance();
-    arr_1.copy(0, 1);
-    arr_1.copy(2, 1);
-    cout << "Cleared arr_1: arr_1 = " << arr_1;
+    cout << arr_1;
+    cout << "Copy data in arr_2 t=2 to arr_1 t=0\n";
     arr_1.copy(0, arr_2, 2);
     cout << "arr_1 " << arr_1;
+    cout << "Move data from arr_1, t=0 -> t=2\n";
     arr_1.move(2, 0);
     cout << "arr_1 = " << arr_1;
 

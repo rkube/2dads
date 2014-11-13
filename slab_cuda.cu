@@ -1,6 +1,6 @@
-#include "include/error.h"
-#include "include/slab_cuda.h"
 #include <algorithm>
+#include "error.h"
+#include "slab_cuda.h"
 
 using namespace std;
 /*****************************************************************************
