@@ -20,15 +20,15 @@ diagnostics :: diagnostics(slab_config const config) :
     slab_layout{config.get_nx(), config.get_my(), config.get_runnr(), config.get_xleft(),
                 config.get_deltax(), config.get_ylow(), config.get_deltay(),
                 config.get_deltat()},
-    theta(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    theta_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    theta_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
-    omega(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    omega_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    omega_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
-    strmf(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    strmf_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    strmf_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
+    theta(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    theta_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    theta_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
+    omega(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    omega_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    omega_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
+    strmf(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    strmf_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    strmf_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
     time(0.0),
     old_com_x(0.0),
     old_com_y(0.0),
@@ -219,11 +219,11 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 	// Compute maxima for theta and strmf, integrated particle density,
 	// center of mass coordinates and relative dispersion tensor components
-	for(int n = 0; n < int(slab_layout.Nx); n++){
-		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
-		for(int m = 0; m < int(slab_layout.My); m++){
-			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
+    for(int m = 0; m < int(slab_layout.My); m++){
+        y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
+        for(int n = 0; n < int(slab_layout.Nx); n++){
+            x = slab_layout.x_left + double(n) * slab_layout.delta_x;
+            theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
 			theta_int += theta_val;
 			theta_int_x += theta_val * x;
 			theta_int_y += theta_val * y;
@@ -234,7 +234,7 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 				theta_max_y = y;
 			}
 			if ( fabs ( strmf(n,m) ) >= strmf_max ) {
-				strmf_max = fabs( strmf(n,m) );
+				strmf_max = fabs(strmf(m, n));
 				strmf_max_x = x;
 				strmf_max_y = y;
 			}
@@ -243,13 +243,13 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 	
 	theta_int_x /= theta_int;
 	theta_int_y /= theta_int;
-	for(int n = 0; n < int(slab_layout.Nx); n++){
-		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
-		for(int m = 0; m < int(slab_layout.My); m++){
-			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
-			wxx = theta_val * ( x - theta_int_x ) * (x - theta_int_x);
-			wyy = theta_val * ( y - theta_int_y ) * (y - theta_int_y);
+    for(int m = 0; m < int(slab_layout.My); m++){
+        y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
+        for(int n = 0; n < int(slab_layout.Nx); n++){
+            x = slab_layout.x_left + double(n) * slab_layout.delta_x;
+            theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
+			wxx = theta_val * (x - theta_int_x) * (x - theta_int_x);
+			wyy = theta_val * (y - theta_int_y) * (y - theta_int_y);
 		}
 	}
 	wxx /= theta_int;

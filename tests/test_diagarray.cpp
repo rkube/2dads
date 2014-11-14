@@ -1,5 +1,5 @@
 #include <iostream>
-#include "include/diag_array.h"
+#include "diag_array.h"
 
 
 using namespace std;

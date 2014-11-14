@@ -117,43 +117,35 @@ class slab_cuda
         const cuda::stiff_params_t stiff_params; ///< Coefficients for time integration routine
         const cuda::slab_layout_t slab_layout; ///< Slab layout passed to cuda kernels and initialization routines
 
-        ///@brief Block and grid dimensions for kernels operating on Nx*My arrays.
+        ///@brief Block and grid dimensions for kernels operating on My*Nx arrays.
         ///@brief For kernels where every element is treated alike
-        dim3 block_nx_my;
-        dim3 grid_nx_my;
+        dim3 block_my_nx;
+        dim3 grid_my_nx;
 
-        /// @brief Block and grid dimensions for arrays Nx * My/2+1
-        /// @brief Row-like blocks, spanning 0..My/2 in multiples of cuda::cuda_blockdim_my
-        /// @brief effectively wasting blockdim_my-1 threads in the last call. But memory is
+        ///@ brief Block and grid dimensions for kernels operating on My * Nx/2+1 arrays
+        dim3 block_my_nx21;
+        dim3 grid_my_nx21;
+
+        /// @brief Block and grid dimensions for arrays My * Nx/2+1
+        /// @brief Row-like blocks, spanning 0..Nx/2 in multiples of cuda::blockdim_nx
+        /// @brief effectively wasting blockdim_nx-1 threads in the last call. But memory is
         /// @brief coalesced :)
-        dim3 block_my21_sec1;
-        dim3 grid_my21_sec1;
-        
-        // Alternative to block_my21_sec1 would be to leave out the last column
-        // and call all kernels a second time doing only the last row, as for
-        // inv_lapl, integrate_stiff etc.
-        // Drawback: diverging memory access and second kernel function to implement
-        // new indexing
-        dim3 block_my21_sec2; 
-        dim3 grid_my21_sec2; 
+       
+        /// @brief 
+        dim3 block_nx21; ///< blocksize is (cuda::blockdim_nx, 1)
+        dim3 grid_nx21_sec1; ///< Sector 1: ky > 0, kx < Nx / 2
+        dim3 grid_nx21_sec2; ///< Sector 2: ky < 0, kx < Nx / 2
+        dim3 grid_nx21_sec3; ///< Sector 3: ky > 0, kx = Nx / 2
+        dim3 grid_nx21_sec4; ///< Sector 4: ky < 0, kx = Nx / 2
 
-        // Grid sizes for x derivative 
-        // used to avoid if-block to compute wave number
-        dim3 grid_dx_half;
-        dim3 grid_dx_single;
+        dim3 grid_dx_half; ///< All modes with kx < Nx / 2
+        dim3 grid_dx_single; ///< All modes with kx = Nx / 2
 
-        // Block and grid sizes for inv_lapl and integrate_stiff kernels
-        dim3 block_sec12;
-        dim3 grid_sec1;
-        dim3 grid_sec2;
+        dim3 grid_dy_half; ///< My/2 rows, all columns
+        dim3 grid_dy_single; ///< 1 row, all columns
 
-        dim3 block_sec3;
-        dim3 block_sec4;
-        dim3 grid_sec3;
-        dim3 grid_sec4;
 
-        /// @brief Block and grid dimensions for access on all {kx, 0} modes
-        dim3 block_ky0;
+        /// @brief Grid dimensions for access on all {kx, 0} modes, stored in the first Nx/2+1 elements of an array
         dim3 grid_ky0;
 
         cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration

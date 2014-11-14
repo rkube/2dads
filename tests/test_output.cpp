@@ -7,8 +7,8 @@
  */
 
 #include <iostream>
-#include "include/slab_cuda.h"
-#include "include/output.h"
+#include "slab_cuda.h"
+#include "output.h"
 
 using namespace std;
 

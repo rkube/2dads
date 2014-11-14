@@ -1,7 +1,7 @@
 #include <iostream>
 #include <ctime>
 #include <cstdio>
-#include "include/diag_array.h"
+#include "diag_array.h"
 
 using namespace std;
 

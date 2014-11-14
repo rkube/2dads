@@ -31,39 +31,39 @@ using namespace std;
 
 // Each thread computes total mean over [n_start : n_end-1] x [0:My]
 template <class R, class T>
-void thr_add_to_mean(R* array, T& result, int n_start, int n_end)
+void thr_add_to_mean(R* array, T& result, int m_start, int m_end)
 {
-    const int My{int(array -> get_my())};
+    const int Nx{int(array -> get_nx())};
     int n{0}, m{0};
-    for(n = n_start; n < n_end; n++)
-        for(m = 0; m < My; m++)
-            result += (*array)(n, m);
+    for(m = m_start; m < m_end; m++)
+        for(n = 0; n < Nx; n++)
+            result += (*array)(m, n);
 }
 
 
 template <class R, class T>
-void thr_get_max(R* array, T& result, int n_start, int n_end)
+void thr_get_max(R* array, T& result, int m_start, int m_end)
 {
-    const int My{int(array -> get_my())};
+    const int Nx{int(array -> get_nx())};
     int n{0}, m{0};
     T f_max{-1000.0};
-    for(n = n_start; n < n_end; n++)
-        for(m = 0; m < My; m++)
-            f_max = ((*array)(n, m) > f_max ? (*array)(n, m) : f_max);
+    for(m = m_start; m < m_end; m++)
+        for(n = 0; n < Nx; n++)
+            f_max = ((*array)(m, n) > f_max ? (*array)(m, n) : f_max);
     result = f_max;
 }
 
 
 template <class R, class T>
-void thr_get_min(R* array, T& result, int n_start, int n_end)
+void thr_get_min(R* array, T& result, int m_start, int m_end)
 {
-    const int My{int(array -> get_my())};
+    const int Nx{int(array -> get_nx())};
     int n {0};
     int m {0};
     T f_min{1000.0};
-    for(n = n_start; n < n_end; n++)
-        for(m = 0; m < My; m++)
-            f_min = ((*array)(n, m) < f_min ? (*array)(n, m) : f_min);
+    for(m = m_start; m < m_end; m++)
+        for(n = 0; n < Nx; n++)
+            f_min = ((*array)(m, n) < f_min ? (*array)(m, n) : f_min);
     result = f_min; 
 }
 
@@ -81,7 +81,7 @@ void thr_pol_avg(R* array, T* profile, int n_start, int n_end)
         pol_avg = 0.0;
         for(m = 0; m < My; m++)
         {
-            pol_avg += (*array)(n, m);
+            pol_avg += (*array)(m, n);
         }
         profile[n] = pol_avg / T(My);
     }
@@ -100,18 +100,18 @@ void thr_set_polavg(R* array, int n_start, int n_end)
     {
         pol_avg = 0.0;
         for(m = 0; m < My; m++)
-            pol_avg += (*array)(n, m);
+            pol_avg += (*array)(m, n);
         pol_avg /= T(My);
 
         for(m = 0; m < My; m++)
-            (*array)(n, m) = pol_avg;
+            (*array)(m, n) = pol_avg;
     }
 }
 
 
 // Subtract y-average from each radial position
 template <class R, class T>
-void thr_set_tilde(R* array, int n_start, int n_end)
+void thr_set_tilde(R* array, int m_start, int m_end)
 {
     T pol_avg{0.0};
     int n{0}, m{0};
@@ -168,15 +168,14 @@ public:
             for(t = 0; t < tl; t++)                                                             
             {                                                                                                
                 os << "t: " << t << "\n";                                                                    
-                for(n = 0; n < nx; n++)                                                         
+                for(m = 0; m < my; m++)                                                         
                 {                                                                                            
-                    for(m = 0; m < my; m++)                                                     
+                    for(n = 0; n < nx; n++)                                                     
                     {                                                                                        
-                    os << src(t,n,m) << "\t";                                                            
+                    os << src(t, m, n) << "\t";                                                            
                 }                                                                                        
                 os << "\n";                                                                              
             }                                                                                            
-            os << "\n\n";                                                                                
             }                                                                                                
             return (os);                                                                                     
         }                                          
@@ -213,7 +212,7 @@ public:
 /// @detailed nthreads = 1, tlevs = 1
 template <class T>
 diag_array<T> :: diag_array(cuda_array<T, T>& in) :
-    array_base<T, diag_array<T>>(1, 1, in.get_nx(), in.get_my())
+    array_base<T, diag_array<T>>(1, 1, in.get_my(), in.get_nx())
 {
 #ifdef DEBUG 
     cout << "diag_array::diag_array(cuda_array<T, T>& in)\n";
@@ -237,8 +236,8 @@ diag_array<T> :: diag_array(diag_array<T>&& in) : array_base<T, diag_array<T>>(s
 
 /// @brief Calls corresponding constructor from array_base
 template <class T>
-diag_array<T> :: diag_array(uint Nx, uint My) :
-    array_base<T, diag_array<T>>(1, 1, Nx, My)
+diag_array<T> :: diag_array(uint My, uint Nx) :
+    array_base<T, diag_array<T>>(1, 1, My, Nx)
 {
 }
 
@@ -247,8 +246,8 @@ diag_array<T> :: diag_array(uint Nx, uint My) :
 /// @param nthreads Number of working threads for threaded member functions
 /// @param tlevs: Number of time levels, use tlevs = 1
 template <class T>
-diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint Nx, uint My) :
-    array_base<T, diag_array<T>>(nthreads, tlevs, Nx, My)
+diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint My, uint Nx) :
+    array_base<T, diag_array<T>>(nthreads, tlevs, My, Nx)
 {
 }
 
@@ -258,8 +257,8 @@ diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint Nx, uint My) :
 template <class T>
 void diag_array<T> :: update(cuda_array<T, T>& in)
 {
-    size_t memsize = Nx * My;
-    if(!(*this).bounds(in.get_tlevs(), in.get_nx(), in.get_my()))
+    size_t memsize = My * Nx;
+    if(!(*this).bounds(in.get_tlevs(), in.get_my(), in.get_nx()))
         throw out_of_bounds_err(string("diag_array<T> :: update(cuda_array<T, T>& in): dimensions do not match!\n"));
     gpuErrchk(cudaMemcpy(array, in.get_array_d(), memsize * sizeof(T), cudaMemcpyDeviceToHost));
 //#ifdef DEBUG
@@ -280,10 +279,10 @@ inline T diag_array<T> :: get_max() const
 {
     int n{0}, m{0};
     T f_max{-1.0};
-    for(n = 0; n < int(Nx); n++)
-        for(m = 0; m < int(My); m++)
-            if(f_max < (*this)(n, m))
-                f_max = (*this)(n,m);
+    for(m = 0; m < int(My); m++)
+        for(n = 0; n < int(Nx); n++)
+            if(f_max < (*this)(m, n))
+                f_max = (*this)(m, n);
     return(f_max);
 
 }
@@ -321,10 +320,10 @@ inline T diag_array<T> :: get_min() const
 {
     int n{0}, m{0};
     T min{1e10};
-    for(n = 0; n < int(Nx); n++)
-        for(m = 0; m < int(My); m++)
-            if(min > (*this)(n, m))
-                min = (*this)(n,m);
+    for(m = 0; m < int(My); m++)
+        for(n = 0; n < int(Nx); n++)
+            if(min > (*this)(m, n))
+                min = (*this)(m, n);
     return(min);
 }
 
@@ -361,10 +360,10 @@ inline T diag_array<T> :: get_mean() const
     int n{0}, m{0};
     T mean{0.0};
 
-    for(n = 0; n < int(Nx); n++)
-        for(m = 0; m < int(My); m++)
-            mean += (*this)(n,m);
-    mean /= T(Nx * My);
+    for(m = 0; m < int(My); m++)
+        for(n = 0; n < int(Nx); n++)
+            mean += (*this)(m, n);
+    mean /= T(My * Nx);
     return(mean);
 }
 
@@ -404,7 +403,7 @@ inline void diag_array<T> :: get_profile(T* profile) const
     {
         result = 0.0;
         for(m = 0; m < int(My); m++)
-            result += (*this)(n, m);
+            result += (*this)(m, n);
         profile[n] = result / T(My);
     }
 }
@@ -461,7 +460,7 @@ inline diag_array<T> diag_array<T> :: bar() const
             temp += (*this)(n, m);
         temp = temp / T(My);
         for(m = 0; m < int(My); m++)
-            result(n, m) = temp;
+            result(m, n) = temp;
     }
     return(result);
 }
@@ -499,7 +498,7 @@ inline diag_array<T> diag_array<T> :: tilde() const
     {
         //profile_n = this -> get_profile(n);
         for(m = 0; m < int(My); m++)
-            result(n, m) -= profile[n];
+            result(m, n) -= profile[n];
     }
     delete[] profile;
     return(result);
@@ -534,9 +533,9 @@ inline diag_array<T> diag_array<T> :: d1_dx1(const double Lx)
     int n{0}, m{0};
     const double inv2dx{0.5 * double(Nx) / Lx};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
-            result(n, m) = ((*this)(n + 1, m) - (*this)(n - 1, m)) * inv2dx;
+    for(m = 0; m < My; m++)
+        for(n = 0; n < Nx; n++)
+            result(m, n) = ((*this)(m, n + 1) - (*this)(m, n - 1)) * inv2dx;
 
     return result;
 }
@@ -551,8 +550,8 @@ inline diag_array<T> diag_array<T> :: d1_dy1(const double Ly)
     int n{0}, m{0};
     const double inv2dy{0.5 * double(My) / Ly};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
+    for(m = 0; m < My; m++)
+        for(n = 0; n < Nx; n++)
             result(n, m) = ((*this)(n, m + 1) - (*this)(n, m - 1)) * inv2dy;
 
     return result;
@@ -568,9 +567,9 @@ inline diag_array<T> diag_array<T> :: d2_dx2(const double Lx)
     int n{0}, m{0};
     const double invdx2{double(Nx * Nx) / (Lx * Lx)};
 
-    for(n = 0; n < (int)Nx; n++)
-        for(m = 0; m < (int)My; m++)
-            result(n, m) = ((*this)(n - 1, m) - 2.0 * (*this)(n, m) + (*this)(n + 1, m)) * invdx2;
+    for(m = 0; m < (int)My; m++)
+        for(n = 0; n < (int)Nx; n++)
+            result(m, n) = ((*this)(m, n - 1) - 2.0 * (*this)(m, n) + (*this)(m, n + 1)) * invdx2;
 
     return result;
 }
@@ -585,9 +584,9 @@ inline diag_array<T> diag_array<T> :: d2_dy2(const double Ly)
     int n{0}, m{0};
     const double invdy2{double(My * My) / (Ly * Ly)};
 
-    for(n = 0; n < int(Nx); n++)
-        for(m = 0; m < int(My); m++)
-            result(n, m) = ((*this)(n, m - 1) - 2.0 * (*this)(n, m) + (*this)(n, m + 1)) * invdy2;
+    for(m = 0; m < int(My); m++)
+        for(n = 0; n < int(Nx); n++)
+            result(m, n) = ((*this)(m - 1, n) - 2.0 * (*this)(m, n) + (*this)(m + 1, n)) * invdy2;
 
     return result;
 }
@@ -602,9 +601,9 @@ inline diag_array<T> diag_array<T> :: d3_dx3(const double Lx)
     int n{0}, m{0};
     const double inv2dx3{0.5 * double(Nx * Nx * Nx) / double(Lx * Lx * Lx)};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
-            result(n, m) = (-1.0 * (*this)(n - 2, m) + 2.0 * ((*this)(n - 1, m) - (*this)(n + 1, m)) + (*this)(n + 2, m)) * inv2dx3;
+    for(m = 0; m < My; m++)
+        for(n = 0; n < Nx; n++)
+            result(m, n) = (-1.0 * (*this)(m, n - 2) + 2.0 * ((*this)(m, n - 1) - (*this)(m, n + 1)) + (*this)(m, n + 2)) * inv2dx3;
     return result;
 }
 
@@ -618,9 +617,9 @@ inline diag_array<T> diag_array<T> :: d3_dy3(const double Ly)
     int n{0}, m{0};
     const double inv2dy3{0.5 * double(My * My * My) / double(Ly * Ly * Ly)};
 
-    for(n = 0; n < Nx; n++)
-        for(m = 0; m < My; m++)
-            result(n, m) = (-1.0 * (*this)(n, m - 2) + 2.0 * ((*this)(n, m - 1) - (*this)(n, m + 1)) + (*this)(n, m + 2)) * inv2dy3;
+    for(m = 0; m < My; m++)
+        for(n = 0; n < Nx; n++)
+            result(m, n) = (-1.0 * (*this)(m - 2, m) + 2.0 * ((*this)(m - 1, m) - (*this)(m + 1, n)) + (*this)(m + 2, n)) * inv2dy3;
     return result;
 }
 

@@ -113,8 +113,8 @@ private:
 	double xright;
 	double ylow;
 	double yup;
-	unsigned int Nx;
 	unsigned int My;
+	unsigned int Nx;
 	unsigned int tlevs;
     unsigned int nthr;
 	string scheme;

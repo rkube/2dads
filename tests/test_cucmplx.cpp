@@ -1,5 +1,5 @@
 #include <iostream>
-#include "include/cucmplx.h"
+#include "cucmplx.h"
 
 using namespace std;
 

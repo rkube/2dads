@@ -21,8 +21,8 @@ using namespace H5;
 // Constructor of the base class
 output :: output(slab_config config) :
     output_counter(0),
-    Nx(config.get_nx()),
     My(config.get_my())
+    Nx(config.get_nx()),
 {
 }
 
@@ -47,10 +47,10 @@ output_h5 :: output_h5(slab_config config) :
     o_list(config.get_output())
 {
 	// DataSpace dimension 
-	const hsize_t fdim[] = {Nx, My};
+	const hsize_t fdim[] = {My, Nx};
 	// Hyperslab parameter for ghost point array output
 	const hsize_t offset[] = {0,0};
-	const hsize_t count[] = {Nx, My};
+	const hsize_t count[] = {My, Nx};
 	DSetCreatPropList ds_creatplist;  
 	dspace_file = new DataSpace(2, count); 
 

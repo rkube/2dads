@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include "include/slab_cuda.h"
+#include "slab_cuda.h"
 
 using namespace std;
 

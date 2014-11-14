@@ -9,7 +9,7 @@
 #include <iostream>
 #include <stdio.h>
 #include "vector_types.h"
-#include "include/cuda_types.h"
+#include "cuda_types.h"
 #include "cufft.h"
 
 using namespace std;
@@ -23,7 +23,7 @@ void d_dump_c(cuda::cmplx_t* alpha, uint N, uint width)
     for(int i = 0; i < N; i++){
         for(int j = 0; j < width; j++){
             //printf("alpha[%d][%d] = (%f, %f)\t", i, j, alpha[i][j].x, alpha[i][j].y);
-            printf("alpha[%d][%d] = (%f, %f)\t", i, j, (alpha[i * width + j]).x, (alpha[i * width + j]).y);
+            printf("alpha[%d][%d] = (%f, %f)\t", i, j, (alpha[i * width + j]).re(), (alpha[i * width + j]).im());
         }
         printf("\n");
     }
@@ -48,9 +48,12 @@ void d_dump_r(cuda::real_t* alpha, uint N, uint width)
 
 int main(void)
 {
-    cuda::cmplx_t alpha_c[3][4] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)},
-                                   {make_cuDoubleComplex(1.5, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(-0.5, 0.0), make_cuDoubleComplex(0.0, 0.0)},
-                                   {make_cuDoubleComplex(11.0 / 6.0, 0.0), make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-1.5, 0.0), make_cuDoubleComplex(1.0/3.0, 0.0)}};
+    //cuda::cmplx_t alpha_c[3][4] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)},
+    //                               {make_cuDoubleComplex(1.5, 0.0), make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(-0.5, 0.0), make_cuDoubleComplex(0.0, 0.0)},
+    //                               {make_cuDoubleComplex(11.0 / 6.0, 0.0), make_cuDoubleComplex(3.0, 0.0), make_cuDoubleComplex(-1.5, 0.0), make_cuDoubleComplex(1.0/3.0, 0.0)}};
+    cuda::cmplx_t alpha_c[3][4] = {{cuda::cmplx_t(1.0, 0.0), cuda::cmplx_t(1.0, 0.0), cuda::cmplx_t(0.0, 0.0), cuda::cmplx_t(0.0, 0.0)},
+                                   {cuda::cmplx_t(1.5, 0.0), cuda::cmplx_t(1.0, 0.0), cuda::cmplx_t(-0.5, 0.0), cuda::cmplx_t(0.0, 0.0)},
+                                   {cuda::cmplx_t(11.0 / 6.0, 0.0), cuda::cmplx_t(3.0, 0.0), cuda::cmplx_t(-1.5, 0.0), cuda::cmplx_t(1.0/3.0, 0.0)}};
     cuda::real_t alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 1.0, -0.5, 0.0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
     /*
     cuda::cmplx_t beta[3][3] = {{make_cuDoubleComplex(1.0, 0.0), make_cuDoubleComplex(0.0, 0.0), make_cuDoubleComplex(0.0, 0.0)},

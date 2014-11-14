@@ -28,7 +28,6 @@ test_diagarray:
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines
 test_slab:
-	$(CC) $(CFLAGS) -o test_slab/test_init $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_init.cpp $(INCLUDES) $(LFLAGS)
 # Test enumeration of derivation kernels d_dx, d_dy, inv_lapl and time integrator stiff_k
 	$(CC) $(CFLAGS) -o test_slab/test_enum $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o test_enum.cpp $(INCLUDES) $(LFLAGS)
 # Initialization

@@ -132,6 +132,7 @@ class cuda_array{
                     }
                 os << "\n";
                 }
+                os << "\n";
             }
             return (os);
         }
@@ -486,10 +487,10 @@ cuda_array<U, T> :: cuda_array(uint t, uint my, uint nx) :
     array_h(NULL), array_h_t(NULL)
 {
     // Determine grid size for kernel launch
-    block = dim3(cuda::cuda_blockdim_nx, cuda::cuda_blockdim_my);
+    block = dim3(cuda::blockdim_nx, cuda::blockdim_my);
     // Round integer division for grid.y, see: http://stackoverflow.com/questions/2422712/c-rounding-integer-division-instead-of-truncating
     // a la int a = (59 + (4 - 1)) / 4;
-    grid = dim3((Nx + (cuda::cuda_blockdim_nx - 1)) / cuda::cuda_blockdim_nx, My);
+    grid = dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My);
 
     // Allocate device memory
     size_t nelem = tlevs * Nx * My;
@@ -522,8 +523,8 @@ cuda_array<U, T> :: cuda_array(uint t, uint my, uint nx) :
     set_all(0.0);
 //#ifdef DEBUG
 //    cout << "Array size: My=" << My << ", Nx=" << Nx << ", tlevs=" << tlevs << "\n";
-//    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
-//    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
+//    cout << "cuda::blockdim_x = " << cuda::blockdim_nx;
+//    cout << ", cuda::blockdim_y = " << cuda::blockdim_my << "\n";
 //    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
 //    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
 //    cout << "Device data at " << array_d << "\t";

@@ -1,7 +1,7 @@
 #include <iostream>
-#include "include/slab_cuda.h"
 #include <vector>
 #include <iomanip>
+#include "slab_cuda.h"
 
 using namespace std;
 

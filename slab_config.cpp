@@ -38,7 +38,7 @@ void slab_config :: split_at_whitespace(const string params_str, vector<double>*
 //config :: config( string filename, int foo ) :
 slab_config :: slab_config() :
 	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
-	Nx(0), My(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
+	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
 	tout(0.0), log_theta(false), do_dealiasing(false), particle_tracking(0), 
 	nprobes(0), nthreads(0), chunksize(0)
 {
