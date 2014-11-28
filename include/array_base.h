@@ -160,12 +160,12 @@ class array_base{
             const uint nx = src.get_nx();
             const uint my = src.get_my();
 
-            for(unsigned int t = 0; t < tl; t++)
+            for(uint t = 0; t < tl; t++)
             {
                 os << "t: " << t << "\n";
-                for(unsigned int m = 0; m < my; m++)
+                for(uint m = 0; m < my; m++)
                 {
-                    for(unsigned int n = 0; n < nx; n++)
+                    for(uint n = 0; n < nx; n++)
                     {
                         os << src(t, m, n) << "\t";
                     }
@@ -247,7 +247,7 @@ array_base<T, Derived> :: array_base(const uint nthr, const uint t, const uint m
     for(uint tl = 0; tl < tlevs; tl++)
         cout << "\t\tarray_t[" << tl << "] at " << array_t[tl] << "\n";
     cout << "\t\tnthreads = " << nthreads << " threads, nelem = " << nelem << "\n";
-/#endif 
+#endif 
 }
 
 

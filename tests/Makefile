@@ -1,8 +1,8 @@
 include ../Makefile.inc
 
-.PHONY: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_output test_stiff test_memcpy test_diff test_blob test_hw test_diagarray test_perf
+.PHONY: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_output test_stiff test_memcpy test_diff test_blob test_hw test_diagarray test_perf test_opengl
 
-all: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_stiff test_memcpy test_diff test_blob test_hw
+all: test_cucmplx test_array3 test_copy test_slab test_init test_dft test_arith test_derivs test_stiff test_memcpy test_diff test_blob test_hw test_opengl
 
 
 # Test the CuCmplx class, especially arithmetic and return types of the operators
@@ -39,8 +39,8 @@ test_slab:
 
 # Test time integrator, solve diffusion problem and show how modes are integrated
 test_stiff:
-	$(CC) $(CFLAGS) -o test_stiff/test_stiff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_stiff.cpp $(INCLUDES) $(LFLAGS)
-	$(CC) $(CFLAGS) -o test_stiff/test_diff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o test_diff.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_stiff/test_stiff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_stiff.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -o test_stiff/test_diff $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o test_diff.cpp $(INCLUDES) $(LFLAGS)
 
 
 # Test HDF5 output routines
@@ -54,6 +54,7 @@ test_diag:
 # Toy around with memcpu
 test_memcpy:
 	$(CUDACC) -arch=sm_30 -O0 -o test_memcpy test_memcpy.cu $(INCLUDES) 
+
 # Performance tests
 test_perf:
 	$(CC) $(CFLAGS) -o test_perf/test_perf_arraybase test_arrayperf.cpp -pthread $(INCLUDES) $(LFLAGS) 
@@ -65,6 +66,12 @@ test_hw:
 test_zfky0:
 	$(CC) $(CFLAGS) -o test_zf/test_zfky0 $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_zfky0.cpp $(INCLUDES) $(LFLAGS) -I/usr/local/cuda
 	$(CC) $(CFLAGS) -o test_zf/test_zfky0_int $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o test_zfky0_int.cpp $(INCLUDES) $(LFLAGS) -I/usr/local/cuda
+
+# Tests involving OpenGL output
+test_opengl:
+	#$(CC) $(CFLAGS) -o test_opengl/test_init_opengl $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/shader.o $(OBJ_DIR)/output.o test_init_opengl.cpp $(INCLUDES) $(LFLAGS) $(LFLAGS_OGL)
+	#$(CC) $(CFLAGS) -o test_opengl/test_diff_opengl $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/shader.o $(OBJ_DIR)/output.o test_diff_opengl1.cpp $(INCLUDES) $(LFLAGS) $(LFLAGS_OGL)
+	$(CC) $(CFLAGS) -o test_opengl/test_diff_opengl2 $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/shader.o $(OBJ_DIR)/output.o test_diff_opengl2.cpp $(INCLUDES) $(LFLAGS) $(LFLAGS_OGL)
 
 
 clean:

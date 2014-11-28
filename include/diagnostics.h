@@ -6,12 +6,12 @@
 #ifndef DIAGNOSTICS_H
 #define DIAGNOSTICS_H
 
-#include "include/2dads_types.h"
-#include "include/cuda_types.h"
-#include "include/error.h"
-#include "include/slab_config.h"
-#include "include/slab_cuda.h"
-#include "include/diag_array.h"
+#include "2dads_types.h"
+#include "cuda_types.h"
+#include "error.h"
+#include "slab_config.h"
+#include "slab_cuda.h"
+#include "diag_array.h"
 
 
 using namespace std;
@@ -56,7 +56,10 @@ class diagnostics {
         ///@detailed \f$D_{12} = \frac{1}{A} \int \mathrm{d}A\, n_{xxx}^2 + n_{yyy}^2\f$ <br>
         ///@detailed \f$D_{13} = \frac{1}{A} \int \mathrm{d}A\, \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}\f$ <br>
         void diag_energy(twodads::real_t const);
-        /// @brief Write time series of physical variables
+        /// @brief write output for probes
+        /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
+        /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
+        /// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
         void diag_probes(twodads::real_t const);
         /// @brief Write simulation parameters to log file
         void diag_rhs(twodads::real_t const);

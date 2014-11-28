@@ -104,7 +104,8 @@ void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, const double 
 {
     const uint idx = row * (layout.Nx / 2 + 1) + col;
     const double phase = 0.56051 * cuda::TWOPI;
-    CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
+    //CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
+    cuda::cmplx_t foo(amp * cos(phase), amp * sin(phase));
     array[idx] = foo;
     printf("d_init_mode: mode(%d, %d) at idx = %d = (%f, %f)\n",
             row, col, idx, cos(phase), sin(phase));
@@ -204,14 +205,14 @@ void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
     const unsigned int num_modes = initc.size() / 4;
     (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
 
-#ifdef DEBUG
+//#ifdef DEBUG
     cout << "Initializing modes:\n";
-#endif
+//#endif
     for(uint n = 0; n < num_modes; n++)
     {
-#ifdef DEBUG
+//#ifdef DEBUG
         cout << "mode " << n << ": amp=" << initc[4*n] << " kx=" << initc[4*n+1] << ", ky=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
-#endif
+//#endif
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
     }
 }

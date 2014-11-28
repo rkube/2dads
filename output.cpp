@@ -21,8 +21,8 @@ using namespace H5;
 // Constructor of the base class
 output :: output(slab_config config) :
     output_counter(0),
-    My(config.get_my())
-    Nx(config.get_nx()),
+    My(config.get_my()),
+    Nx(config.get_nx())
 {
 }
 

@@ -111,7 +111,7 @@ void thr_set_polavg(R* array, int n_start, int n_end)
 
 // Subtract y-average from each radial position
 template <class R, class T>
-void thr_set_tilde(R* array, int m_start, int m_end)
+void thr_set_tilde(R* array, int n_start, int n_end)
 {
     T pol_avg{0.0};
     int n{0}, m{0};

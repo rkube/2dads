@@ -72,14 +72,14 @@ class slab_cuda
         void print_field(twodads::field_t, string); ///< Print member cuda_array to ascii file
         void print_field(twodads::field_k_t); ///< Print member cuda_aray to terminal
         void print_field(twodads::field_k_t, string); ///< Print member cuda_array<cmplx_t> to ascii file
+
+        void get_data(twodads::field_t, cuda::real_t* buffer); ///< Export real field data into a buffer
         void print_address(); ///< Print the addresses of member variables in host memory
         void print_grids(); ///< Print the grid sizes used for cuda kernel calls
 
         // Output methods
-        // Make output_h5 a pointer since we deleted the default constructor
         friend class output_h5;
         friend class diagnostics;
-
 
     private:
         slab_config config; ///< slab configuration

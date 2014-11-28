@@ -1,4 +1,5 @@
 #include <iostream>
+#include <GLFW/glfw3.h>
 #include "cuda_runtime_api.h"
 #include "slab_cuda.h"
 #include "diagnostics.h"

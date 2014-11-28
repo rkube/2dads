@@ -5,10 +5,14 @@ TEST_DIR = tests
 
 .PHONY: slab_config output diagnostics initialize slab_cuda tests clean dist 2dads
 
-all: output initialize diagnostics slab_config slab_cuda 
-base: initialize diagnostics slab_config output slab_cuda 
+all: output initialize diagnostics slab_config slab_cuda shader
+base: initialize diagnostics slab_config output slab_cuda shader
 
-DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))'
+DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
+
+
+shader:
+	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
 
 slab_config:
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)

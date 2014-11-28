@@ -137,8 +137,12 @@ class cuda_array{
             return (os);
         }
 
+        // Copy device data into internal host buffer
         inline void copy_device_to_host();
         inline void copy_device_to_host(uint);
+
+        // Copy device data to another buffer
+        inline void copy_device_to_host(U*);
 
         // Transfer from host to device
         inline void copy_host_to_device();
@@ -972,6 +976,16 @@ inline void cuda_array<U, T> :: copy_device_to_host(uint tlev)
     const size_t line_size = My * Nx * sizeof(U);
     gpuErrchk(cudaMemcpy(array_h_t[tlev], array_d_t_host[tlev], line_size, cudaMemcpyDeviceToHost));
 }
+
+
+template <typename U, typename T>
+inline void cuda_array<U, T> :: copy_device_to_host(U* buffer)
+{
+    const size_t line_size = My * Nx * sizeof(U);
+    for(uint t = 0; t < tlevs; t++)
+        gpuErrchk(cudaMemcpy(&buffer[t * My * Nx], array_d_t_host[t], line_size, cudaMemcpyDeviceToHost));
+}
+
 
 
 template <typename U, typename T>

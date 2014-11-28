@@ -106,7 +106,8 @@ diagnostics::~diagnostics()
  */
 
 
-void diagnostics::write_logfile() {
+void diagnostics::write_logfile() 
+{
 	ofstream logfile;
 	stringstream filename;
 	filename << "log." << setw(3) << setfill('0') << slab_layout.runnr;
@@ -127,13 +128,16 @@ void diagnostics::write_logfile() {
  */ 
 
 
-void diagnostics :: init_diagnostic_output(string filename, string header, bool& init_flag){
+void diagnostics :: init_diagnostic_output(string filename, string header, bool& init_flag)
+{
     cout << "Initializing output file " << filename << "\n";
-    if ( init_flag == false ) {
+    if ( init_flag == false ) 
+    {
         ofstream output;
         output.exceptions(ofstream::badbit);
         output.open(filename.data(), ios::trunc);
-        if ( !output ) {
+        if ( !output ) 
+        {
             throw new std::exception;
         }
         output << header;
@@ -219,21 +223,26 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 	// Compute maxima for theta and strmf, integrated particle density,
 	// center of mass coordinates and relative dispersion tensor components
-    for(int m = 0; m < int(slab_layout.My); m++){
+    for(int m = 0; m < int(slab_layout.My); m++)
+    {
         y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-        for(int n = 0; n < int(slab_layout.Nx); n++){
+        for(int n = 0; n < int(slab_layout.Nx); n++)
+        {
             x = slab_layout.x_left + double(n) * slab_layout.delta_x;
             theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
 			theta_int += theta_val;
 			theta_int_x += theta_val * x;
 			theta_int_y += theta_val * y;
  
-			if ( fabs(theta_val) >= theta_max) {
+			if ( fabs(theta_val) >= theta_max) 
+            {
 				theta_max = fabs(theta_val);
 				theta_max_x = x;
 				theta_max_y = y;
 			}
-			if ( fabs ( strmf(n,m) ) >= strmf_max ) {
+
+			if ( fabs ( strmf(n,m) ) >= strmf_max ) 
+            {
 				strmf_max = fabs(strmf(m, n));
 				strmf_max_x = x;
 				strmf_max_y = y;
@@ -243,9 +252,11 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 	
 	theta_int_x /= theta_int;
 	theta_int_y /= theta_int;
-    for(int m = 0; m < int(slab_layout.My); m++){
+    for(int m = 0; m < int(slab_layout.My); m++)
+    {
         y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-        for(int n = 0; n < int(slab_layout.Nx); n++){
+        for(int n = 0; n < int(slab_layout.Nx); n++)
+        {
             x = slab_layout.x_left + double(n) * slab_layout.delta_x;
             theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
 			wxx = theta_val * (x - theta_int_x) * (x - theta_int_x);
@@ -272,7 +283,8 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 	// Write to output file
 	output.open("blobs.dat", ios::app);	
-	if ( output.is_open() ){
+	if ( output.is_open() )
+    {
 		output << time << "\t";
 		output << setw(12) << theta_max << "\t" << setw(12) << theta_max_x << "\t" << setw(12) << theta_max_y << "\t";
 		output << setw(12) << strmf_max << "\t" << setw(12) << strmf_max_x << "\t" << setw(12) << strmf_max_y << "\t";
@@ -338,7 +350,8 @@ void diagnostics::diag_energy(const twodads::real_t time)
     const double D13{ ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
 	output.open("energy.dat", ios::app);
-	if ( output.is_open() ) {
+	if (output.is_open()) 
+    {
 		output << time << "\t";
 		output << setw(12) << E << "\t" << setw(12) << K << "\t" << setw(12) << T << "\t" << setw(12) << U << "\t" << setw(12) << W << "\t";
 		output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
@@ -419,10 +432,6 @@ void diagnostics::diag_energy(const twodads::real_t time)
 //    }
 //}
 
-/// @brief write output for probes
-/// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
-/// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
-/// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
 void diagnostics::diag_probes(const twodads::real_t time)
 {
 	ofstream output;
@@ -449,7 +458,7 @@ void diagnostics::diag_probes(const twodads::real_t time)
             filename << "probe" << setw(3) << setfill('0') << n * n_probes + m << ".dat";
             output.open(filename.str().data(), ofstream::app );
             if ( output.is_open() ){
-                output << time << "\t";                                                           // time
+                output << time << "\t";                                  // time
                 output << setw(12) << theta_tilde  (np, mp) << "\t";     // n_tilde
                 output << setw(12) << theta        (np, mp) << "\t";     // n
                 output << setw(12) << strmf        (np, mp) << "\t";     // phi
@@ -467,4 +476,4 @@ void diagnostics::diag_probes(const twodads::real_t time)
     }
 }
 
-    // End of file diagnostics.cpp
+// End of file diagnostics.cpp

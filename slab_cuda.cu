@@ -381,7 +381,7 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky *  ky) * (kx * kx + ky * ky) ));
     
 
     // Add contribution from explicit and implicit parts
@@ -421,7 +421,7 @@ void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
@@ -459,7 +459,7 @@ void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI/ p.length_y;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
@@ -498,7 +498,7 @@ void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
 
     for(uint k = 1; k < tlev; k++)
     {
@@ -536,13 +536,15 @@ void d_integrate_stiff_ky0(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_
 // Print very verbose debug information of what stiffk does
 // Do no update A!
 __global__
-void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev, uint row, uint col, cuda::real_t kx, cuda::real_t ky)
+void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev, uint row, uint col)
 {
-    const uint idx = row * p.My + col;
+    const uint idx = row * p.Nx + col;
     uint off_a = (tlev - 2) * p.level + tlev;
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
-    //cuda::real_t kx = cuda::TWOPI * cuda::real_t(row) / p.length_x;
-    //cuda::real_t ky = cuda::TWOPI * cuda::real_t(row) / p.length_y;
+    cuda::real_t kx = cuda::TWOPI * cuda::real_t(row) / p.length_x;
+    cuda::real_t ky = cuda::TWOPI * cuda::real_t(row) / p.length_y;
+
+    printf("A[%d][%d] = (%f, %f)\n", p.level - tlev, idx, A[p.level - tlev][idx].re(), A[p.level - tlev][idx].im());
     printf("delta_t = %f, diff = %f hv = %f, kx = %f, ky = %f\n", p.delta_t, p.diff, p.hv, kx, ky);
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
@@ -552,7 +554,7 @@ void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::rea
     printf("\ttlev = %d, off_a = %d, off_b = %d\n", tlev, off_a, off_b);
     for(uint k = 1; k < tlev; k++)
     {
-        printf("\ttlev=%d,k=%d\t %f * A[%d] + dt * %f * A_R[%d]\n", tlev, k, alpha[off_a - k], p.level - k, beta[off_b - k], p.level - 1 - k);
+        printf("\ttlev=%d, k = %d\t %f * A[%d] + dt * %f * A_R[%d]\n", tlev, k, alpha[off_a - k], p.level - k, beta[off_b - k], p.level - 1 - k);
         printf("\ttlev=%d, k = %d\t sum_alpha += %f * (%f, %f)\n", tlev, k, alpha[off_a - k], (A[p.level -k][idx]).re(), (A[p.level -k][idx]).im());
         printf("\ttlev=%d, k = %d\t sum_beta+= %f * (%f, %f)\n", tlev, k, beta[off_b - k], (A_rhs[p.level - 1 - k][idx]).re(), (A_rhs[p.level - 1 - k][idx]).im());
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
@@ -563,6 +565,7 @@ void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::rea
     printf("sum1_alpha = (%f, %f)\tsum1_beta = (%f, %f)\t", sum_alpha.re(), sum_alpha.im(), sum_beta.re(),  sum_beta.im());
     printf("temp_div = %f\n", temp_div); 
     printf("A[%d][%d] = (%f, %f)\n", p.level - tlev, idx, result.re(), result.im());
+    printf("\n");
 }
 
 
@@ -1144,6 +1147,16 @@ void slab_cuda :: print_field(twodads::field_k_t field_name, string file_name)
 }
 
 
+/// @brief Copy data from a real field to a buffer
+/// @param twodads::field_t fname: Name of the field to be copied
+/// @param cuda::real_t* buffer: buffer in which the data is to be copied
+void slab_cuda :: get_data(twodads::field_t fname, cuda::real_t* buffer)
+{
+    cuda_arr_real* arr = get_field_by_name(fname);
+    arr -> copy_device_to_host(buffer);
+}
+
+
 void slab_cuda :: print_address()
 {
     // Use this to test of memory is aligned between g++ and NVCC
@@ -1550,23 +1563,23 @@ void slab_cuda :: integrate_stiff_debug(twodads::field_k_t fname, uint tlev, uin
     cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
 
     // Compute kx and ky explicitly for mode number
-    cuda::real_t kx = 0.0; 
-    cuda::real_t ky = 0.0; 
+    //cuda::real_t kx = 0.0; 
+    //cuda::real_t ky = 0.0; 
 
-    if(col < My / 2 + 1)
-        ky = double(col) * 2.0 * cuda::PI / stiff_params.length_y;
-    else
-        return;
+    //if(col < Nx / 2 + 1)
+    //    ky = double(col) * 2.0 * cuda::PI / stiff_params.length_y;
+    //else
+    //    return;
 
-    if(row < Nx / 2 + 1)
-        kx = double(row) * 2.0 * cuda::PI / stiff_params.length_x;
-    else if ((row > Nx / 2) && row < Nx)
-        kx = (double(row) - double(Nx)) * 2.0 * cuda::PI / stiff_params.length_x;
-    else
-        return;
+    //if(row < Nx / 2 + 1)
+    //    kx = double(row) * 2.0 * cuda::PI / stiff_params.length_x;
+    //else if ((row > Nx / 2) && row < Nx)
+    //    kx = (double(row) - double(Nx)) * 2.0 * cuda::PI / stiff_params.length_x;
+    //else
+    //    return;
 
     cout << "Debug information for stiffk\n";
-    d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, row, col, kx, ky);
+    d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, row, col); 
 #ifdef DEBUG
     gpuStatus();
 #endif
