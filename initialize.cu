@@ -5,7 +5,7 @@
 
 #include <iostream>
 #include <vector>
-#include "include/initialize.h"
+#include "initialize.h"
 #include <stdio.h>
 
 

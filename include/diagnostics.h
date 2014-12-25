@@ -6,12 +6,12 @@
 #ifndef DIAGNOSTICS_H
 #define DIAGNOSTICS_H
 
-#include "include/2dads_types.h"
-#include "include/cuda_types.h"
-#include "include/error.h"
-#include "include/slab_config.h"
-#include "include/slab_cuda.h"
-#include "include/diag_array.h"
+#include "2dads_types.h"
+#include "cuda_types.h"
+#include "error.h"
+#include "slab_config.h"
+#include "slab_cuda.h"
+#include "diag_array.h"
 
 
 using namespace std;

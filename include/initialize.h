@@ -3,8 +3,8 @@
 #ifndef INITIALIZE_H
 #define INITIALIZE_H
 
-#include "include/cuda_types.h"
-#include "include/cuda_array3.h"
+#include "cuda_types.h"
+#include "cuda_array3.h"
 #include <vector>
 
 typedef cuda_array<cuda::cmplx_t, cuda::real_t> cuda_arr_cmplx;

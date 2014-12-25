@@ -7,9 +7,9 @@
  *
  */
 
-#include "include/slab_config.h"
-#include "include/error.h"
-#include "include/2dads_types.h"
+#include "slab_config.h"
+#include "error.h"
+#include "2dads_types.h"
 #include <iostream>
 #include <fstream>
 

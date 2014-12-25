@@ -5,7 +5,7 @@
 /// Contains diagnostic routines for turbulence simulation
 
 
-#include "include/diagnostics.h"
+#include "diagnostics.h"
 #include <string>
 #include <iostream>
 #include <iomanip>

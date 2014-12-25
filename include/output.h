@@ -13,10 +13,10 @@
 #include <string>
 #include <vector>
 #include <H5Cpp.h>
-#include "include/2dads_types.h"
-#include "include/cuda_types.h"
-#include "include/slab_cuda.h"
-#include "include/slab_config.h"
+#include "2dads_types.h"
+#include "cuda_types.h"
+#include "slab_cuda.h"
+#include "slab_config.h"
 
 #ifndef H5_NO_NAMESPACE
     using namespace H5;
