@@ -40,7 +40,7 @@ int main(void)
         slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, my_config.get_tlevs() - t - 1);
         slab.update_real_fields(my_config.get_tlevs() - t - 1);
         slab.rhs_fun(my_config.get_tlevs() - t - 1);
-        if ( t == 1)
+        if (t == 1)
         {
             slab.move_t(twodads::field_k_t::f_theta_rhs_hat, my_config.get_tlevs() - t - 2, 0);
             slab.move_t(twodads::field_k_t::f_omega_rhs_hat, my_config.get_tlevs() - t - 2, 0);

@@ -43,4 +43,3 @@ int main(void)
     slab.print_field(twodads::field_t::f_strmf_y);
 }
 
-

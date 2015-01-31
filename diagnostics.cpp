@@ -296,24 +296,6 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 }
 
 
-///@brief Compute energy integrals for various turbulence models
-///@param time Time of output
-///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13
-///@detailed $D_{1} = \frac{1}{2A} \int \mathrm{d}A n^2$
-///@detailed $D_{2} = \frac{1}{2A} \int \mathrm{d}A \left\nabla_\perp \phi\right)^2$
-///@detailed $D_{3} = \frac{1}{2A} \int \mathrm{d}A \Omega^2$
-///@detailed $D_{4} = -\frac{1}{A} \int \mathrm{d}A \widetilde{n}\widetilde{\phi_y}$
-///@detailed $D_{5} = \frac{1}{A} \int \mathrm{d}A \left(\bar{n} - \bar{\phi}\right)^2$
-///@detailed $D_{6} = \frac{1}{A} \int \mathrm{d}A \left(\widetilde{n} - \widetilde{\phi}\right)^2$
-///@detailed $D_{7} = \frac{1}{A} \int \mathrm{d}A \bar{\phi} \left( \bar{\phi} - \bar{n} \right)$
-///@detailed $D_{8] = \frac{1}{A} \int \mathrm{d}A \widetilde{\phi} \left( \widetilde{\phi} - \widetilde{n}\right)$
-///@detailed $D_{9} = \frac{1}{A} \int \mathrm{d}A 0$
-///@detailed $D_{10} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp^2 n$
-///@detailed $D_{11} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp \phi \nabla_\perp \Omega$
-///@detailed $D_{12} = \frac{1}{A} \int \mathrm{d}A n_{xxx}^2 + n_{yyy}^2$
-///@detailed $D_{13} = \frac{1}{A} \int \mathrm{d}A \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}$
-
-
 void diagnostics::diag_energy(const twodads::real_t time)
 {
     ofstream output;
@@ -329,7 +311,7 @@ void diagnostics::diag_energy(const twodads::real_t time)
     diag_array<double> theta_tilde(move(theta.tilde()));
     diag_array<double> theta_bar(move(theta.bar())); 
 
-    const double E{(omega_tilde * omega_tilde).get_mean()};
+    const double E{(theta_tilde * theta_tilde + strmf_x * strmf_x + strmf_y * strmf_y).get_mean()};
     const double K{(strmf_x_tilde * strmf_x_tilde + strmf_y * strmf_y).get_mean()};
     const double T{(strmf_x_tilde * strmf_y.tilde() * omega_bar).get_mean()};
     const double U{(strmf_x.bar() * strmf_x.bar()).get_mean()};

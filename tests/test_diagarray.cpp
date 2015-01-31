@@ -28,7 +28,6 @@ int main(void)
     cout << "da1 = " << da1 << "\n";
     cout << "da3 = " << da3 << "\n";
 
-    return(0);
 
     da1.set_numthreads(nthreads);
     da2.set_numthreads(nthreads);

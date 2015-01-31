@@ -110,8 +110,8 @@ class cuda_array{
         // Set array to constant value for specified time level
         cuda_array<U, T>& set_t(const U&, uint);
         // Access operator to host array
-        inline U& operator()(uint, uint, uint);
-        inline U operator()(uint, uint, uint) const;
+        U& operator()(uint, uint, uint);
+        U operator()(uint, uint, uint) const;
 
         // Copy device memory to host and print to stdout
         friend std::ostream& operator<<(std::ostream& os, cuda_array<U, T> src)
@@ -128,7 +128,8 @@ class cuda_array{
                     for(uint n = 0; n < nx; n++)
                     {
                         // Remember to also set precision routines in CuCmplx :: operator<<
-                        os << std::setw(8) << std::setprecision(4) << src(t, m, n) << "\t";
+                        //os << std::setw(8) << std::setprecision(4) << src(t, m, n) << "\t";
+                        os << fixed << setw(4) << src(t, m, n) << "\t";
                     }
                 os << "\n";
                 }
@@ -138,31 +139,32 @@ class cuda_array{
         }
 
         // Copy device data into internal host buffer
-        inline void copy_device_to_host();
-        inline void copy_device_to_host(uint);
+        void copy_device_to_host();
+        void copy_device_to_host(uint);
 
         // Copy device data to another buffer
-        inline void copy_device_to_host(U*);
+        void copy_device_to_host(U*);
 
         // Transfer from host to device
-        inline void copy_host_to_device();
+        void copy_host_to_device();
+        void copy_host_to_device(uint);
 
         // Advance time levels
-        inline void advance(); 
+        void advance(); 
         
-        inline void copy(uint, uint);
-        inline void copy(uint, const cuda_array<U, T>&, uint);
-        inline void move(uint, uint);
-        inline void swap(uint, uint);
-        inline void normalize();
+        void copy(uint, uint);
+        void copy(uint, const cuda_array<U, T>&, uint);
+        void move(uint, uint);
+        void swap(uint, uint);
+        void normalize();
 
-        inline void kill_kx0();
-        inline void kill_ky0();
-        inline void kill_k0();
+        void kill_kx0();
+        void kill_ky0();
+        void kill_k0();
 
         // Access to private members
-        inline uint get_nx() const {return Nx;};
-        inline uint get_my() const {return My;};
+        uint get_nx() const {return Nx;};
+        uint get_my() const {return My;};
         inline uint get_tlevs() const {return tlevs;};
         inline int address(uint m, uint n) const {return (m * Nx + n);};
         inline dim3 get_grid() const {return grid;};
@@ -177,7 +179,7 @@ class cuda_array{
         inline U** get_array_d_t() const {return array_d_t;};
         inline U* get_array_d(uint t) const {return array_d_t_host[t];};
 
-    private:
+    protected: 
         // Size of data array. Host data
         const uint tlevs;
         const uint Nx;
@@ -684,7 +686,8 @@ template <typename U, typename T>
 cuda_array<U, T>& cuda_array<U, T> :: operator= (const cuda_array<U, T>& rhs)
 {
     // check bounds
-    if (!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
+    //if (!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
+    if (!bounds(rhs.get_my(), rhs.get_nx()))
         throw out_of_bounds_err(string("cuda_array<U, T>& cuda_array<U, T> :: operator= (const cuda_array<U, T>& rhs): out of bounds!"));
     // Check if we assign to ourself
     if ((void*) this == (void*) &rhs)
@@ -913,7 +916,7 @@ cuda_array<U, T> cuda_array<U, T> :: operator/(const U& rhs)
 
 
 template <typename U, typename T>
-inline U& cuda_array<U, T> :: operator()(uint t, uint m, uint n)
+U& cuda_array<U, T> :: operator()(uint t, uint m, uint n)
 {
 	if (!bounds(t, m, n))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: operator()(uint t, uint m, uint n): out of bounds\n"));
@@ -922,7 +925,7 @@ inline U& cuda_array<U, T> :: operator()(uint t, uint m, uint n)
 
 
 template <typename U, typename T>
-inline U cuda_array<U, T> :: operator()(uint t, uint m, uint n) const
+U cuda_array<U, T> :: operator()(uint t, uint m, uint n) const
 {
 	if (!bounds(t, m, n))
 		throw out_of_bounds_err(string("T cuda_array<T> :: operator()(uint t, uint m, uint n): out of bounds\n"));
@@ -958,7 +961,7 @@ void cuda_array<U, T> :: advance()
 
 // The array is contiguous 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: copy_device_to_host() 
+void cuda_array<U, T> :: copy_device_to_host() 
 {
     //const size_t line_size = Nx * My * tlevs * sizeof(T);
     //gpuErrchk(cudaMemcpy(array_h, array_d, line_size, cudaMemcpyDeviceToHost));
@@ -971,7 +974,7 @@ inline void cuda_array<U, T> :: copy_device_to_host()
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: copy_device_to_host(uint tlev)
+void cuda_array<U, T> :: copy_device_to_host(uint tlev)
 {
     const size_t line_size = My * Nx * sizeof(U);
     gpuErrchk(cudaMemcpy(array_h_t[tlev], array_d_t_host[tlev], line_size, cudaMemcpyDeviceToHost));
@@ -979,7 +982,7 @@ inline void cuda_array<U, T> :: copy_device_to_host(uint tlev)
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: copy_device_to_host(U* buffer)
+void cuda_array<U, T> :: copy_device_to_host(U* buffer)
 {
     const size_t line_size = My * Nx * sizeof(U);
     for(uint t = 0; t < tlevs; t++)
@@ -987,9 +990,27 @@ inline void cuda_array<U, T> :: copy_device_to_host(U* buffer)
 }
 
 
+template <typename U, typename T>
+void cuda_array<U, T> :: copy_host_to_device()
+{
+    const size_t line_size = My * Nx * sizeof(U);
+    for(uint t = 0; t < tlevs; t++)
+    {
+        gpuErrchk(cudaMemcpy(array_d_t_host[t], &array_h[t * My * Nx], line_size, cudaMemcpyHostToDevice));
+    }
+}
+
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: copy(uint t_dst, uint t_src)
+void cuda_array<U, T> :: copy_host_to_device(uint tlev)
+{
+    const size_t line_size = My * Nx * sizeof(U);
+    gpuErrchk(cudaMemcpy(array_d_t_host[tlev], &array_h[tlev * My * Nx], line_size, cudaMemcpyHostToDevice));
+}
+
+
+template <typename U, typename T>
+void cuda_array<U, T> :: copy(uint t_dst, uint t_src)
 {
     const size_t line_size = My * Nx * sizeof(U);
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
@@ -997,7 +1018,7 @@ inline void cuda_array<U, T> :: copy(uint t_dst, uint t_src)
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: copy(uint t_dst, const cuda_array<U, T>& src, uint t_src)
+void cuda_array<U, T> :: copy(uint t_dst, const cuda_array<U, T>& src, uint t_src)
 {
     const size_t line_size = My * Nx * sizeof(U);
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], src.get_array_d(t_src), line_size, cudaMemcpyDeviceToDevice));
@@ -1005,7 +1026,7 @@ inline void cuda_array<U, T> :: copy(uint t_dst, const cuda_array<U, T>& src, ui
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: move(uint t_dst, uint t_src)
+void cuda_array<U, T> :: move(uint t_dst, uint t_src)
 {
     // Copy data 
     const size_t line_size = Nx * My * sizeof(U);
@@ -1019,7 +1040,7 @@ inline void cuda_array<U, T> :: move(uint t_dst, uint t_src)
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: swap(uint t1, uint t2)
+void cuda_array<U, T> :: swap(uint t1, uint t2)
 {
     d_swap<<<1, 1>>>(array_d_t, t1, t2);
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(U*) * tlevs, cudaMemcpyDeviceToHost));
@@ -1028,7 +1049,7 @@ inline void cuda_array<U, T> :: swap(uint t1, uint t2)
 
 
 template <typename U, typename T>
-inline void cuda_array<U, T> :: kill_kx0()
+void cuda_array<U, T> :: kill_kx0()
 {
     d_kill_kx0<<<grid.x, block.x>>>(array_d, My, Nx);
 #ifdef DEBUG
@@ -1039,7 +1060,7 @@ inline void cuda_array<U, T> :: kill_kx0()
 
 /// Do this for U = CuCmplx<T>
 template <typename U, typename T>
-inline void cuda_array<U, T> :: kill_ky0()
+void cuda_array<U, T> :: kill_ky0()
 {
     d_kill_ky0<<<grid.y, block.y>>>(array_d, My, Nx);
 #ifdef DEBUG
@@ -1050,7 +1071,7 @@ inline void cuda_array<U, T> :: kill_ky0()
 
 /// Do this for U = CuCmplx<T>
 template <typename U, typename T>
-inline void cuda_array<U, T> :: kill_k0()
+void cuda_array<U, T> :: kill_k0()
 {
     d_kill_k0<<<1, 1>>>(array_d);
 #ifdef DEBUG

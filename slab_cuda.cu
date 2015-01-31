@@ -43,8 +43,7 @@ void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, c
 }
 
 
-// Frequencies: My/2
-// These are stored in row My/2
+// Frequencies: My/2, stored in row My / 2
 __global__
 void d_d_dy_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
 {
@@ -174,17 +173,15 @@ __global__
 void d_kill_ky0(cuda::cmplx_t* in, const uint My, const uint Nx21)
 {
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = col;
+    //const uint index = col;
 
     if (col >= Nx21)
         return;
     
-    in[index] = cuda::cmplx_t(0.0, 0.0);
+    in[col] = cuda::cmplx_t(0.0, 0.0);
 }
 
 
-//
-//
 // invert two dimensional laplace equation.
 // In spectral space, 
 //                              / 4 pi^2 ((ky/Ly)^2 + (kx/Lx)^2 )  for ky, kx  <= N/2
@@ -223,7 +220,7 @@ void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * Nx21 + col;
-    if ((col > Nx21) || (row > My / 2))
+    if ((col >= Nx21) || (row >= My / 2))
         return;
 
     //cuda::cmplx_t factor(-cuda::FOURPIS * (double(col * col) * inv_Lx2 + double(row * row) * inv_Ly2), 0.0);
@@ -266,7 +263,7 @@ void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * Nx21 + col;
-    if ((col >= Nx21) || (row >= My))
+    if ((col >= Nx21) || (row > My - 1))
         return;
 
     out[idx] = cuda::cmplx_t(2000 + row - My, col);
@@ -281,7 +278,7 @@ void d_inv_laplace_sec3(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = Nx21 - 1;
     const uint idx = row * Nx21 + col; 
-    if (row > My / 2 + 1)
+    if (row >= My / 2)
         return;
 
     cuda::cmplx_t factor(-cuda::FOURPIS * (
@@ -296,7 +293,7 @@ void d_inv_laplace_sec3_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = Nx21 - 1;
     const uint idx = row * Nx21 + col; 
-    if (row > My / 2 + 1)
+    if (row >= My / 2)
         return;
 
     out[idx] = cuda::cmplx_t(3000 + row, col);
@@ -337,8 +334,7 @@ void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
 __global__
 void d_inv_laplace_zero(cuda::cmplx_t* out)
 {
-    cuda::cmplx_t zero(0.0, 0.0);
-    out[0] = zero;
+    out[0] = cuda::cmplx_t(0.0, 0.0);
 }
 
 
@@ -379,9 +375,10 @@ void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev- 1;
     cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI / p.length_y;
+    cuda::real_t kx2 = kx * kx + ky * ky;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky *  ky) * (kx * kx + ky * ky) ));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * kx2 + p.hv * kx2 * kx2 * kx2));
     
 
     // Add contribution from explicit and implicit parts
@@ -415,13 +412,14 @@ void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     if ((col >= p.Nx) || (row >= p.My))
         return;
 
-    uint off_a = (tlev - 2) * p.level + tlev;
-    uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
+    unsigned int off_a = (tlev - 2) * p.level + tlev;
+    unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
+    cuda::real_t k2 = kx * kx + ky * ky;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
     for(uint k = 1; k < tlev; k++)
     {
@@ -457,10 +455,10 @@ void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI/ p.length_y;
+    cuda::real_t k2 = kx * kx + ky * ky;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
-
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
     for(uint k = 1; k < tlev; k++)
     {
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
@@ -496,9 +494,10 @@ void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
     cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
+    cuda::real_t k2 = kx * kx + ky * ky;
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx * kx + ky * ky) * (kx * kx + ky * ky) * (kx * kx + ky * ky)));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
     for(uint k = 1; k < tlev; k++)
     {
@@ -520,10 +519,11 @@ void d_integrate_stiff_ky0(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_
     uint off_a = (tlev - 2) * p.level + tlev;
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
     cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
-    cuda::real_t ky = 0.0;
+    // ky = 0
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div =  1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky)));
+    // ky = 0
+    cuda::real_t temp_div =  1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * kx * kx + p.hv * kx * kx * kx * kx * kx * kx));
 
     for (uint k = 1; k < tlev; k++)
     {
@@ -538,25 +538,36 @@ void d_integrate_stiff_ky0(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_
 __global__
 void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev, uint row, uint col)
 {
+    col = col % p.Nx;
+    row = row % p.My;
+
+
     const uint idx = row * p.Nx + col;
     uint off_a = (tlev - 2) * p.level + tlev;
     uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
-    cuda::real_t kx = cuda::TWOPI * cuda::real_t(row) / p.length_x;
+    cuda::real_t kx = cuda::TWOPI * cuda::real_t(col) / p.length_x;
     cuda::real_t ky = cuda::TWOPI * cuda::real_t(row) / p.length_y;
+    cuda::real_t k2 = kx * kx + ky * ky;
 
-    printf("A[%d][%d] = (%f, %f)\n", p.level - tlev, idx, A[p.level - tlev][idx].re(), A[p.level - tlev][idx].im());
+    printf("----d_integrate_stiff_debug:\n");
+    printf("p.Nx = %d, p.My = %d\n", p.Nx, p.My);
+    printf("p.level = %d, tlev = %d, kx = %5.3f, ky = %5.3f\n", p.level, tlev, kx, ky);
+    printf("row = %d, col = %d\n", row, col);
+    printf("A[%d][%d] = (%f, %f)\n", p.level - tlev + 1, idx, A[p.level - tlev + 1][idx].re(), A[p.level - tlev + 1][idx].im());
     printf("delta_t = %f, diff = %f hv = %f, kx = %f, ky = %f\n", p.delta_t, p.diff, p.hv, kx, ky);
     cuda::cmplx_t sum_alpha(0.0, 0.0);
     cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * p.diff * (kx * kx + ky * ky) + p.hv * (kx*kx*kx*kx*kx*kx + ky*ky*ky*ky*ky*ky));
+    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
     cuda::cmplx_t result(0.0, 0.0);
 
+    printf("sum_alpha = (%f, %f)\n", sum_alpha.re(), sum_alpha.im());
+    printf("sum_beta = (%f, %f)\n", sum_beta.re(), sum_beta.im());
     printf("\ttlev = %d, off_a = %d, off_b = %d\n", tlev, off_a, off_b);
     for(uint k = 1; k < tlev; k++)
     {
         printf("\ttlev=%d, k = %d\t %f * A[%d] + dt * %f * A_R[%d]\n", tlev, k, alpha[off_a - k], p.level - k, beta[off_b - k], p.level - 1 - k);
-        printf("\ttlev=%d, k = %d\t sum_alpha += %f * (%f, %f)\n", tlev, k, alpha[off_a - k], (A[p.level -k][idx]).re(), (A[p.level -k][idx]).im());
-        printf("\ttlev=%d, k = %d\t sum_beta+= %f * (%f, %f)\n", tlev, k, beta[off_b - k], (A_rhs[p.level - 1 - k][idx]).re(), (A_rhs[p.level - 1 - k][idx]).im());
+        printf("\ttlev=%d, k = %d\t sum_alpha = (%f, %f) + %f * (%f, %f)\n", tlev, k, sum_alpha.re(), sum_alpha.im(), alpha[off_a - k], (A[p.level -k][idx]).re(), (A[p.level -k][idx]).im());
+        printf("\ttlev=%d, k = %d\t sum_beta = (%f, %f) + %f * (%f, %f)\n", tlev, k, sum_beta.re(), sum_beta.im(), beta[off_b - k], (A_rhs[p.level - 1 - k][idx]).re(), (A_rhs[p.level - 1 - k][idx]).im());
         sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
         sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
     }
@@ -576,21 +587,21 @@ void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::rea
  */
 
 
-/// @brief Poisson brackt: {f, phi}
+/// @brief Poisson brackt: {f, phi} = d_dx(f d_dy(g)) - d_dy(f d_dx(g)) = f_x g_y - f_y g_x
 /// @param theta_x: f_x
 /// @param theta_y: f_y
 /// @param strmf_x: phi_x
-/// @param strmf_y: phi_x
+/// @param strmf_y: phi_y
 /// @param out: Field to store result in
 /// @param Nx: Number of modes in x-direction (obs! field has Nx/2-1 columns)
 /// @param My: Number of modes in y-direction
 /// @detailed Poisson bracket is defined as d_y(f * phi_x) - d_x(f * phi_y)
 /// @detailed When used to describe ExB advection the time derivative operator is partial f / partial t + {phi, f} = ...
 /// @detailed In numerics, the Poisson bracket goes into the non-linear part of the time evolution equation:
-/// @detailed df/dt + {phi, f} = .... goes over to partial f / partial t = {f, phi} + ...
+/// @detailed df/dt + {phi, f} = ... => df/dt = {f, phi} + ...
 /// @detailed
 __global__
-void d_pbracket(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* out, const uint My, const uint Nx)
+void d_pbracket(cuda::real_t* f_x, cuda::real_t* f_y, cuda::real_t* g_x, cuda::real_t* g_y, cuda::real_t* out, const uint My, const uint Nx)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -598,19 +609,19 @@ void d_pbracket(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strm
 
     if ((row >= My) || (col >= Nx))
        return;
-    out[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx];
+    out[idx] = f_x[idx] * g_y[idx] - f_y[idx] * g_x[idx];
 }
 
 
 // RHS for logarithmic density field:
 // theta_x * strmf_x - theta_y * strmf_x + diff * (theta_x^2 + theta_y^2)
 __global__
-void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t diff, cuda::real_t* tmp_arr, const uint My, const uint Nx21)
+void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t diff, cuda::real_t* tmp_arr, const uint My, const uint Nx)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-    if ((row >= My) || (col >= Nx21))
+    const uint idx = row * Nx + col;
+    if ((row >= My) || (col >= Nx))
        return;
 
     tmp_arr[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
@@ -625,19 +636,22 @@ void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
     const uint idx = row * Nx21 + col;
     if ((row >= My) || (col >= Nx21))
         return;
-    theta_rhs_hat[idx] +=  ((strmf_hat[idx] - theta_hat[idx]) * C) - strmf_y_hat[idx];
+    
+    theta_rhs_hat[idx] += ((strmf_hat[idx] - theta_hat[idx]) * C) - strmf_y_hat[idx];
 }
 
 
 __global__
 void d_theta_rhs_hw_debug(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, const cuda::real_t C, const uint My, const uint Nx21)
 {
-    const uint idx = 2;
+    const uint row = 0;
+    const uint col = 0;
+    const uint idx = row * Nx21 + col;
 
-    cuda::cmplx_t dummy = (theta_rhs_hat[idx] + (strmf_hat[idx] - theta_hat[idx]) * C - strmf_y_hat[idx]);
     printf("d_theta_rhs_hw_debug: initially: theta_rhs_hat[%d] = (%f, %f)\n", idx, theta_rhs_hat[idx].re(), theta_rhs_hat[idx].im());
-    printf("                             --> theta_rhs_hat[%d] = (%f, %f)\tC = %f, theta_hat = (%f, %f), strmf_hat =(%f, %f), strmf_y_hat=(%f,%f)\n" ,
-            idx, dummy.re(), dummy.im(), C, theta_hat[idx].re(), theta_hat[idx].im(), strmf_hat[idx].re(), strmf_hat[idx].im(), 
+    cuda::cmplx_t dummy = (theta_rhs_hat[idx] + (strmf_hat[idx] - theta_hat[idx]) * C - strmf_y_hat[idx]);
+    printf("                             --> theta_rhs_hat[%d] = (%f, %f)\tC = %f, strmf_hat = (%f, %f), theta_hat =(%f, %f), strmf_y_hat=(%f,%f)\n" ,
+            idx, dummy.re(), dummy.im(), C, strmf_hat[idx].re(), strmf_hat[idx].im(), theta_hat[idx].re(), theta_hat[idx].im(), 
             strmf_y_hat[idx].re(), strmf_y_hat[idx].im()); 
 }
 
@@ -653,10 +667,22 @@ void d_omega_ic(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmpl
     if ((row >= My) || (col >= Nx21))
        return;
 
-    cuda::cmplx_t foo((theta_y_hat[idx] * ic) + (strmf_hat[idx] * sdiss) + (omega_hat[idx] * cfric));
-    out[idx] -= foo;
+    out[idx] = out[idx] - theta_y_hat[idx] * ic + strmf_hat[idx] * sdiss + omega_hat[idx] * cfric;
 }
 
+
+__global__
+void d_omega_rhs_hw_debug(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, const cuda::real_t C, const uint My, const uint Nx21)
+{
+    const uint row = 0;
+    const uint col = 0;
+    const uint idx = row * Nx21 + col;
+
+    printf("d_omega_rhs_hw_debug: initially: omega_rhs_hat[%d] = (%f, %f)\n", idx, omega_rhs_hat[idx].re(), omega_rhs_hat[idx].im());
+    cuda::cmplx_t dummy = omega_rhs_hat[idx] + (strmf_hat[idx] - theta_hat[idx]) * C;
+    printf("                             --> omega_rhs_hat[%d] = (%f, %f)\tC = %f, strmf_hat = (%f, %f), theta_hat = (%f, %f)\n",
+            idx, dummy.re(), dummy.im(), C, strmf_hat[idx].re(), strmf_hat[idx].im(), theta_hat[idx].re(), theta_hat[idx].im());
+}
 
 __global__
 void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, const cuda::real_t C, const uint My, const uint Nx21)
@@ -667,8 +693,7 @@ void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
     if ((row >= My) || (col >= Nx21))
        return;
 
-    cuda::cmplx_t foo( (strmf_hat[idx] - theta_hat[idx]) * C);
-    omega_rhs_hat[idx] += foo;
+    omega_rhs_hat[idx] += (strmf_hat[idx] - theta_hat[idx]) * C;
 }
 
 
@@ -685,22 +710,6 @@ void d_coupling_hwmod(cuda::cmplx_t* rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cm
     cuda::cmplx_t dummy = (strmf_hat[idx] - theta_hat[idx]) * C;
     rhs_hat[idx] += dummy;
 }
-
-
-__global__
-void d_omega_rhs_hw_debug(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, const cuda::real_t C, const uint My, const uint Nx21)
-{
-    const uint col = 2;
-    const uint row = 0;
-    const uint idx = row * My + col;
-
-    cuda::cmplx_t dummy = ((strmf_hat[idx] - theta_hat[idx]) * C + omega_rhs_hat[idx]);
-    //omega_rhs_hat[idx] = dummy;
-
-    printf("d_omega_rhs_hw_debug: omega_rhs_hat[%d] = (%f, %f)\tC = %f, strmf_hat = (%f, %f), theta_hat =(%f, %f), strmf_y_hat=(%f,%f)\n" ,
-            idx, dummy.re(), dummy.im(), C, strmf_hat[idx].re(), strmf_hat[idx].im(), theta_hat[idx].re(), theta_hat[idx].im());
-}
-
 
 
 
@@ -854,12 +863,6 @@ void slab_cuda :: test_slab_config()
 }
 
 /// @brief initialize slab to start with time integration 
-/// @detailed After running initialize, the following things are set up:
-/// @detailed theta, omega, strmf: Either by function specified through init_function string in 
-/// @detailed input.ini or by taking the iDFT of their respective spectral field
-/// @detailed theta_hat, omega_hat: non-zero values at last time index, tlev-1
-/// @detailed omega_rhs_hat, theta_rhs_hat: computed as specified by omega/theta_rhs
-/// @detailed non-zero value at last time index, tlev-2
 void slab_cuda :: initialize()
 {
     switch(config.get_init_function())
@@ -941,8 +944,12 @@ void slab_cuda :: initialize()
             //init_invlapl(&theta, config.get_initc(), slab_layout);
             //dft_r2c(twodads::f_theta, twodads::f_theta_hat, config.get_tlevs() - 1);
             //move_t(twodads::f_theta_hat, config.get_tlevs() - 1, 0);
-            init_all_modes(&theta_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
+            init_all_modes(&omega_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
+            dft_c2r(twodads::f_omega_hat, twodads::f_omega, config.get_tlevs() - 1);
 
+            inv_laplace(twodads::f_omega_hat, twodads::f_strmf_hat, config.get_tlevs() - 1);
+            dft_c2r(twodads::f_strmf_hat, twodads::f_strmf, 0);
+            break;
 
         case twodads::init_file:
             break;
@@ -974,10 +981,7 @@ void slab_cuda :: initialize()
 }
 
 
-/// @brief Move data from time level t_src to t_dst
-/// @param fname field name 
-/// @param t_dst destination time index
-/// @param t_src source time index
+// Move data from time level t_src to t_dst
 void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
@@ -988,10 +992,7 @@ void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 }
 
 
-/// @brief Copy data from time level t_src to t_dst
-/// @param fname field name 
-/// @param t_dst destination time index
-/// @param t_src source time index
+// Copy data from time level t_src to t_dst
 void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
@@ -1002,10 +1003,7 @@ void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 }
 
 
-/// @brief Set fname to a constant value at time index tlev
-/// @param fname field name 
-/// @param val constant complex number
-/// @param t_src time index
+// Set fname to a constant value at time index tlev
 void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
@@ -1016,9 +1014,7 @@ void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 }
 
 
-/// @brief Set fname to constant value at time index tlev=0
-/// @param fname field name
-/// @param val constant real number
+/// Set fname to constant value at time index tlev=0
 void slab_cuda::set_t(twodads::field_t fname, cuda::real_t val)
 {
     cuda_array<cuda::real_t, cuda::real_t>* arr = get_field_by_name(fname);
@@ -1028,7 +1024,7 @@ void slab_cuda::set_t(twodads::field_t fname, cuda::real_t val)
     arr -> set_t(val, 0);
 }
 
-/// @brief advance all fields with multiple time levels
+/// advance all fields with multiple time levels
 void slab_cuda :: advance()
 {
     theta_hat.advance();
@@ -1038,8 +1034,7 @@ void slab_cuda :: advance()
 }
 
 
-/// @brief Compute RHS from using time index t_src for dynamical fields omega_hat and theta_hat.
-/// @param t_src The most current time level, only important for first transient time steps
+/// Compute RHS from using time index t_src for dynamical fields omega_hat and theta_hat.
 void slab_cuda :: rhs_fun(uint t_src)
 {
     (this ->* theta_rhs_fun)(t_src);
@@ -1047,8 +1042,7 @@ void slab_cuda :: rhs_fun(uint t_src)
 }
 
 
-/// @brief Update real fields theta, theta_x, theta_y, etc.
-/// @param tlev: The time level for theta_hat, omega_hat used as input for inverse DFT
+// Update real fields theta, theta_x, theta_y, etc.
 void slab_cuda::update_real_fields(uint tlev)
 {
     //Compute theta, omega, strmf and respective spatial derivatives
@@ -1074,10 +1068,7 @@ void slab_cuda::update_real_fields(uint tlev)
     dft_c2r(twodads::f_omega_rhs_hat, twodads::f_omega_rhs, 1);
 }
 
-/// @brief execute DFT
-/// @param fname_r real field type
-/// @param fname_c complex field type
-/// @param t_src time index of complex field used as target for DFT
+// execute r2c DFT
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t_src)
 {
     cufftResult err;
@@ -1089,10 +1080,7 @@ void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, 
 }
 
 
-/// @brief execute iDFT and normalize the resulting real field
-/// @param fname_c complex field type
-/// @param fname_r real field type
-/// @param t time index of complex field used as source for iDFT
+// execute iDFT and normalize the resulting real field
 void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, uint t)
 {
     cufftResult err;
@@ -1106,14 +1094,14 @@ void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, 
 }
 
 
-/// @brief print real field on terminal
+// print real field on terminal
 void slab_cuda :: print_field(twodads::field_t field_name)
 {
     cuda_array<cuda::real_t, cuda::real_t>* field = get_field_by_name(field_name);
     cout << *field << "\n";
 }
 
-/// @brief print real field to ascii file
+// print real field to ascii file
 void slab_cuda :: print_field(twodads::field_t field_name, string file_name)
 {
     cuda_arr_real* arr = get_field_by_name(field_name);
@@ -1125,8 +1113,7 @@ void slab_cuda :: print_field(twodads::field_t field_name, string file_name)
 
 
 
-/// @brief print complex field on terminal, all time levels
-/// @param field_name name of complex field
+// print complex field on terminal, all time levels
 void slab_cuda :: print_field(twodads::field_k_t field_name)
 {
     cuda_arr_cmplx* field = get_field_by_name(field_name);
@@ -1134,9 +1121,7 @@ void slab_cuda :: print_field(twodads::field_k_t field_name)
 }
 
 
-/// @brief print complex field to ascii file
-/// @param field_name: type of field to dump
-/// @param file_name: name of the output file
+// print complex field to ascii file
 void slab_cuda :: print_field(twodads::field_k_t field_name, string file_name)
 {
     cuda_arr_cmplx* arr = get_field_by_name(field_name);
@@ -1147,9 +1132,7 @@ void slab_cuda :: print_field(twodads::field_k_t field_name, string file_name)
 }
 
 
-/// @brief Copy data from a real field to a buffer
-/// @param twodads::field_t fname: Name of the field to be copied
-/// @param cuda::real_t* buffer: buffer in which the data is to be copied
+/// Copy data from a real field to a buffer
 void slab_cuda :: get_data(twodads::field_t fname, cuda::real_t* buffer)
 {
     cuda_arr_real* arr = get_field_by_name(fname);
@@ -1195,6 +1178,7 @@ void slab_cuda :: print_address()
 
 void slab_cuda :: print_grids()
 {
+    cout << "Nx = " << Nx << ", My = " << My << "\t" << "My / 2 - 1 = " << My / 2 - 1 << "\n";
     cout << "block_my_nx = (" << block_my_nx.x << ", " << block_my_nx.y << ")\n";
     cout << "grid_my_nx = (" << grid_my_nx.x << ", " << grid_my_nx.y << ")\n";
     cout << "block_my_nx21 = (" << block_my_nx21.x << ", " << block_my_nx21.y << ")\n";
@@ -1356,9 +1340,11 @@ cuda_array<cuda::real_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::
             result = &strmf_y;
             break;
         case twodads::o_theta_rhs:
+            theta_rhs.copy_device_to_host();
             result = &theta_rhs;
             break;
         case twodads::o_omega_rhs:
+            omega_rhs.copy_device_to_host();
             result = &omega_rhs;
             break;
         default:
@@ -1496,6 +1482,7 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
     d_inv_laplace_sec3<<<grid_nx21_sec3, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
     d_inv_laplace_sec4<<<grid_nx21_sec4, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
     d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
+
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1526,6 +1513,9 @@ void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
 {
     cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname); 
     cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname); 
+
+    //d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, 4, 4);
+
     d_integrate_stiff_sec1<<<grid_nx21_sec1, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec2<<<grid_nx21_sec2, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3<<<grid_nx21_sec3, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
@@ -1562,29 +1552,16 @@ void slab_cuda :: integrate_stiff_debug(twodads::field_k_t fname, uint tlev, uin
     cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname);
     cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
 
-    // Compute kx and ky explicitly for mode number
-    //cuda::real_t kx = 0.0; 
-    //cuda::real_t ky = 0.0; 
-
-    //if(col < Nx / 2 + 1)
-    //    ky = double(col) * 2.0 * cuda::PI / stiff_params.length_y;
-    //else
-    //    return;
-
-    //if(row < Nx / 2 + 1)
-    //    kx = double(row) * 2.0 * cuda::PI / stiff_params.length_x;
-    //else if ((row > Nx / 2) && row < Nx)
-    //    kx = (double(row) - double(Nx)) * 2.0 * cuda::PI / stiff_params.length_x;
-    //else
-    //    return;
-
     cout << "Debug information for stiffk\n";
     d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, row, col); 
+    //d_integrate_stiff_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+    //d_integrate_stiff_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+    //d_integrate_stiff_sec3_enumerate<<<grid_nx21_sec3, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
+    //d_integrate_stiff_sec4_enumerate<<<grid_nx21_sec4, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
 #ifdef DEBUG
     gpuStatus();
 #endif
         
-        //(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev, uint row, uint col, cuda::real_t kx, cuda::real_t ky)
 }
 
 
@@ -1603,10 +1580,11 @@ void slab_cuda :: theta_rhs_ns(uint t_src)
 void slab_cuda :: theta_rhs_lin(uint t_src)
 {
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+
 #ifdef DEBUG
     gpuStatus();
 #endif
-    dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
 }
 
 
@@ -1617,11 +1595,12 @@ void slab_cuda :: theta_rhs_hw(uint t_src)
     const cuda::real_t C = config.get_model_params(2);
     // Poisson bracket is on the RHS: dn/dt = {n, phi} + ...
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-#ifdef DEBUG
-    gpuStatus();
-#endif
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
+    //theta_rhs_hat = 0.0;
+    //gpuStatus(); 
+    //d_theta_rhs_hw_debug<<<1, 1>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(0), C, My, Nx / 2 + 1);
     d_theta_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(0), C, My, Nx / 2 + 1);
+
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1638,6 +1617,7 @@ void slab_cuda :: theta_rhs_hwmod(uint t_src)
     // Neglect ky=0 modes for in coupling term
     d_coupling_hwmod<<<grid_my_nx21, block_my_nx21>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
     theta_rhs_hat -= strmf_y_hat; 
+
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1646,8 +1626,10 @@ void slab_cuda :: theta_rhs_hwmod(uint t_src)
 
 void slab_cuda :: theta_rhs_log(uint t_src)
 {
-    d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    d_theta_rhs_log<<<grid_my_nx21, block_my_nx21>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
+    //d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    //d_theta_rhs_log<<<grid_my_nx21, block_my_nx21>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
+    cout << "theta_rhs_log\n";
+    d_theta_rhs_log<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
     dft_r2c(twodads::f_tmp, twodads::f_theta_rhs_hat, 0);
 #ifdef DEBUG
     gpuStatus();
@@ -1665,13 +1647,16 @@ void slab_cuda :: omega_rhs_ns(uint t_src)
 }
 
 /// @brief RHS for the Hasegawa-Wakatani model
-/// @detailed RHS = {Omega, phi} - C(phi - n)
+/// @detailed RHS = {Omega, phi} + C(phi - n)
 void slab_cuda :: omega_rhs_hw(uint t_src)
 {
     const cuda::real_t C = config.get_model_params(2);
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
-    d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
+    //omega_rhs_hat = 0.0; 
+
+    //d_omega_rhs_hw_debug<<<1, 1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
+    d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1709,13 +1694,15 @@ void slab_cuda :: omega_rhs_hwzf(uint t_src)
 
 void slab_cuda::omega_rhs_ic(uint t_src)
 {
-    // Compute Poisson bracket in real space, use full grid/block
-    d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
-    dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
     // Convert model parameters to complex numbers
     const cuda::real_t ic = config.get_model_params(2); 
     const cuda::real_t sdiss = config.get_model_params(3);
     const cuda::real_t cfric = config.get_model_params(4);
+
+    // Compute Poisson bracket in real space, use full grid/block
+    d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    //dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
+    dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
 #ifdef DEBUG
     cout << "omega_rhs\n";
     cout << "ic = " << ic << ", sdiss = " << sdiss << ", cfric = " << cfric << "\n";

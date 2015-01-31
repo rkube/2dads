@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <H5Cpp.h>
 #include "2dads_types.h"
 #include "cuda_types.h"
@@ -53,8 +54,12 @@ public:
     /// Cleanup.
     ~output_h5();
     
-    /// Write variable type var_type from passed slab_array to output file.
+    /// @brief Call this routine to write output
+    /// @detailed Note that get_field_by_name, when called with a twodads::output_t
+    /// @detailed also calls cuda_array<%>.copy_device_to_host
     void write_output(slab_cuda&, twodads::real_t);
+    /// @brief Write output field
+    /// @detailed This assumes that the host data src points to is up-to-date. 
     void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t);
 
 private:
@@ -90,9 +95,11 @@ private:
     DataSpace dspace_theta_rhs;
     DSetCreatPropList ds_creatplist;
     // Mapping from field types to dataspace
-    DataSpace* get_dspace_from_field(twodads::output_t);
+    map<twodads::output_t, DataSpace*> dspace_map;
+    //DataSpace* get_dspace_from_field(twodads::output_t);
     // Mapping from field types to dataspace names
-    string get_fname_str_from_field(twodads::output_t);
+    map<twodads::output_t, string> fname_map;
+    //string get_fname_str_from_field(twodads::output_t);
 };
 
 #endif //OUTPUT_CLASS

@@ -108,7 +108,7 @@ void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, const double 
     cuda::cmplx_t foo(amp * cos(phase), amp * sin(phase));
     array[idx] = foo;
     printf("d_init_mode: mode(%d, %d) at idx = %d = (%f, %f)\n",
-            row, col, idx, cos(phase), sin(phase));
+            row, col, idx, array[idx].re(), array[idx].im());
 }
 
 
@@ -215,6 +215,15 @@ void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
 //#endif
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
     }
+
+    // Zero out kx=0,ky=0 mode
+    d_init_mode<<<1, 1>>>(arr -> get_array_d(tlev), layout, 0.0, 0, 0);
+
+#ifdef DEBUG
+    cout << "Initialized field:\n";
+    cout << (*arr) << "\n";
+#endif
+
 }
 
 // End of file initialize.cu

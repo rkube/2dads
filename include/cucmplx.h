@@ -1,5 +1,7 @@
-/*
+/*!
  * Complex data type for cuda
+ * Define all operator arguments and return types as by-value, see Stroustrup(2013), 18.2.4
+ * \param T: underlying data type, most probably double
  */
 
 
@@ -17,9 +19,6 @@
 
 
 
-/// Template parameters:
-/// T: underlying data type, most probably double
-/// Define all operator arguments and return types as by-value, see Stroustrup(2013), 18.2.4
 template<typename T>
 class CuCmplx
 {
@@ -69,8 +68,8 @@ public:
     CUDA_MEMBER void dump();
     friend std::ostream& operator<<(std::ostream& os, CuCmplx<T> rhs)
     {
-        //os << std::setw(6) << std::setprecision(4);
-        os << "(" << rhs.re() << ", " << rhs.im() << ")";
+        os << "(" << std::setw(8) << std::setprecision(5) << rhs.re() << ", ";
+        os << std::setw(8) << std::setprecision(5) << rhs.im() << ")";
         return (os);
     }
 

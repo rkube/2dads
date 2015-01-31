@@ -32,18 +32,42 @@ class slab_cuda
         void finish_dft(); ///< Clean-up for cuFFT
         void test_slab_config(); ///< Test if the slab_configuration gives a good slab
 
-        void initialize(); ///< Initialize fields in a consistent manner. See docstring of the function
+        /// @brief initialize slab to start with time integration 
+        /// @detailed After running initialize, the following things are set up:
+        /// @detailed theta, omega, strmf: Either by function specified through init_function string in 
+        /// @detailed input.ini or by taking the iDFT of their respective spectral field
+        /// @detailed theta_hat, omega_hat: non-zero values at last time index, tlev-1
+        /// @detailed omega_rhs_hat, theta_rhs_hat: computed as specified by omega/theta_rhs
+        /// @detailed non-zero value at last time index, tlev-2
+        void initialize(); 
 
-        void move_t(twodads::field_k_t, uint, uint); ///< move data for specified field from t_src to t_dst
-        //void move_t(twodads::field_t, uint, uint); ///< move data for real field form t_src to t_dst
-        void copy_t(twodads::field_k_t, uint, uint); ///< copy data for fourier field from t_src to t_dst
-        void set_t(twodads::field_k_t, cuda::cmplx_t, uint); ///< set fourier field to fixed value at given tlev
-        void set_t(twodads::field_t, cuda::real_t); ///< set real field to fixed value at given tlev
+        
+        /// @brief Move data from time level t_src to t_dst
+        /// @param fname field name 
+        /// @param t_dst destination time index
+        /// @param t_src source time index
+        void move_t(twodads::field_k_t, uint, uint); 
+        /// @brief Copy data from time level t_src to t_dst
+        /// @param fname field name 
+        /// @param t_dst destination time index
+        /// @param t_src source time index
+        void copy_t(twodads::field_k_t, uint, uint); 
+        /// @brief Set fname to a constant value at time index tlev
+        /// @param fname field name 
+        /// @param val constant complex number
+        /// @param t_src time index
+        void set_t(twodads::field_k_t, cuda::cmplx_t, uint); 
+        /// @brief Set fname to a constant value at time index tlev
+        /// @param fname field name 
+        /// @param val constant complex number
+        /// @param t_src time index
+        void set_t(twodads::field_t, cuda::real_t); 
 
-        // compute spectral derivative
-        void d_dx(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute x derivative 
-        void d_dy(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute y derivative
-        // Solve laplace equation in k-space
+        /// @brief compute spectral derivative in x direction
+        void d_dx(twodads::field_k_t, twodads::field_k_t, uint); 
+        /// @brief compute spectral derivative in y direction
+        void d_dy(twodads::field_k_t, twodads::field_k_t, uint); 
+        /// @brief Solve laplace equation in k-space
         void inv_laplace(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
 
         // Debug functions that only enumerate the array by row and col number (1000 * col + row)
@@ -52,31 +76,47 @@ class slab_cuda
         // Solve laplace equation in k-space
         void inv_laplace_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
         
-        // Advance all fields with multiple time levels
-        void advance(); ///<Advance all member fields with multiple time levels: theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
-        // Compute RHS function into tlev0 of theta_rhs_hat, omega_rhs_hat
-        void rhs_fun(uint); ///< Call RHS_fun pointers
-        // Compute all real fields and spatial derivatives from Fourier coeffcients at specified
-        // time level
-        void update_real_fields(uint); ///< Update all real fields
-        // Compute new theta_hat, omega_hat into tlev0.
+        /// @brief Advance all member fields with multiple time levels: theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
+        void advance(); 
+        /// @brief Call RHS_fun pointers
+        /// @param t_src The most current time level, only important for first transient time steps
+        void rhs_fun(uint); 
+        /// @brief Update real fields theta, theta_x, theta_y, etc.
+        /// @param tlev: The time level used from theta_hat, omega_hat as input for inverse DFT
+        void update_real_fields(uint); 
+
         void integrate_stiff(twodads::field_k_t, uint); ///< Time step
         void integrate_stiff_ky0(twodads::field_k_t, uint); ///< Time integration of modes with ky=0
         void integrate_stiff_enumerate(twodads::field_k_t, uint); ///< Only enumerate modes
         void integrate_stiff_debug(twodads::field_k_t, uint, uint, uint); ///< Integrate, with full debugging output
-        // Carry out DFT
-        void dft_r2c(twodads::field_t, twodads::field_k_t, uint); ///< Real to complex DFT
-        void dft_c2r(twodads::field_k_t, twodads::field_t, uint); ///< Complex to real DFT
+        /// @brief execute DFT real to complex
+        /// @param fname_r real field type
+        /// @param fname_c complex field type
+        /// @param t_src time index of complex field used as target for DFT
+        void dft_r2c(twodads::field_t, twodads::field_k_t, uint); 
+        /// @brief execute iDFT (complex to real) and normalize the resulting real field
+        /// @param fname_c complex field type
+        /// @param fname_r real field type
+        /// @param t time index of complex field used as source for iDFT
+        void dft_c2r(twodads::field_k_t, twodads::field_t, uint); 
 
-        void print_field(twodads::field_t); ///< Print member cuda_array to terminal
-        void print_field(twodads::field_t, string); ///< Print member cuda_array to ascii file
-        void print_field(twodads::field_k_t); ///< Print member cuda_aray to terminal
+        /// @brief print real field on terminal
+        void print_field(twodads::field_t); 
+        /// @brief print real field on to ascii file
+        void print_field(twodads::field_t, string); 
+        /// @brief print complex field to terminal
+        void print_field(twodads::field_k_t); 
+        /// @brief print complex field to ascii file
         void print_field(twodads::field_k_t, string); ///< Print member cuda_array<cmplx_t> to ascii file
 
-        void get_data(twodads::field_t, cuda::real_t* buffer); ///< Export real field data into a buffer
-        void print_address(); ///< Print the addresses of member variables in host memory
-        void print_grids(); ///< Print the grid sizes used for cuda kernel calls
-
+        /// @brief Copy data from a real field to a buffer
+        /// @param twodads::field_t fname: Name of the field to be copied
+        /// @param cuda::real_t* buffer: buffer in which the data is to be copied
+        void get_data(twodads::field_t, cuda::real_t* buffer); 
+        /// @brief Print the addresses of member variables in host memory
+        void print_address(); 
+        /// @brief  Print the grid sizes used for cuda kernel calls
+        void print_grids(); 
         // Output methods
         friend class output_h5;
         friend class diagnostics;

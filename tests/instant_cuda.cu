@@ -1,6 +1,6 @@
 #include <iostream>
-#include "include/cuda_types.h"
-#include "include/cuda_array3.h"
+#include "cuda_types.h"
+#include "cuda_array3.h"
 
 
 template class cuda_array<double, double>;

@@ -1,4 +1,4 @@
-/*
+/*!
  * Header for array template class
  */
 #ifndef ARRAY_BASE_H
@@ -253,8 +253,8 @@ array_base<T, Derived> :: array_base(const uint nthr, const uint t, const uint m
 
 
 /// @brief Create array with nthreads = 1, tlevs = 1
-/// @param n Nx
 /// @param m My
+/// @param n Nx
 template<class T, class Derived>
 array_base<T, Derived> :: array_base(const uint m, const uint n) :
     array_base(1, 1, m, n)
@@ -289,8 +289,8 @@ array_base<T, Derived> :: array_base(const array_base<T, Derived>* src) :
 /// @brief Move constructor
 /// @details Takes a rvalue as a reference and moves the data of this object into its own private variables.
 /// @details This is called in f.ex.:
-/// @details array_base<twodads::real_t> a1(t, N, M);
-/// @details array_base<twodads::real_t> a2(t, N, M);
+/// @details array_base<twodads::real_t> a1(t, M, N);
+/// @details array_base<twodads::real_t> a2(t, M, N);
 /// @details a1 = 1.0;
 /// @details a2 = 2.0;
 /// @details array_base<twodads::real_t> a3(a1 + a2);

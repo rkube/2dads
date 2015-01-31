@@ -1,4 +1,6 @@
-// User defined types for twodads
+/*! 
+ * \brief User defined types for twodads
+ */
 
 #ifndef TWODADS_TYPES
 #define TWODADS_TYPES
@@ -30,10 +32,23 @@ namespace twodads {
     /// List of real fields
     //enum class field_t {f_theta, f_theta_x, f_theta_y, f_omega, f_omega_x,
     //                    f_omega_y, f_strmf, f_strmf_x, f_strmf_y};
-    enum field_t {f_theta, ///< theta
-        f_theta_x,  ///< radial derivative of theta
-        f_theta_y, ///< poloidal derivative of theta
-        f_omega, f_omega_x, f_omega_y, f_strmf, f_strmf_x, f_strmf_y, f_tmp, f_theta_rhs, f_omega_rhs};
+    /*! \brief Field types
+     * \param f_theta
+     *
+     */
+    enum field_t {f_theta, ///< \f$\theta\f$
+        f_theta_x,  ///< \f$\theta_x \f$, radial derivative of theta
+        f_theta_y,  ///< \f$ \theta_y \f$, poloidal derivative of theta
+        f_omega,    ///< \f$ \Omega \f$
+        f_omega_x,  ///<  \f$ \Omega_x \f$
+        f_omega_y,  ///< \f$ \Omega_x  \f$ 
+        f_strmf,    ///< \f$ \phi   \f$  
+        f_strmf_x,  ///< \f$ \phi_x \f$ 
+        f_strmf_y,  ///< \f$ \phi_y \f$   
+        f_tmp,      ///< tmp field
+        f_theta_rhs,///< rhs for time integration
+        f_omega_rhs ///< rhs for time integration
+    };
 
     /// List of fields of Fourier coefficients
     //enum class field_k_t {f_theta_hat, f_theta_x_hat, f_theta_y_hat,
@@ -68,6 +83,9 @@ namespace twodads {
     //                  omega_rhs_std, omega_rhs_hw, omega_rhs_hwmod, omega_rhs_ic, omega_rhs_NA,
     //                  rhs_null};
 
+    /*!
+     * Defines the right hand side to use
+     */
     enum rhs_t {theta_rhs_lin,  ///< Linear interchange model
         theta_rhs_log, ///< Logarithmic interchange model
         theta_rhs_hw, ///< Hasegawa-Wakatani model
@@ -85,12 +103,17 @@ namespace twodads {
     };
 
     //enum class diagnostic_t {diag_blobs, diag_energy, diag_probes};
-    /// Available diagnostic functions 
+    /*!
+     * Enumerate diagnostic functions
+     */
     enum diagnostic_t {diag_blobs,  ///< Information on blob dynamics
         diag_energy, ///< Energetics for turbulence simulations
         diag_probes, ///< Time series from probes
     };
-    /// Available full output of fields
+    
+    /*!
+     *  Available full output of fields
+     */
     //enum class output_t {theta, theta_x, theta_y, omega, omega_x, omega_y, strmf};
     enum output_t {o_theta,  ///< Theta, thermodynamic variable
         o_theta_x, ///< Radial derivative of theta
@@ -98,6 +121,9 @@ namespace twodads {
         o_omega, o_omega_x, o_omega_y, o_strmf, o_strmf_x, o_strmf_y, o_theta_rhs, o_omega_rhs};
 
 
+    /*!
+     * Domain layout passed to diagnostic functions
+     */
     struct diag_data_t
     {
         uint Nx;

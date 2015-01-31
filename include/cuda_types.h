@@ -17,6 +17,13 @@ namespace cuda
     typedef CuCmplx<real_t> cmplx_t;
     const unsigned int blockdim_nx = 16; ///< Block dimension in radial (x) direction, columns
     const unsigned int blockdim_my = 1;  ///< Block dimension in poloidal(y) direction, rows
+
+    const unsigned int blockdim_nx_max = 1024;
+    const unsigned int blockdim_my_max = 1024;
+
+    const unsigned int griddim_nx_max = 1024;
+    const unsigned int griddim_my_max = 1024;
+
     //const real_t PI = 3.14159265358979323846264338327950288;
     const real_t PI = 3.141592653589793; ///< $\pi$
     const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$

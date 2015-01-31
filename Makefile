@@ -2,6 +2,7 @@
 include Makefile.inc
 # Subdirectories
 TEST_DIR = tests
+OBJ_DIR = /home/rku000/cuda-workspace/cuda_array2/obj/
 
 .PHONY: slab_config output diagnostics initialize slab_cuda tests clean dist 2dads
 
