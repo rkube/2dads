@@ -23,7 +23,7 @@
 #include "check_bounds.h"
 #include "2dads_types.h"
 #include "array_base.h"
-#include "cuda_array3.h"
+#include "cuda_array4.h"
 
 
 using namespace std;
@@ -146,7 +146,7 @@ public:
         // Create array nthreads, tlevs, Nx, My
         diag_array(const uint, const uint, const uint, const uint);
         // Create array from cuda_array
-        diag_array(cuda_array<T, T>&);
+        diag_array(cuda_array<T>&);
         // Create array from base class
         diag_array(const array_base<T, diag_array<T> >*);
         // Create from diag_Array
@@ -197,7 +197,7 @@ public:
         inline void dump_profile() const;
         inline void dump_profile_t() const;
 
-        inline void update(cuda_array<T, T>&);
+        inline void update(cuda_array<T>&);
         inline diag_array<T> d1_dx1(const double);
         inline diag_array<T> d2_dx2(const double);
         inline diag_array<T> d3_dx3(const double);
@@ -211,11 +211,11 @@ public:
 /// @detailed Create diag_array with same dimensions as cuda_array
 /// @detailed nthreads = 1, tlevs = 1
 template <class T>
-diag_array<T> :: diag_array(cuda_array<T, T>& in) :
+diag_array<T> :: diag_array(cuda_array<T>& in) :
     array_base<T, diag_array<T>>(1, 1, in.get_my(), in.get_nx())
 {
 #ifdef DEBUG 
-    cout << "diag_array::diag_array(cuda_array<T, T>& in)\n";
+    cout << "diag_array::diag_array(cuda_array<T>& in)\n";
     cout << "\t\tarray: " << sizeof(T) * tlevs * Nx * My << " bytes at " << array << "\n"; 
     cout << "\tarray_t[0] at " << array_t[0] << "\n";
 #endif
@@ -255,11 +255,11 @@ diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint My, uint Nx) :
 /// @Copy data pointed to by in to memory localtion pointed to by array
 /// @details assumes that nthreads=1, tlevs=1
 template <class T>
-void diag_array<T> :: update(cuda_array<T, T>& in)
+void diag_array<T> :: update(cuda_array<T>& in)
 {
     size_t memsize = My * Nx;
     if(!(*this).bounds(in.get_tlevs(), in.get_my(), in.get_nx()))
-        throw out_of_bounds_err(string("diag_array<T> :: update(cuda_array<T, T>& in): dimensions do not match!\n"));
+        throw out_of_bounds_err(string("diag_array<T> :: update(cuda_array< T>& in): dimensions do not match!\n"));
     gpuErrchk(cudaMemcpy(array, in.get_array_d(), memsize * sizeof(T), cudaMemcpyDeviceToHost));
 //#ifdef DEBUG
 //    cout << "diag_array::update(), host address: " << array << "\n";

@@ -2,7 +2,7 @@
  *  output.h
  *  2dads-oo
  *
- *  Created by Ralph Kube on 01.12.10.
+ose*  Created by Ralph Kube on 01.12.10.
  *  Copyright 2010 __MyCompanyName__. All rights reserved.
  *
  */
@@ -60,7 +60,7 @@ public:
     void write_output(slab_cuda&, twodads::real_t);
     /// @brief Write output field
     /// @detailed This assumes that the host data src points to is up-to-date. 
-    void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t);
+    void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t);
 
 private:
     string filename;
@@ -96,10 +96,8 @@ private:
     DSetCreatPropList ds_creatplist;
     // Mapping from field types to dataspace
     map<twodads::output_t, DataSpace*> dspace_map;
-    //DataSpace* get_dspace_from_field(twodads::output_t);
     // Mapping from field types to dataspace names
     map<twodads::output_t, string> fname_map;
-    //string get_fname_str_from_field(twodads::output_t);
 };
 
 #endif //OUTPUT_CLASS

@@ -18,7 +18,6 @@
 
 using namespace std;
 
-//class out_of_bounds_err : public exception{
 class out_of_bounds_err : public exception
 {
     public:

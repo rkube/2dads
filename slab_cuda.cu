@@ -86,7 +86,6 @@ void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint 
     if((col >= Nx21) || (row >= My))
         return;
 
-    //cuda::cmplx_t factor(0.0, two_pi_L * (double(row) - double(My)));
     out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * (double(row) - double(My)));
 }
 
@@ -223,7 +222,6 @@ void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
     if ((col >= Nx21) || (row >= My / 2))
         return;
 
-    //cuda::cmplx_t factor(-cuda::FOURPIS * (double(col * col) * inv_Lx2 + double(row * row) * inv_Ly2), 0.0);
     out[idx] = in[idx] / cuda::cmplx_t(-cuda::FOURPIS * (double(col * col) * inv_Lx2 + double(row * row) * inv_Ly2), 0.0);
 }
 
@@ -712,6 +710,13 @@ void d_coupling_hwmod(cuda::cmplx_t* rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cm
 }
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// 
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+map<twodads::rhs_t, slab_cuda::rhs_fun_ptr> slab_cuda :: rhs_func_map = slab_cuda::create_rhs_func_map();
 
 /// Initializes all real and fourier fields
 /// Sets pointer to RHS functions for theta and omega
@@ -749,66 +754,49 @@ slab_cuda :: slab_cuda(slab_config my_config) :
     grid_dy_half(dim3(((Nx / 2) + cuda::blockdim_nx - 1) / cuda::blockdim_nx, My / 2)),
     grid_dy_single(dim3(((Nx / 2) + cuda::blockdim_nx - 1) / cuda::blockdim_nx, 1))
 {
+    theta_rhs_func = rhs_func_map[config.get_theta_rhs_type()];
+    omega_rhs_func = rhs_func_map[config.get_omega_rhs_type()];
 
-    //* Setting RHS pointer for theta and omega corresponding to get_?????_rhs_type() from config */
-    switch(config.get_theta_rhs_type())
-    {
-        case twodads::rhs_null:
-            theta_rhs_fun = &slab_cuda::theta_rhs_null;
-            break;
-        case twodads::rhs_ns:
-            theta_rhs_fun = &slab_cuda::theta_rhs_ns;
-            break;
-        case twodads::theta_rhs_lin:
-            theta_rhs_fun = &slab_cuda::theta_rhs_lin;
-            break;
-        case twodads::theta_rhs_log:
-            theta_rhs_fun = &slab_cuda::theta_rhs_log;
-            break;
-        case twodads::theta_rhs_hw:
-            theta_rhs_fun = &slab_cuda::theta_rhs_hw;
-            break;
-        case twodads::theta_rhs_hwmod:
-            theta_rhs_fun = &slab_cuda::theta_rhs_hwmod;
-            break;
-        case twodads::theta_rhs_ic:
-            // Fall through
-        case twodads::theta_rhs_NA:
-            // Fall through
-        default:
-            //* Throw a name_error when the RHS for theta is not ot implemented yet*/
-            string err_msg("Invalid RHS: RHS for theta not implemented yet\n");
-            throw name_error(err_msg);
-    }
+    rhs_array_map[twodads::f_theta_hat] = &theta_rhs_hat;
+    rhs_array_map[twodads::f_omega_hat] = &omega_rhs_hat;
 
-    switch(config.get_omega_rhs_type())
-    {
-        case twodads::rhs_null:
-            omega_rhs_fun = &slab_cuda::omega_rhs_null;
-            break;
-        case twodads::rhs_ns:
-            omega_rhs_fun = &slab_cuda::omega_rhs_ns;
-            break;
-        case twodads::omega_rhs_ic:
-            omega_rhs_fun = &slab_cuda::omega_rhs_ic;
-            break;
-        case twodads::omega_rhs_hw:
-            omega_rhs_fun = &slab_cuda::omega_rhs_hw;
-            break;
-        case twodads::omega_rhs_hwmod:
-            omega_rhs_fun = &slab_cuda::omega_rhs_hwmod;
-            break;
-        case twodads::omega_rhs_hwzf:
-            omega_rhs_fun = &slab_cuda::omega_rhs_hwzf;
-            break;
-        case twodads::omega_rhs_NA:
-            // Fall through
-        default:
-            //* Throw a name_error when the RHS for omega is not ot implemented yet*/
-            string err_msg("Invalid RHS: RHS for omega not implemented yet\n");
-            throw name_error(err_msg);
-    
-    }
+    get_field_by_name[twodads::f_theta] = &theta;
+    get_field_by_name[twodads::f_theta_x] = &theta_x;
+    get_field_by_name[twodads::f_theta_y] = &theta_y;
+    get_field_by_name[twodads::f_omega] = &omega;
+    get_field_by_name[twodads::f_omega_x] = &omega_x;
+    get_field_by_name[twodads::f_omega_y] = &omega_y;
+    get_field_by_name[twodads::f_strmf] = &strmf;
+    get_field_by_name[twodads::f_strmf_x] = &strmf_x;
+    get_field_by_name[twodads::f_strmf_y] = &strmf_y;
+    get_field_by_name[twodads::f_tmp] = &tmp_array;
+    get_field_by_name[twodads::f_theta_rhs] = &theta_rhs;
+    get_field_by_name[twodads::f_omega_rhs] = &omega_rhs;
+
+    get_field_k_by_name[twodads::f_theta_hat] = &theta_hat;
+    get_field_k_by_name[twodads::f_theta_x_hat] = &theta_x_hat;
+    get_field_k_by_name[twodads::f_theta_y_hat] = &theta_y_hat;
+    get_field_k_by_name[twodads::f_omega_hat] = &omega_hat;
+    get_field_k_by_name[twodads::f_omega_x_hat] = &omega_x_hat;
+    get_field_k_by_name[twodads::f_omega_y_hat] = &omega_y_hat;
+    get_field_k_by_name[twodads::f_strmf_hat] = &strmf_hat;
+    get_field_k_by_name[twodads::f_strmf_x_hat] = &strmf_x_hat;
+    get_field_k_by_name[twodads::f_strmf_y_hat] = &strmf_y_hat;
+    get_field_k_by_name[twodads::f_theta_rhs_hat] = &theta_rhs_hat;
+    get_field_k_by_name[twodads::f_omega_rhs_hat] = &omega_rhs_hat;
+    get_field_k_by_name[twodads::f_tmp_hat] = &tmp_array_hat;
+
+    get_output_by_name[twodads::o_theta] = &theta;
+    get_output_by_name[twodads::o_theta_x] = &theta_x;
+    get_output_by_name[twodads::o_theta_y] = &theta_y;
+    get_output_by_name[twodads::o_omega] = &omega;
+    get_output_by_name[twodads::o_omega_x] = &omega_x;
+    get_output_by_name[twodads::o_omega_y] = &omega_y;
+    get_output_by_name[twodads::o_strmf] = &strmf;
+    get_output_by_name[twodads::o_strmf_x] = &strmf_x;
+    get_output_by_name[twodads::o_strmf_y] = &strmf_y;
+    get_output_by_name[twodads::o_theta_rhs] = &theta_rhs;
+    get_output_by_name[twodads::o_omega_rhs] = &omega_rhs;
 
     //* Copy coefficients alpha and beta for time integration scheme to device */
     gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_r)));
@@ -984,7 +972,8 @@ void slab_cuda :: initialize()
 // Move data from time level t_src to t_dst
 void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+    //cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_arr_cmplx* arr = get_field_k_by_name[fname];
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -995,7 +984,8 @@ void slab_cuda :: move_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 // Copy data from time level t_src to t_dst
 void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+    //cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_arr_cmplx* arr = get_field_k_by_name[fname];
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1006,7 +996,8 @@ void slab_cuda :: copy_t(twodads::field_k_t fname, uint t_dst, uint t_src)
 // Set fname to a constant value at time index tlev
 void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr = get_field_by_name(fname);
+    //cuda_array<cuda::cmplx_t>* arr = get_field_by_name(fname);
+    cuda_arr_cmplx* arr = get_field_k_by_name[fname];
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1017,7 +1008,8 @@ void slab_cuda::set_t(twodads::field_k_t fname, cuda::cmplx_t val, uint t_src)
 /// Set fname to constant value at time index tlev=0
 void slab_cuda::set_t(twodads::field_t fname, cuda::real_t val)
 {
-    cuda_array<cuda::real_t, cuda::real_t>* arr = get_field_by_name(fname);
+    //cuda_array<cuda::real_t >* arr = get_field_by_name(fname);
+    cuda_arr_real* arr = get_field_by_name[fname];
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1037,8 +1029,8 @@ void slab_cuda :: advance()
 /// Compute RHS from using time index t_src for dynamical fields omega_hat and theta_hat.
 void slab_cuda :: rhs_fun(uint t_src)
 {
-    (this ->* theta_rhs_fun)(t_src);
-    (this ->* omega_rhs_fun)(t_src);
+    (this ->* theta_rhs_func)(t_src);
+    (this ->* omega_rhs_func)(t_src);
 }
 
 
@@ -1072,8 +1064,8 @@ void slab_cuda::update_real_fields(uint tlev)
 void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, uint t_src)
 {
     cufftResult err;
-    cuda_array<cuda::real_t, cuda::real_t>* arr_r = get_field_by_name(fname_r);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_c = get_field_by_name(fname_c);
+    cuda_arr_real* arr_r = get_field_by_name[fname_r];
+    cuda_arr_cmplx* arr_c = get_field_k_by_name[fname_c];
     err = cufftExecD2Z(plan_r2c, arr_r -> get_array_d(), (cufftDoubleComplex*) arr_c -> get_array_d(t_src));
     if (err != CUFFT_SUCCESS)
         throw;
@@ -1084,8 +1076,8 @@ void slab_cuda :: dft_r2c(twodads::field_t fname_r, twodads::field_k_t fname_c, 
 void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, uint t)
 {
     cufftResult err;
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_c= get_field_by_name(fname_c);
-    cuda_array<cuda::real_t, cuda::real_t>* arr_r = get_field_by_name(fname_r);
+    cuda_arr_cmplx* arr_c = get_field_k_by_name[fname_c];
+    cuda_arr_real* arr_r = get_field_by_name[fname_r];
     err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) arr_c -> get_array_d(t), arr_r -> get_array_d());
     if (err != CUFFT_SUCCESS)
         throw;
@@ -1097,17 +1089,15 @@ void slab_cuda :: dft_c2r(twodads::field_k_t fname_c, twodads::field_t fname_r, 
 // print real field on terminal
 void slab_cuda :: print_field(twodads::field_t field_name)
 {
-    cuda_array<cuda::real_t, cuda::real_t>* field = get_field_by_name(field_name);
-    cout << *field << "\n";
+    cout << *get_field_by_name[field_name] << endl;
 }
 
 // print real field to ascii file
 void slab_cuda :: print_field(twodads::field_t field_name, string file_name)
 {
-    cuda_arr_real* arr = get_field_by_name(field_name);
     ofstream output_file;
     output_file.open(file_name.data());
-    output_file << *arr;
+    output_file << *get_field_by_name[field_name] << "\n";
     output_file.close();
 }
 
@@ -1116,27 +1106,26 @@ void slab_cuda :: print_field(twodads::field_t field_name, string file_name)
 // print complex field on terminal, all time levels
 void slab_cuda :: print_field(twodads::field_k_t field_name)
 {
-    cuda_arr_cmplx* field = get_field_by_name(field_name);
-    cout << *field << "\n";
+    cout << *get_field_k_by_name[field_name] << endl;
 }
 
 
 // print complex field to ascii file
 void slab_cuda :: print_field(twodads::field_k_t field_name, string file_name)
 {
-    cuda_arr_cmplx* arr = get_field_by_name(field_name);
     ofstream output_file;
     output_file.open(file_name.data());
-    output_file << *arr;
+    output_file << *get_field_k_by_name[field_name] << "\n";
     output_file.close();
 }
 
 
-/// Copy data from a real field to a buffer
+/// Copy data from a cuda_array<cuda::real_t> to a cuda::real_t* buffer, tlev=0
 void slab_cuda :: get_data(twodads::field_t fname, cuda::real_t* buffer)
 {
-    cuda_arr_real* arr = get_field_by_name(fname);
-    arr -> copy_device_to_host(buffer);
+    cuda_arr_real* arr = get_field_by_name[fname];
+    for(uint t = 0; t < tlevs; t++)
+        arr -> copy_device_to_host(buffer);
 }
 
 
@@ -1193,202 +1182,18 @@ void slab_cuda :: print_grids()
 }
 
 
-/// @brief convert field type to internal pointer
-/// @param field name of the real field
-cuda_array<cuda::real_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_t field)
-{
-    cuda_array<cuda::real_t, cuda::real_t>* result;
-    switch(field)
-    {
-        case twodads::f_theta:
-            result = &theta;
-            break;
-        case twodads::f_theta_x:
-            result = &theta_x;
-            break;
-        case twodads::f_theta_y:
-            result = &theta_y;
-            break;
-        case twodads::f_omega:
-            result = &omega;
-            break;
-        case twodads::f_omega_x:
-            result = &omega_x;
-            break;
-        case twodads::f_omega_y:
-            result = &omega_y;
-            break;
-        case twodads::f_strmf:
-            result = &strmf;
-            break;
-        case twodads::f_strmf_x:
-            result = &strmf_x;
-            break;
-        case twodads::f_strmf_y:
-            result = &strmf_y;
-            break;
-        case twodads::f_tmp:
-            result = &tmp_array;
-            break;
-        case twodads::f_theta_rhs:
-            result = &theta_rhs;
-            break;
-        case twodads::f_omega_rhs:
-            result = &omega_rhs;
-            break;
-        default: 
-            string err_str("Invalid field name\n");
-            throw name_error(err_str);
-    }
-    return(result);
-}
-
-
-/// @brief convert field type to internal pointer
-/// @param field name of the complex field
-cuda_array<cuda::cmplx_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::field_k_t field)
-{
-    cuda_array<cuda::cmplx_t, cuda::real_t>* result;
-    switch(field)
-    {
-        case twodads::f_theta_hat:
-            result = &theta_hat;
-            break;
-        case twodads::f_theta_x_hat:
-            result = &theta_x_hat;
-            break;
-        case twodads::f_theta_y_hat:
-            result = &theta_y_hat;
-            break;
-        case twodads::f_omega_hat:
-            result = &omega_hat;
-            break;
-        case twodads::f_omega_x_hat:
-            result = &omega_x_hat;
-            break;
-        case twodads::f_omega_y_hat:
-            result = &omega_y_hat;
-            break;
-        case twodads::f_strmf_hat:
-            result = &strmf_hat;
-            break;
-        case twodads::f_strmf_x_hat:
-            result = &strmf_x_hat;
-            break;
-        case twodads::f_strmf_y_hat:
-            result = &strmf_y_hat;
-            break;
-        case twodads::f_omega_rhs_hat:
-            result = &omega_rhs_hat;
-            break;
-        case twodads::f_theta_rhs_hat:
-            result = &theta_rhs_hat;
-            break;
-        case twodads::f_tmp_hat:
-            result = &tmp_array_hat;
-            break;
-        default:
-            string err_str("Invalid field name\n");
-            throw name_error(err_str);
-    }
-    return (result);
-}
-
-
-/// @brief convert field type to internal pointer
-/// @param fname name of the output field
-/// @detailed This function is called by the output class. Copy device data to host
-cuda_array<cuda::real_t, cuda::real_t>* slab_cuda :: get_field_by_name(twodads::output_t fname)
-{
-    cuda_array<cuda::real_t, cuda::real_t>* result;
-    switch(fname)
-    {
-        case twodads::o_theta:
-            theta.copy_device_to_host();
-            result = &theta;
-            break;
-        case twodads::o_theta_x:
-            theta_x.copy_device_to_host();
-            result = &theta_x;
-            break;
-        case twodads::o_theta_y:
-            theta_y.copy_device_to_host();
-            result = &theta_y;
-            break;
-        case twodads::o_omega:
-            omega.copy_device_to_host();
-            result = &omega;
-            break;
-        case twodads::o_omega_x:
-            omega_x.copy_device_to_host();
-            result = &omega_x;
-            break;
-        case twodads::o_omega_y:
-            omega_y.copy_device_to_host();
-            result = &omega_y;
-            break;
-        case twodads::o_strmf:
-            strmf.copy_device_to_host();
-            result = &strmf;
-            break;
-        case twodads::o_strmf_x:
-            strmf_x.copy_device_to_host();
-            result = &strmf_x;
-            break;
-        case twodads::o_strmf_y:
-            strmf_y.copy_device_to_host();
-            result = &strmf_y;
-            break;
-        case twodads::o_theta_rhs:
-            theta_rhs.copy_device_to_host();
-            result = &theta_rhs;
-            break;
-        case twodads::o_omega_rhs:
-            omega_rhs.copy_device_to_host();
-            result = &omega_rhs;
-            break;
-        default:
-            string err_str("get_field_by_name(twodads::output_t field): Invalid field name\n");
-            throw name_error(err_str);
-    }
-    return(result);
-}
-
-
-/// @brief convert field type to internal pointer
-/// @param fname name of the RHS field
-cuda_array<cuda::cmplx_t, cuda::real_t>* slab_cuda :: get_rhs_by_name(twodads::field_k_t fname)
-{
-    cuda_array<cuda::cmplx_t, cuda::real_t>* result;
-    switch(fname)
-    {
-        case twodads::f_theta_hat:
-            result = &theta_rhs_hat;
-            break;
-        case twodads::f_omega_hat:
-            result = &omega_rhs_hat;
-            break;
-        default: 
-            string err_str("get_rhs_by_name(twodads::dyn_field_t fname): Invalid field name\n");
-            throw name_error(err_str);
-    }
-    return(result);
-}
-
 /// @brief RHS, set explicit part for theta equation to zero
 /// @param t not used 
 void slab_cuda :: theta_rhs_null(uint t)
 {
-    CuCmplx<cuda::real_t> foobar(0.0, 0.0);
-    theta_rhs_hat = foobar;
+    theta_rhs_hat = cuda::cmplx_t(0.0);
 }
 
 /// @brief RHS, set explicit part for omega equation to zero
 /// @param t not used
 void slab_cuda :: omega_rhs_null(uint t)
 {
-    CuCmplx<cuda::real_t> foobar(0.0, 0.0);
-    omega_rhs_hat = foobar;
+    omega_rhs_hat = cuda::cmplx_t(0.0);
 }
 
 /*****************************************************************************
@@ -1402,9 +1207,9 @@ void slab_cuda :: omega_rhs_null(uint t)
 // Compute radial derivative from src_name using time index t_src, store in dst_name, time index 0
 void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
-    
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
+
     const uint Nx21 = Nx / 2 + 1;
     const double Ly = config.get_lengthy();
 
@@ -1419,8 +1224,8 @@ void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name,
 
 void slab_cuda :: d_dy_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
     
     const uint Nx21 = Nx / 2 + 1;
     const double Ly = config.get_lengthy();
@@ -1437,8 +1242,8 @@ void slab_cuda :: d_dy_enumerate(twodads::field_k_t src_name, twodads::field_k_t
 // Compute poloidal derivative from src_name using time index t_src, store in dst_name, time index 0
 void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint tlev)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
 
     const uint Nx21 = Nx / 2 + 1;
     const double Lx = config.get_lengthx();
@@ -1453,8 +1258,8 @@ void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name,
 // Compute poloidal derivative from src_name using time index t_src, store in dst_name, time index 0
 void slab_cuda :: d_dx_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint tlev)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
 
     const uint Nx21 = Nx / 2 + 1;
     double Lx = config.get_lengthx();
@@ -1470,8 +1275,8 @@ void slab_cuda :: d_dx_enumerate(twodads::field_k_t src_name, twodads::field_k_t
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
 void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
 
     const uint Nx21 = Nx / 2 + 1;
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
@@ -1491,8 +1296,8 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
 void slab_cuda :: inv_laplace_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_in = get_field_by_name(src_name);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* arr_out = get_field_by_name(dst_name);
+    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
+    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
 
     const uint Nx21 = Nx / 2 + 1;
     const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
@@ -1511,8 +1316,8 @@ void slab_cuda :: inv_laplace_enumerate(twodads::field_k_t src_name, twodads::fi
 
 void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname); 
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname); 
+    cuda_arr_cmplx* A = get_field_k_by_name[fname];
+    cuda_arr_cmplx* A_rhs = rhs_array_map[fname];
 
     //d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, 4, 4);
 
@@ -1528,16 +1333,18 @@ void slab_cuda :: integrate_stiff(twodads::field_k_t fname, uint tlev)
 /// @brief Integrate only modes with ky=0
 void slab_cuda :: integrate_stiff_ky0(twodads::field_k_t fname, uint tlev)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
+    cuda_arr_cmplx* A = get_field_k_by_name[fname];
+    cuda_arr_cmplx* A_rhs = rhs_array_map[fname];
+
     d_integrate_stiff_ky0<<<grid_dy_single, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
 }
 
 
 void slab_cuda :: integrate_stiff_enumerate(twodads::field_k_t fname, uint tlev)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
+    cuda_arr_cmplx* A = get_field_k_by_name[fname];
+    cuda_arr_cmplx* A_rhs = rhs_array_map[fname];
+
     d_integrate_stiff_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
     d_integrate_stiff_sec3_enumerate<<<grid_nx21_sec3, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
@@ -1549,8 +1356,8 @@ void slab_cuda :: integrate_stiff_enumerate(twodads::field_k_t fname, uint tlev)
 
 void slab_cuda :: integrate_stiff_debug(twodads::field_k_t fname, uint tlev, uint row, uint col)
 {
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A = get_field_by_name(fname);
-    cuda_array<cuda::cmplx_t, cuda::real_t>* A_rhs = get_rhs_by_name(fname);
+    cuda_arr_cmplx* A = get_field_k_by_name[fname];
+    cuda_arr_cmplx* A_rhs = rhs_array_map[fname];
 
     cout << "Debug information for stiffk\n";
     d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, row, col); 
@@ -1683,8 +1490,8 @@ void slab_cuda :: omega_rhs_hwzf(uint t_src)
 {
     const cuda::real_t C = config.get_model_params(2);
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    d_kill_ky0<<<grid_ky0, block_my_nx21>>>(tmp_array.get_array_d(), My, Nx / 2 + 1);
     dft_r2c(twodads::f_tmp, twodads::f_omega_rhs_hat, 0);
+    d_kill_ky0<<<grid_ky0, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), My, Nx / 2 + 1);
     d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
 #ifdef DEBUG
     gpuStatus();

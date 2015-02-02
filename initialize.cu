@@ -141,7 +141,7 @@ void init_simple_sine(cuda_arr_real* arr,
 
 
 /// Initialize field with a guassian profile
-void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
+void init_gaussian(cuda_arr_real* arr,
         vector<double> initc,
         cuda::slab_layout_t layout,
         bool log_theta)
@@ -164,7 +164,7 @@ void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
 
 
 /// Initialize real field with nabla^2 exp(-(x-x0)^2/ (2. * sigma^2) - (y - y0)^2 / (2. * sigma_y^2)
-void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
+void init_invlapl(cuda_arr_real* arr,
         vector<double> initc,
         cuda::slab_layout_t layout)
 {
@@ -197,7 +197,7 @@ void init_all_modes(cuda_arr_cmplx* arr, vector<double> initc, cuda::slab_layout
 /// kx -> row, ky -> column. 
 /// kx is the x-mode number: kx = 0, 1, ...Nx / 2 
 /// ky is the y-mode number: ky = 0... My / 2
-void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
+void init_mode(cuda_arr_cmplx* arr,
         vector<double> initc,
         cuda::slab_layout_t layout,
         uint tlev)

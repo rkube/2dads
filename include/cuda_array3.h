@@ -3,21 +3,18 @@
  *
  *  Created on: Oct 22, 2013
  *      Author: rku000
- */
-
-
-#ifndef CUDA_ARRAY3_H
-#define CUDA_ARRAY3_H
-
-/*
- * cuda_array.h
  *
  * Datatype to hold 2d CUDA arrays with three time levels
  *
  *  when PINNED_HOST_MEMORY is defined, memory for mirror copy of array in host
  *  memory is pinned, i.e. non-pageable. This increases memory transfer rates
  *  between host and device in exchange for more heavyweight memory allocation.
+ *
  */
+
+
+#ifndef CUDA_ARRAY3_H
+#define CUDA_ARRAY3_H
 
 #include <iostream>
 #include <iomanip>

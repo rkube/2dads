@@ -120,11 +120,12 @@ output_h5 :: ~output_h5()
 
 void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 {
-    cuda_array<cuda::real_t, cuda::real_t>* arr;
+    cuda_array<cuda::real_t>* arr;
     // Iterate over list of fields we need to write output for
     for(auto it : o_list)
     {
-        arr = slab.get_field_by_name(it);
+        arr = slab.get_array_ptr(it);
+        arr -> copy_device_to_host();
         surface(it, arr, time);
     }
     output_counter++;
@@ -132,8 +133,10 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 
 
 
-void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t, cuda::real_t>* src, const cuda::real_t time)
+void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
 {
+    // update host data on src
+    src -> copy_device_to_host();
     // Dataset name is /[OST]/[0-9]*
     stringstream foo;
     foo << fname_map[field_name] << "/" << to_string(output_counter);

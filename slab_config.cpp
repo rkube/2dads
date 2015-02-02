@@ -93,7 +93,6 @@ slab_config :: slab_config() :
 	}
     
 	// Parse configuration file
-	//ifstream cf_stream( filename.data() );
 	ifstream cf_stream( "input.ini" );
 	if ( ! cf_stream ){
 		cerr << "Could not open config file " << filename.data() << "\n";
@@ -103,14 +102,6 @@ slab_config :: slab_config() :
 		po::notify(vm);
 	}
 	
-    
-	// update value of global variables if openmp variables are given
-	/*if ( vm.count("nthreads") ){
-		OMP_NUMTHREADS = nthreads;
-	}
-	if ( vm.count("chunksize") ){
-		OMP_CHUNKSIZE = chunksize;
-	}*/
     if(vm.count("nthreads"))
         nthr = nthreads;    
 	
@@ -279,46 +270,36 @@ slab_config :: slab_config() :
 		init_function = twodads::init_fun_t::init_NA;
 
     // Set RHS type of theta equation
-	if ( theta_rhs_str.compare(string("theta_rhs_log")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_log;
-    
+    if ( theta_rhs_str.compare(string("theta_rhs_ns")) == 0)
+        theta_rhs = twodads::rhs_t::theta_rhs_ns;
     else if ( theta_rhs_str.compare(string("theta_rhs_lin")) == 0) 
 		theta_rhs = twodads::rhs_t::theta_rhs_lin;
-    
+    else if ( theta_rhs_str.compare(string("theta_rhs_log")) == 0) 
+		theta_rhs = twodads::rhs_t::theta_rhs_log;
     else if ( theta_rhs_str.compare(string("theta_rhs_hw")) == 0) 
 		theta_rhs = twodads::rhs_t::theta_rhs_hw;
-    
     else if ( theta_rhs_str.compare(string("theta_rhs_hw_mod")) == 0) 
 		theta_rhs = twodads::rhs_t::theta_rhs_hwmod;
-    
     else if ( theta_rhs_str.compare(string("theta_rhs_null")) == 0) 
-		theta_rhs = twodads::rhs_t::rhs_null;
-    
-    else if ( theta_rhs_str.compare(string("theta_rhs_ic")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_ic;
-    else if ( theta_rhs_str.compare(string("theta_rhs_ns")) == 0)
-        theta_rhs = twodads::rhs_t::rhs_ns;
-    
+		theta_rhs = twodads::rhs_t::theta_rhs_null;
     else 
-		theta_rhs = twodads::rhs_t::theta_rhs_NA;
+        throw config_error("Unkown RHS for theta: " + theta_rhs_str);
 
     // Set RHS type of omega equation
-	if ( omega_rhs_str.compare(string("omega_rhs")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_std;
+    if ( omega_rhs_str.compare(string("omega_rhs_ns")) == 0)
+        omega_rhs = twodads::rhs_t::omega_rhs_ns;
     else if ( omega_rhs_str.compare(string("omega_rhs_hw")) == 0) 
 		omega_rhs = twodads::rhs_t::omega_rhs_hw;
     else if ( omega_rhs_str.compare(string("omega_rhs_hw_mod")) == 0) 
 		omega_rhs = twodads::rhs_t::omega_rhs_hwmod;
     else if ( omega_rhs_str.compare(string("omega_rhs_hw_zf")) == 0) 
 		omega_rhs = twodads::rhs_t::omega_rhs_hwzf;
-    else if ( omega_rhs_str.compare(string("omega_rhs_null")) == 0) 
-		omega_rhs = twodads::rhs_t::rhs_null;
     else if ( omega_rhs_str.compare(string("omega_rhs_ic")) == 0) 
         omega_rhs = twodads::rhs_t::omega_rhs_ic;
-    else if ( omega_rhs_str.compare(string("omega_rhs_ns")) == 0)
-        omega_rhs = twodads::rhs_t::rhs_ns;
+    else if ( omega_rhs_str.compare(string("omega_rhs_null")) == 0) 
+		omega_rhs = twodads::rhs_t::omega_rhs_null;
     else 
-		omega_rhs = twodads::rhs_t::omega_rhs_NA;
+        throw config_error("Unknown RHS for omega: " + omega_rhs_str);
 
     //End config::config()
 }
@@ -331,43 +312,30 @@ slab_config :: ~slab_config () {
 int slab_config :: consistency() {
 
 	// Test for empty output line
-	if ( get_output().size() == 0 ) 
+	if (get_output().size() == 0) 
 		throw config_error("No output variables specified. If no full output is desired, write output = None\n");
 	// Test x domain boundary
-	if ( xleft >= xright ) 
+	if (xleft >= xright) 
 		throw config_error("Left domain boundary must be smaller than right domain boundary\n");
 	// Test y domain boundary
-	if ( ylow >= yup ) 
+	if (ylow >= yup)
 		throw config_error("Lower domain boundary must be smaller than upper domain boundary\n");
 	// Test initialization routine
-	if ( get_init_function() == twodads::init_fun_t::init_NA ) 
+	if (get_init_function() == twodads::init_fun_t::init_NA) 
 		throw config_error("Invalid initialization routine specified in init file\n");
-	// Test RHS for theta
-	if ( get_theta_rhs_type() == twodads::rhs_t::theta_rhs_NA ) 
-		throw config_error("Selected RHS for theta is invalid\n");
-	// Test RHS for omega
-	if ( get_omega_rhs_type() == twodads::rhs_t::omega_rhs_NA ) 
-		throw config_error("Selected RHS for omega is invalid\n");
 	// Test if logarithmic theta has correct RHS
-	if ( get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false ) 
+	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false) 
 		throw config_error("Selecting rhs_theta_log as the RHS function must have log_theta = true\n");
-	if ( get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true ) 
+	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true) 
 		throw config_error("Selecting rhs_theta as the RHS function must have log_theta = false\n");
 	// If radial probe diagnostics is specified we need the number of radial probes
-	if ( nprobes == 0 ) 
+	if (nprobes == 0 ) 
 		throw config_error("Radial probe diagnostics requested but no number of radial probes specified\n");
-    if( Nx % nthreads != 0 )
+    if(Nx % nthreads != 0)
         throw config_error("Nx must be a multiple of nthreads\n");
             
 	return (0);
 }
 
-/*
-void slab_config :: test_modes() const {
-    for ( vector<mode>::iterator it = mode_list.begin(); it != mode_list.end(); it++){
-        cout << "Item: " << (*it) << "\n";
-    }
-}
-*/	
 
 // End of file slab_config.cpp

@@ -15,7 +15,7 @@ namespace cuda
     //typedef double2 cmplx_t;
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
-    const unsigned int blockdim_nx = 16; ///< Block dimension in radial (x) direction, columns
+    const unsigned int blockdim_nx = 32; ///< Block dimension in radial (x) direction, columns
     const unsigned int blockdim_my = 1;  ///< Block dimension in poloidal(y) direction, rows
 
     const unsigned int blockdim_nx_max = 1024;

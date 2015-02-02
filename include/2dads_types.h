@@ -86,20 +86,19 @@ namespace twodads {
     /*!
      * Defines the right hand side to use
      */
-    enum rhs_t {theta_rhs_lin,  ///< Linear interchange model
+    enum rhs_t {
+        theta_rhs_ns, ///< Navier-Stokes equation
+        theta_rhs_lin,  ///< interchange model, linear
         theta_rhs_log, ///< Logarithmic interchange model
         theta_rhs_hw, ///< Hasegawa-Wakatani model
         theta_rhs_hwmod, ///< Modified Hasegawa-Wakatani model
-        theta_rhs_ic, ///< Interhange turbulence
-        theta_rhs_NA, ///< Not available, throws an error
-        omega_rhs_std, ///< who knows?
+        theta_rhs_null, ///< No explicit terms
+        omega_rhs_ns, ///< Navier-Stokes equation
         omega_rhs_hw, ///< Hasegawa-Wakatani model
         omega_rhs_hwmod,  ///< Modified Hasegawa-Wakatani model
         omega_rhs_hwzf, ///< Modified Hasegawa-Wakatani model, supressed zonal flow
         omega_rhs_ic, ///< Interchange turbulence
-        omega_rhs_NA, ///< Set if RHS specified in input.ini is not available, throws an error
-        rhs_ns, ///< Navier-Stokes equation
-        rhs_null ///< No explicit terms
+        omega_rhs_null ///< No explicit terms
     };
 
     //enum class diagnostic_t {diag_blobs, diag_energy, diag_probes};
