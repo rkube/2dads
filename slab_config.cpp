@@ -34,6 +34,50 @@ void slab_config :: split_at_whitespace(const string params_str, vector<double>*
 	}		
 }
 
+
+map<string, twodads::output_t> slab_config::output_map = {
+    {"theta", twodads::output_t::o_theta},
+    {"theta_x", twodads::output_t::o_theta_x},
+    {"theta_y", twodads::output_t::o_theta_y},
+    {"omega", twodads::output_t::o_omega},
+    {"omega_x", twodads::output_t::o_omega_x},
+    {"omega_y", twodads::output_t::o_omega_y},
+    {"strmf", twodads::output_t::o_strmf},
+    {"strmf_x", twodads::output_t::o_strmf_x},
+    {"strmf_y", twodads::output_t::o_strmf_y},
+    {"theta_rhs", twodads::output_t::o_theta_rhs},
+    {"omega_rhs", twodads::output_t::o_omega_rhs}};
+
+map<string, twodads::diagnostic_t> slab_config::diagnostic_map = {
+    {"blobs", twodads::diagnostic_t::diag_blobs},
+    {"energy", twodads::diagnostic_t::diag_energy},
+    {"probes", twodads::diagnostic_t::diag_probes}};
+
+map<string, twodads::init_fun_t> slab_config::init_func_map = {
+    {"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
+    {"both_gaussian", twodads::init_fun_t::init_both_gaussian},
+    {"theta_sine", twodads::init_fun_t::init_theta_sine},
+    {"omega_sine", twodads::init_fun_t::init_omega_sine},
+    {"both_sine", twodads::init_fun_t::init_both_sine},
+    {"init_test", twodads::init_fun_t::init_test},
+    {"theta_mode", twodads::init_fun_t::init_theta_mode},
+    {"omega_mode", twodads::init_fun_t::init_omega_mode},
+    {"both_mode", twodads::init_fun_t::init_both_mode}};
+
+map<string, twodads::rhs_t> slab_config::rhs_func_map = {
+    {"theta_rhs_ns", twodads::rhs_t::theta_rhs_ns},
+    {"theta_rhs_lin", twodads::rhs_t::theta_rhs_lin},
+    {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
+    {"theta_rhs_hw", twodads::rhs_t::theta_rhs_hw},
+    {"theta_rhs_hwmod", twodads::rhs_t::theta_rhs_hwmod},
+    {"theta_rhs_null", twodads::rhs_t::theta_rhs_null},
+    {"omega_rhs_ns", twodads::rhs_t::omega_rhs_ns},
+    {"omega_rhs_hw", twodads::rhs_t::omega_rhs_hw},
+    {"omega_rhs_hwmod", twodads::rhs_t::omega_rhs_hwmod},
+    {"omega_rhs_hwzf", twodads::rhs_t::omega_rhs_hwzf},
+    {"omega_rhs_ic", twodads::rhs_t::omega_rhs_ic},
+    {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}};
+
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
 slab_config :: slab_config() :
@@ -121,17 +165,22 @@ slab_config :: slab_config() :
 		boost::split(diagnostics_split_vec, diagnostics_str, boost::is_any_of(" \t"), boost::token_compress_on);
 	}
     for(auto str : diagnostics_split_vec){
-        if (str.compare(string("blobs")) == 0){
-            diagnostics.push_back(twodads::diagnostic_t::diag_blobs);
-            continue;
-        }
-        if (str.compare(string("energy")) == 0){
-            diagnostics.push_back(twodads::diagnostic_t::diag_energy);
-            continue;
-        }
-        if (str.compare(string("probes")) == 0){
-            diagnostics.push_back(twodads::diagnostic_t::diag_probes);
-            continue;
+        cout << "diagnstics_str = " << str << " ";
+        diagnostics.push_back(diagnostic_map[str]);
+        switch(diagnostic_map[str])
+        {
+            case twodads::diagnostic_t::diag_blobs:
+                cout << " -> blobs" << endl;
+                break;
+            case twodads::diagnostic_t::diag_energy:
+                cout << " -> energy" << endl;
+                break;
+            case twodads::diagnostic_t::diag_probes:
+                cout << " -> probes" << endl;
+                break;
+            default:
+                cout << "not found!" << endl;
+                break;
         }
     }
 
@@ -139,66 +188,48 @@ slab_config :: slab_config() :
 	// Split output_str at whitespaces and store substrings in output
     vector<string> output_split_vec;
 	if ( vm.count("output") )
-    {
 		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
-	}
+
     for(auto str: output_split_vec)
     {
-        if (str.compare(string("theta")) == 0)
-        {
-            output.push_back(twodads::output_t::o_theta);
-            continue;
+    	cout << "output_split_vec = " << str << " -> ";
+        output.push_back(output_map[str]);
+        switch(output_map[str]){
+            case twodads::output_t::o_theta:
+                cout << "o_theta" << endl;
+                break;
+            case twodads::output_t::o_theta_x:
+                cout << "o_theta_x" << endl;
+                break;
+            case twodads::output_t::o_theta_y:
+                cout << "o_theta_y" << endl;
+                break;
+            case twodads::output_t::o_omega:
+                cout << "o_omega" << endl;
+                break;
+            case twodads::output_t::o_omega_x:
+                cout << "o_omega_x" << endl;
+                break;
+            case twodads::output_t::o_omega_y:
+                cout << "o_omega_y" << endl;
+                break;
+            case twodads::output_t::o_strmf:
+                cout << "o_strmf" << endl;
+                break;
+            case twodads::output_t::o_strmf_x:
+                cout << "o_strmf_x" << endl;
+                break;
+            case twodads::output_t::o_strmf_y:
+                cout << "o_strmf_y" << endl;
+                break;
+            case twodads::output_t::o_theta_rhs:
+                cout << "o_theta_rhs" << endl;
+                break;
+            case twodads::output_t::o_omega_rhs:
+                cout << "o_omega_rhs" << endl;
+                break;
         }
-        if (str.compare(string("theta_x")) == 0)
-        {
-            output.push_back(twodads::output_t::o_theta_x);
-            continue;
-        }
-        if (str.compare(string("theta_y")) == 0)
-        {
-            output.push_back(twodads::output_t::o_theta_y);
-            continue;
-        }
-        if (str.compare(string("omega")) == 0)
-        {
-            output.push_back(twodads::output_t::o_omega);
-            continue;
-        }
-        if (str.compare(string("omega_x")) == 0)
-        {
-            output.push_back(twodads::output_t::o_omega_x);
-            continue;
-        }
-        if (str.compare(string("omega_y")) == 0)
-        {
-            output.push_back(twodads::output_t::o_omega_y);
-            continue;
-        }
-        if (str.compare(string("strmf")) == 0)
-        {
-            output.push_back(twodads::output_t::o_strmf);
-            continue;
-        }
-        if (str.compare(string("strmf_x")) == 0)
-        {
-            output.push_back(twodads::output_t::o_strmf_x);
-            continue;
-        }
-        if (str.compare(string("strmf_y")) == 0)
-        {
-            output.push_back(twodads::output_t::o_strmf_y);
-            continue;
-        }
-        if (str.compare(string("theta_rhs")) == 0)
-        {
-            output.push_back(twodads::output_t::o_theta_rhs);
-            continue;
-        }
-        if (str.compare(string("omega_rhs")) == 0)
-        {
-            output.push_back(twodads::output_t::o_omega_rhs);
-            continue;
-        }
+
     }
 
     // Parse string shift_modes, string is in the form shift_modes = (kx1 ky1), (kx2 ky2), (kx3 ky3) ... (kxn kyn)
@@ -218,26 +249,8 @@ slab_config :: slab_config() :
     }*/
 
     // Assign theta_rhs, omega_rhs, and init_function by parsing the string 
-    
-	if (init_function_str.compare(string("theta_gaussian")) == 0)
-        init_function = twodads::init_fun_t::init_theta_gaussian;
-    else if (init_function_str.compare(string("both_gaussian")) == 0)
-        init_function = twodads::init_fun_t::init_both_gaussian;
-    else if (init_function_str.compare(string("theta_sine")) == 0)
-        init_function = twodads::init_fun_t::init_theta_sine;
-    else if (init_function_str.compare(string("omega_sine")) == 0)
-        init_function = twodads::init_fun_t::init_omega_sine;
-    else if (init_function_str.compare(string("both_sine")) == 0)
-        init_function = twodads::init_fun_t::init_both_sine;
-    else if (init_function_str.compare(string("init_test")) == 0)
-        init_function = twodads::init_fun_t::init_test;
-    else if (init_function_str.compare(string("theta_mode")) == 0)
-        init_function = twodads::init_fun_t::init_theta_mode;
-    else if (init_function_str.compare(string("omega_mode")) == 0)
-        init_function = twodads::init_fun_t::init_omega_mode;
-    else if (init_function_str.compare(string("both_mode")) == 0)
-        init_function = twodads::init_fun_t::init_both_mode;
-
+   
+    init_function = init_func_map[init_function_str]; 
     /*
 	else if (init_function_str.compare(string("omega_random_k")) == 0)
 		init_function = twodads::init_fun_t::init_omega_random_k;
@@ -266,42 +279,64 @@ slab_config :: slab_config() :
 	else if (init_function_str.compare(string("from_file")) == 0)
 		init_function = twodads::init_fun_t::init_file;
     */
-	else 
-		init_function = twodads::init_fun_t::init_NA;
+	//else 
+	//	init_function = twodads::init_fun_t::init_NA;
 
     // Set RHS type of theta equation
-    if ( theta_rhs_str.compare(string("theta_rhs_ns")) == 0)
-        theta_rhs = twodads::rhs_t::theta_rhs_ns;
-    else if ( theta_rhs_str.compare(string("theta_rhs_lin")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_lin;
-    else if ( theta_rhs_str.compare(string("theta_rhs_log")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_log;
-    else if ( theta_rhs_str.compare(string("theta_rhs_hw")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_hw;
-    else if ( theta_rhs_str.compare(string("theta_rhs_hw_mod")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_hwmod;
-    else if ( theta_rhs_str.compare(string("theta_rhs_null")) == 0) 
-		theta_rhs = twodads::rhs_t::theta_rhs_null;
-    else 
-        throw config_error("Unkown RHS for theta: " + theta_rhs_str);
+    theta_rhs = rhs_func_map[theta_rhs_str];
+    omega_rhs = rhs_func_map[omega_rhs_str];
+    
+    cout << "theta_rhs_str = " << theta_rhs_str << "-> ";
+    switch(theta_rhs)
+    {
+    	case twodads::rhs_t::theta_rhs_ns:
+    		cout << " theta_rhs_ns" << endl;
+    		break;
+        case twodads::rhs_t::theta_rhs_lin:
+            cout << " theta_rhs_lin" << endl;
+            break;
+        case twodads::rhs_t::theta_rhs_log:
+            cout << " theta_rhs_log" << endl;
+            break;
+        case twodads::rhs_t::theta_rhs_hw:
+            cout << " theta_rhs_hw" << endl;
+            break;
+        case twodads::rhs_t::theta_rhs_hwmod:
+            cout << " theta_rhs_hwmod" << endl;
+            break;
+        case twodads::rhs_t::theta_rhs_null:
+            cout << " theta_rhs_null" << endl;
+            break;
+        default:
+            cout << " not found" << endl;
+            break;
+    }
 
-    // Set RHS type of omega equation
-    if ( omega_rhs_str.compare(string("omega_rhs_ns")) == 0)
-        omega_rhs = twodads::rhs_t::omega_rhs_ns;
-    else if ( omega_rhs_str.compare(string("omega_rhs_hw")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_hw;
-    else if ( omega_rhs_str.compare(string("omega_rhs_hw_mod")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_hwmod;
-    else if ( omega_rhs_str.compare(string("omega_rhs_hw_zf")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_hwzf;
-    else if ( omega_rhs_str.compare(string("omega_rhs_ic")) == 0) 
-        omega_rhs = twodads::rhs_t::omega_rhs_ic;
-    else if ( omega_rhs_str.compare(string("omega_rhs_null")) == 0) 
-		omega_rhs = twodads::rhs_t::omega_rhs_null;
-    else 
-        throw config_error("Unknown RHS for omega: " + omega_rhs_str);
-
-    //End config::config()
+    cout << "omega_rhs_str = " << omega_rhs_str << "-> ";
+    switch(omega_rhs)
+    {
+        case twodads::rhs_t::omega_rhs_ns:
+            cout << " omega_rhs_ns" << endl;
+            break;
+        case twodads::rhs_t::omega_rhs_hw:
+            cout << " omega_rhs_hw" << endl;
+            break;
+        case twodads::rhs_t::omega_rhs_hwmod:
+            cout << " omega_rhs_hwmod" << endl;
+            break;
+        case twodads::rhs_t::omega_rhs_hwzf:
+            cout << " omega_rhs_hwzf" << endl;
+            break;
+        case twodads::rhs_t::omega_rhs_null:
+            cout << "omega_rhs_null" << endl;
+            break;
+        case twodads::rhs_t::omega_rhs_ic:
+            cout << "omega_rhs_ic" << endl;
+            break;
+        default:
+            cout << " not found" << endl;
+            break;
+    }
 }
 
 

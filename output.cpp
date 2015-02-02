@@ -124,8 +124,8 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
     // Iterate over list of fields we need to write output for
     for(auto it : o_list)
     {
+        // Make sure that get_array_ptr calls copy_device_to_host! 
         arr = slab.get_array_ptr(it);
-        arr -> copy_device_to_host();
         surface(it, arr, time);
     }
     output_counter++;

@@ -116,8 +116,8 @@ class slab_cuda
         void get_data(twodads::field_t, cuda::real_t* buffer); 
 
         /// @brief get address of a field
-        inline cuda_arr_real*  get_array_ptr(twodads::output_t fname) { return(get_output_by_name[fname]);};
-        inline cuda_arr_real*  get_array_ptr(twodads::field_t fname) { return(get_field_by_name[fname]);};
+        cuda_arr_real*  get_array_ptr(twodads::output_t fname); //{ return(get_output_by_name[fname]);};
+        cuda_arr_real*  get_array_ptr(twodads::field_t fname); //{ return(get_field_by_name[fname]);};
         /// @brief Print the addresses of member variables in host memory
         void print_address(); 
         /// @brief  Print the grid sizes used for cuda kernel calls

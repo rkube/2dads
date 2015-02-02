@@ -301,8 +301,10 @@ class cuda_array{
         // Set array to constant value for specified time level
         cuda_array<T>& set_t(const T&, uint);
         // Access operator to host array
-        inline T& operator()(uint, uint, uint);
-        inline T operator()(uint, uint, uint) const;
+        //inline T& operator()(uint, uint, uint);
+        T& operator()(uint, uint, uint);
+        //inline T operator()(uint, uint, uint) const;
+        T operator()(uint, uint, uint) const;
 
         // Copy device memory to host and print to stdout
         friend std::ostream& operator<<(std::ostream& os, cuda_array<T> src)
@@ -328,25 +330,39 @@ class cuda_array{
             return (os);
         }
 
-        inline void copy_device_to_host();
-        inline void copy_device_to_host(uint);
-        inline void copy_device_to_host(T*);
+        //inline void copy_device_to_host();
+        void copy_device_to_host();
+        //inline void copy_device_to_host(uint);
+        void copy_device_to_host(uint);
+        //inline void copy_device_to_host(T*);
+        void copy_device_to_host(T*);
 
         // Transfer from host to device
-        inline void copy_host_to_device();
+        //inline void copy_host_to_device();
+        void copy_host_to_device();
 
         // Advance time levels
-        inline void advance();
+        //inline void advance();
+        void advance();
 
-        inline void copy(uint, uint);
-        inline void copy(uint, const cuda_array<T>&, uint);
-        inline void move(uint, uint);
-        inline void swap(uint, uint);
-        inline void normalize();
+        //inline void copy(uint, uint);
+        void copy(uint, uint);
+        
+        //inline void copy(uint, const cuda_array<T>&, uint);
+        void copy(uint, const cuda_array<T>&, uint);
+        //inline void move(uint, uint);
+        void move(uint, uint);
+        //inline void swap(uint, uint);
+        void swap(uint, uint);
+        //inline void normalize();
+        void normalize();
 
-        inline void kill_kx0();
-        inline void kill_ky0();
-        inline void kill_k0();
+        //inline void kill_kx0();
+        void kill_kx0();
+        //inline void kill_ky0();
+        void kill_ky0();
+        //inline void kill_k0();
+        void kill_k0();
 
         // Access to private members
         inline uint get_nx() const {return Nx;};

@@ -7,14 +7,15 @@
  *
  */
 
-#ifndef __CONFIG_H
-#define __CONFIG_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
-#include "2dads_types.h"
+#include <string>
+#include <map>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include <string>
+#include "2dads_types.h"
 
 using namespace std;
 
@@ -208,6 +209,11 @@ private:
 	
     // helper functions
 	void split_at_whitespace(const string, vector<double>*);
+    // Mappings from values in input.ini to enums in twodads.h
+    static map<std::string, twodads::output_t> output_map;
+    static map<std::string, twodads::diagnostic_t> diagnostic_map;
+    static map<std::string, twodads::init_fun_t> init_func_map;
+    static map<std::string, twodads::rhs_t> rhs_func_map;
 };
 
-#endif
+#endif //CONFIG_H

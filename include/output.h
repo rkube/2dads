@@ -7,8 +7,8 @@ ose*  Created by Ralph Kube on 01.12.10.
  *
  */
 
-#ifndef OUTPUT_CLASS
-#define OUTPUT_CLASS
+#ifndef OUTPUT_H
+#define OUTPUT_H
 
 #include <string>
 #include <vector>
@@ -100,4 +100,4 @@ private:
     map<twodads::output_t, string> fname_map;
 };
 
-#endif //OUTPUT_CLASS
+#endif //OUTPUT_H

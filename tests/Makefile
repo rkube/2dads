@@ -31,7 +31,7 @@ test_cudadarray: test_cudadarray.cu ../include/cuda_darray.h
 
 # Run basic tests on slab structure
 # Test initialization routine: Initialize with routine specified in input file, check that output state is consistent among all routines
-test_slab: test_enum.cpp test_init.cpp test_derivs_space.cpp  ../obj/initialize.o ../obj/slab_config.o ../obj/slab_cuda.o
+test_slab: test_enum.cpp test_init.cpp test_derivs_space.cpp  test_derivs_py.cpp ../obj/initialize.o ../obj/slab_config.o ../obj/slab_cuda.o
 # Test enumeration of derivation kernels d_dx, d_dy, inv_lapl and time integrator stiff_k
 	$(CC) $(CFLAGS) -o test_slab/test_enum ../obj/initialize.o ../obj/slab_config.o ../obj/slab_cuda.o test_enum.cpp $(INCLUDES) $(LFLAGS)
 # Initialization
@@ -40,6 +40,7 @@ test_slab: test_enum.cpp test_init.cpp test_derivs_space.cpp  ../obj/initialize.
 #	$(CC) $(CCFLAGS) -o test_slab/test_dft $(OBJ_DIR)/initialize.o test_dft.cu $(INCLUDES) $(CUDALFLAGS)
 # Test that derivation routines work
 	$(CC) $(CFLAGS) -o test_slab/test_derivs ../obj/initialize.o ../obj/slab_config.o ../obj/slab_cuda.o test_derivs_space.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -shared -fPIC -Wl,soname,test_derivs_py, -o test_slab/test_derivs_py.o ../obj/initialize_pic.o ../obj/slab_config_pic.o ../obj/slab_cuda_pic.o test_derivs_py.cpp $(INCLUDES) $(LFLAGS)
 
 # Test time integrator, solve diffusion problem and show how modes are integrated
 test_stiff: test_stiff.cpp test_stiff_transient.cpp test_diff.cpp

@@ -12,22 +12,22 @@ base: initialize diagnostics slab_config output slab_cuda shader
 DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
 
 
-shader:
+shader: shader.cpp
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
 
-slab_config:
+slab_config: slab_config.cpp include/slab_config.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)
 
-output: 
+output: output.cpp include/output.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(INCLUDES)
 
-diagnostics:
+diagnostics: diagnostics.cpp include/diagnostics.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
 
-initialize: 
+initialize: initialize.cu include/initialize.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/initialize.o initialize.cu $(INCLUDES)
 
-slab_cuda:
+slab_cuda: slab_cuda.cu include/slab_cuda.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
 2dads: slab_config output diagnostics initialize slab_cuda
@@ -35,6 +35,15 @@ slab_cuda:
 
 tests: cuda_array2 slab_cuda initialize output diagnostics
 	$(MAKE) -C $(TEST_DIR)
+
+# PIC objects
+pic_objs:
+	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/slab_config_pic.o slab_config.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/output_pic.o output.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/diagnostics_pic.o diagnostics.cpp $(INCLUDES)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -Xcompiler -fPIC -c -o $(OBJ_DIR)/initialize_pic.o initialize.cu $(INCLUDES)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -Xcompiler -fPIC -c -o $(OBJ_DIR)/slab_cuda_pic.o slab_cuda.cu $(INCLUDES)
+
 
 dist:
 	rm -i dist/*.cpp
