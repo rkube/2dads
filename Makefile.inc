@@ -10,3 +10,6 @@ CUDACFLAGS	= -O0 -g -pg -G -DDEBUG --gpu-architecture sm_30 --compiler-options -
 CUDALFLAGS	= -lcufft
 
 LFLAGS_OGL = -lglfw -lGLEW -lGL
+
+PROJ_INCDIR = /home/rku000/cuda-workspace/cuda_array2/include
+PROJ_OBJDIR = /home/rku000/cuda-workspace/cuda_array2/obj

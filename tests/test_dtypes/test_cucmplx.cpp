@@ -12,9 +12,12 @@ int main(void)
     double C = 3.0;
     cout << "1 + 3.0 * (10.0 + 0.1) = " << 1. + 3. * (10. + .1) << "\n";
     CuCmplx<double> result(0.0, 0.0);
-    result += ((z2 + z3) * C) + z1;
-    cout << "z1 + (z2 + z3) = " << ((z2 + z3) * C) + z1 << "\n";
-    cout << z1 + ((z2 + z3) * C) << "\n";
+    cout << "C = " << C << endl;
+    cout << "z1 = " << z1 << endl;
+    cout << "z2 = " << z2 << endl;
+    cout << "z3 = " << z3 << endl;
+    result = ((z2 + z3) * C) + z1;
+    cout << "z1 + C * (z2 + z3) = " << ((z2 + z3) * C) + z1 << "\n";
 
     return(0);
 

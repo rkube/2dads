@@ -33,11 +33,11 @@ extern "C" void test_derivs(void* p_theta, void* p_theta_x, void* p_theta_y)
     slab.get_data(twodads::field_t::f_theta_x, (double*) p_theta_x);
     slab.get_data(twodads::field_t::f_theta_y, (double*) p_theta_y);
 
-    cout << "theta=" << endl;
-    slab.print_field(twodads::field_t::f_theta, "theta.dat");
-    cout << "theta_x=" << endl;
-    slab.print_field(twodads::field_t::f_theta_x, "thetax.dat");
-    cout << "theta_y=" << endl;
-    slab.print_field(twodads::field_t::f_theta_y, "thetay.dat");
+//    cout << "theta_hat=" << endl;
+//    slab.print_field(twodads::field_k_t::f_theta_hat);
+//    cout << "theta_x_hat=" << endl;
+//    slab.print_field(twodads::field_k_t::f_theta_x_hat);
+//    cout << "theta_y_hat=" << endl;
+//    slab.print_field(twodads::field_k_t::f_theta_y_hat);
 
 } 

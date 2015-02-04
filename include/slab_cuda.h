@@ -71,11 +71,15 @@ class slab_cuda
         /// @brief Solve laplace equation in k-space
         void inv_laplace(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
 
-        // Debug functions that only enumerate the array by row and col number (1000 * col + row)
-        void d_dx_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute x derivative 
-        void d_dy_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Compute y derivative
+        // Debug functions that only enumerate the array by row and col number 
+        // format: CuCmplx: (sector * 1000 + col, row)
+        //         real   : (1000*col + row)
+        void enumerate(twodads::field_k_t f_name);
+        void enumerate(twodads::field_t f_name);
+        void d_dx_enumerate(twodads::field_k_t, uint); ///< Compute x derivative 
+        void d_dy_enumerate(twodads::field_k_t, uint); ///< Compute y derivative
         // Solve laplace equation in k-space
-        void inv_laplace_enumerate(twodads::field_k_t, twodads::field_k_t, uint); ///< Invert Laplace operators
+        void inv_laplace_enumerate(twodads::field_k_t, uint); ///< Invert Laplace operators
         
         /// @brief Advance all member fields with multiple time levels: theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
         void advance(); 

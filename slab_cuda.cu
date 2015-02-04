@@ -23,23 +23,27 @@ void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint 
 
     double two_pi_L = cuda::TWOPI / Ly;
     // Return if we don't have an item to work on
-    if((col >= Nx21) || (row >= My / 2))
-        return;
+    if((col < Nx21) && (row < My / 2))
+    	out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(row));
 
-    out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(row));
+    return;
+    //if((col >= Nx21) || (row >= My / 2))
+    //    return;
 }
 
 
 __global__
-void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
+void d_d_dy_lo_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21) 
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
-    if((col >= Nx21) || (row >= My / 2))
-        return;
 
-    out[index] = cuda::cmplx_t(1000 + row, col);
+    if((col < Nx21) && (row < My / 2))
+    	arr[index] = cuda::cmplx_t(1000 + row, col);
+    return;
+    //if((col >= Nx21) || (row >= My / 2))
+    //    return;
 }
 
 
@@ -47,28 +51,34 @@ void d_d_dy_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, c
 __global__
 void d_d_dy_mid(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
 {
-    const uint row = My / 2;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
 
+    if((col < Nx21) && (row == My / 2))
+        out[index] = cuda::cmplx_t(0.0, 0.0);
+   	return;
     // Return if we don't have an item to work on
-    if(col >= Nx21)
-        return;
-    
-    out[index] = cuda::cmplx_t(0.0, 0.0);
+    //if(col >= Nx21)
+    //    return;
+    //
 }
 
 
 __global__
-void d_d_dy_mid_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
+void d_d_dy_mid_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21) 
 {
-    const uint row = My / 2;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
-    if(col >= Nx21)
-        return;
 
-    out[index] = cuda::cmplx_t(2000 + row, col);
+    if((col < Nx21) && (row == My / 2))
+    	arr[index] = cuda::cmplx_t(2000 + row, col);
+   	return;
+    //if(col >= Nx21)
+    //    return;
+//
+    //arr[index] = cuda::cmplx_t(2000 + row, col);
 }
 
 
@@ -82,25 +92,33 @@ void d_d_dy_up(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint 
     const uint index = row * Nx21 + col;
 
     double two_pi_L = cuda::TWOPI / Ly;
-    // Return if we don't have an item to work on
-    if((col >= Nx21) || (row >= My))
-        return;
+    if((col < Nx21) && (row < My))
+        out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * (double(row) - double(My)));
+    return;
 
-    out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * (double(row) - double(My)));
+    // Return if we don't have an item to work on
+    //if((col >= Nx21) || (row >= My))
+    //    return;
+    //
+    //out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * (double(row) - double(My)));
 }
 
 
 __global__
-void d_d_dy_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
+void d_d_dy_up_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
 
-    if((col >= Nx21) || (row >= My))
-        return;
+    if((col < Nx21) && (row < My))
+        arr[index] = cuda::cmplx_t(3000.0 + double(row) - double(My), col);
+    return;
 
-    out[index] = cuda::cmplx_t(3000.0 + double(row) - double(My), col);
+    //if((col >= Nx21) || (row >= My))
+    //    return;
+
+    //arr[index] = cuda::cmplx_t(3000.0 + double(row) - double(My), col);
 }
 
 
@@ -112,26 +130,32 @@ void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint 
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
-
-    if ((col >= Nx21 - 1) || (row >= My))
-        return;
     double two_pi_L = cuda::TWOPI / Lx;
-    
+
+    if((row < My) && (col < Nx21 - 1))
+        out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(col));
+    //if ((col >= Nx21 - 1) || (row >= My))
+    //    return;
     //(a + ib) * ik = -(b * k) + i(a * k)
-    out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(col));
+    //out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(col));
 }
 
 
 __global__
-void d_d_dx_lo_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Lx)
+void d_d_dx_lo_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21) 
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint index = row * Nx21 + col;
-    if ((col >= Nx21 - 1) || (row >= My))
-        return;
 
-    out[index] = cuda::cmplx_t(row, col);
+    if((row < My) && (col < Nx21 - 1))
+        arr[index] = cuda::cmplx_t(double(row), double(col));
+
+    return;
+    //if ((col >= Nx21 - 1) || (row >= My))
+    //    return;
+    //
+    //arr[index] = cuda::cmplx_t(double(row), double(col));
 }
 
 
@@ -142,42 +166,39 @@ __global__
 void d_d_dx_up(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Lx)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = Nx21 - 1;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x + Nx21 - 1;
     const uint index = row * Nx21 + col;
 
-    if (col >= Nx21)
-        return;
-
-    out[index] = cuda::cmplx_t(0.0, 0.0);
+    if ((row < My) && (col == Nx21 - 1))
+    	out[index] = cuda::cmplx_t(0.0, 0.0);
 }
 
 
 __global__
-void d_d_dx_up_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Lx)
+void d_d_dx_up_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = Nx21 - 1;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x + Nx21 - 1;
     const uint index = row * Nx21 + col;
 
-    if (col >= Nx21)
-        return;
-
-    out[index] = cuda::cmplx_t(row, col);
+    if((row < My) && (col == Nx21 - 1))
+    	arr[index] = cuda::cmplx_t(row, double(1000 + col));
+    return;
 }
 
 
 
-// ky=0 modes are stored in the first row
+// ky=0 modes are stored in the first row, Nx21 columns
 __global__
 void d_kill_ky0(cuda::cmplx_t* in, const uint My, const uint Nx21)
 {
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    //const uint index = col;
 
-    if (col >= Nx21)
-        return;
-    
-    in[col] = cuda::cmplx_t(0.0, 0.0);
+//    if (col >= Nx21)
+//        return;
+//
+    if(col < Nx21)    
+        in[col] = cuda::cmplx_t(0.0, 0.0);
 }
 
 
@@ -227,7 +248,7 @@ void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
 
 
 __global__
-void d_inv_laplace_sec1_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Ly2, const double inv_Lx2)
+void d_inv_laplace_sec1_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -235,7 +256,7 @@ void d_inv_laplace_sec1_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     if ((col >= Nx21) || (row >= My / 2))
         return;
     
-    out[idx] = cuda::cmplx_t(1000 + row, col);
+    arr[idx] = cuda::cmplx_t(1000 + row, col);
 }
 
 
@@ -256,7 +277,7 @@ void d_inv_laplace_sec2(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
 
 
 __global__
-void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Ly2, const double inv_Lx2) 
+void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -264,7 +285,7 @@ void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     if ((col >= Nx21) || (row > My - 1))
         return;
 
-    out[idx] = cuda::cmplx_t(2000 + row - My, col);
+    arr[idx] = cuda::cmplx_t(2000 + row - My, col);
 }
 
 
@@ -286,7 +307,7 @@ void d_inv_laplace_sec3(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
 
 
 __global__
-void d_inv_laplace_sec3_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Ly2, const double inv_Lx2)
+void d_inv_laplace_sec3_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = Nx21 - 1;
@@ -294,7 +315,7 @@ void d_inv_laplace_sec3_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     if (row >= My / 2)
         return;
 
-    out[idx] = cuda::cmplx_t(3000 + row, col);
+    arr[idx] = cuda::cmplx_t(3000 + row, col);
 }
 
 
@@ -316,7 +337,7 @@ void d_inv_laplace_sec4(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, co
 
 
 __global__
-void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Lx2, const double inv_Ly2) 
+void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
     const uint col = Nx21 - 1;
@@ -325,7 +346,7 @@ void d_inv_laplace_sec4_enumerate(cuda::cmplx_t* in, cuda::cmplx_t* out, const u
     if (row >= My)
         return;
 
-    out[idx] = cuda::cmplx_t(4000 + row - My, col);
+    arr[idx] = cuda::cmplx_t(4000 + row - My, col);
 }
 
 
@@ -942,6 +963,7 @@ void slab_cuda :: initialize()
         case twodads::init_file:
             break;
     }
+
     // Compute spatial derivatives and RHS
     d_dx(twodads::f_theta_hat, twodads::f_theta_x_hat, config.get_tlevs() - 1);
     d_dx(twodads::f_omega_hat, twodads::f_omega_x_hat, config.get_tlevs() - 1);
@@ -953,6 +975,20 @@ void slab_cuda :: initialize()
     dft_c2r(twodads::f_theta_hat, twodads::f_theta, config.get_tlevs() - 1);
     dft_c2r(twodads::f_theta_x_hat, twodads::f_theta_x, 0);
     dft_c2r(twodads::f_theta_y_hat, twodads::f_theta_y, 0);
+
+    //cout << "slab_cuda::initialize" << endl;
+    //cout << "theta_hat = " << theta_hat << endl;
+    //cout << "theta = " << theta << endl;
+    //print_field(twodads::f_theta, "theta2.dat");
+
+    //cout << "theta_x_hat = " << theta_x_hat << endl;
+    //cout << "theta_x = " << theta_x << endl;
+    //print_field(twodads::f_theta_x, "theta_x.dat");
+
+    //cout << "theta_y_hat = " << theta_y_hat << endl;
+    //cout << "theta_y = " << theta_y << endl;
+    //print_field(twodads::f_theta_y, "theta_y.dat");
+
 
     dft_c2r(twodads::f_omega_hat, twodads::f_omega, config.get_tlevs() - 1);
     dft_c2r(twodads::f_omega_x_hat, twodads::f_omega_x, 0);
@@ -1184,18 +1220,20 @@ void slab_cuda :: print_address()
 
 void slab_cuda :: print_grids()
 {
-    cout << "Nx = " << Nx << ", My = " << My << "\t" << "My / 2 - 1 = " << My / 2 - 1 << "\n";
-    cout << "block_my_nx = (" << block_my_nx.x << ", " << block_my_nx.y << ")\n";
-    cout << "grid_my_nx = (" << grid_my_nx.x << ", " << grid_my_nx.y << ")\n";
-    cout << "block_my_nx21 = (" << block_my_nx21.x << ", " << block_my_nx21.y << ")\n";
-    cout << "block_my_nx21 = (" << block_my_nx21.x << ", " << block_my_nx21.y << ")\n";
-    cout << "grid_nx21_sec1 = (" << grid_nx21_sec1.x << ", " << grid_nx21_sec1.y << ")\n";
-    cout << "grid_nx21_sec2 = (" << grid_nx21_sec2.x << ", " << grid_nx21_sec2.y << ")\n";
-    cout << "grid_nx21_sec3 = (" << grid_nx21_sec3.x << ", " << grid_nx21_sec3.y << ")\n";
-    cout << "grid_nx21_sec4 = (" << grid_nx21_sec4.x << ", " << grid_nx21_sec4.y << ")\n";
-    cout << "grid_dx_half = (" << grid_dx_half.x << ", " << grid_dx_half.y << ")\n";
-    cout << "grid_dx_single = (" << grid_dx_single.x << ", " << grid_dx_single.y << ")\n";
-    cout << "grid_ky0 = (" << grid_ky0.x << ", " << grid_ky0.y << ")\n";
+    cout << "Nx = " << Nx << ", My = " << My << "\t" << "Nx/2-1 = " << Nx/2-1 << endl;
+    cout << "block_my_nx = (" << block_my_nx.x << ", " << block_my_nx.y << ")" << endl;
+    cout << "grid_my_nx = (" << grid_my_nx.x << ", " << grid_my_nx.y << ")" << endl;
+    cout << "block_my_nx21 = (" << block_my_nx21.x << ", " << block_my_nx21.y << ")" << endl;
+    cout << "block_my_nx21 = (" << block_my_nx21.x << ", " << block_my_nx21.y << ")" << endl;
+    cout << "grid_nx21_sec1 = (" << grid_nx21_sec1.x << ", " << grid_nx21_sec1.y << ")" << endl;
+    cout << "grid_nx21_sec2 = (" << grid_nx21_sec2.x << ", " << grid_nx21_sec2.y << ")" << endl;
+    cout << "grid_nx21_sec3 = (" << grid_nx21_sec3.x << ", " << grid_nx21_sec3.y << ")" << endl;
+    cout << "grid_nx21_sec4 = (" << grid_nx21_sec4.x << ", " << grid_nx21_sec4.y << ")" << endl;
+    cout << "grid_dx_half = (" << grid_dx_half.x << ", " << grid_dx_half.y << ")" << endl;
+    cout << "grid_dx_single = (" << grid_dx_single.x << ", " << grid_dx_single.y << ")" << endl;
+    cout << "grid_dy_half = (" << grid_dy_half.x << ", " << grid_dy_half.y << ")" << endl;
+    cout << "grid_dy_single = (" << grid_dy_single.x << ", " << grid_dy_single.y << ")" << endl;
+    cout << "grid_ky0 = (" << grid_ky0.x << ", " << grid_ky0.y << ")" << endl;
 }
 
 
@@ -1220,6 +1258,17 @@ void slab_cuda :: omega_rhs_null(uint t)
  ****************************************************************************/
 
 
+void slab_cuda :: enumerate(twodads::field_k_t f_name)
+{
+    get_field_k_by_name[f_name] -> enumerate_array(0);
+}
+
+
+void slab_cuda :: enumerate(twodads::field_t f_name)
+{
+    get_field_by_name[f_name] -> enumerate_array(0);
+}
+
 
 // Compute radial derivative from src_name using time index t_src, store in dst_name, time index 0
 void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
@@ -1239,17 +1288,15 @@ void slab_cuda :: d_dy(twodads::field_k_t src_name, twodads::field_k_t dst_name,
 }
 
 
-void slab_cuda :: d_dy_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
+void slab_cuda :: d_dy_enumerate(twodads::field_k_t f_name, uint t_src)
 {
-    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
-    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
+    cuda_arr_cmplx* arr = get_field_k_by_name[f_name];
     
     const uint Nx21 = Nx / 2 + 1;
-    const double Ly = config.get_lengthy();
 
-    d_d_dy_lo_enumerate<<<grid_dy_half, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
-    d_d_dy_mid_enumerate<<<grid_dy_single, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
-    d_d_dy_up_enumerate<<<grid_dy_half, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
+    d_d_dy_lo_enumerate<<<grid_dy_half, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_d_dy_mid_enumerate<<<grid_dy_single, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_d_dy_up_enumerate<<<grid_dy_half, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1273,16 +1320,16 @@ void slab_cuda :: d_dx(twodads::field_k_t src_name, twodads::field_k_t dst_name,
 }
 
 // Compute poloidal derivative from src_name using time index t_src, store in dst_name, time index 0
-void slab_cuda :: d_dx_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint tlev)
+void slab_cuda :: d_dx_enumerate(twodads::field_k_t f_name, uint tlev)
 {
-    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
-    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
+    cuda_arr_cmplx* arr = get_field_k_by_name[f_name];
 
     const uint Nx21 = Nx / 2 + 1;
-    double Lx = config.get_lengthx();
-
-    d_d_dx_lo_enumerate<<<grid_dx_half, block_nx21>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), My, Nx21, Lx);
-    d_d_dx_up_enumerate<<<grid_dx_single, block_nx21>>>(arr_in -> get_array_d(tlev), arr_out -> get_array_d(0), My, Nx21, Lx);
+    cout << "d_dx_enumerate: Nx21 = " << Nx21 << ", My = " << My << endl;
+    cout << "grid_dx_half = (" << grid_dx_half.x << ", " << grid_dx_half.y << ")" << endl;
+    cout << "block_nx21 = (" << block_nx21.x << ", " << block_nx21.y << ")" << endl;
+    d_d_dx_lo_enumerate<<<grid_dx_half, block_nx21>>>(arr -> get_array_d(tlev), My, Nx21);
+    d_d_dx_up_enumerate<<<grid_dx_single, block_nx21>>>(arr -> get_array_d(tlev), My, Nx21);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1311,20 +1358,17 @@ void slab_cuda :: inv_laplace(twodads::field_k_t src_name, twodads::field_k_t ds
 }
 
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
-void slab_cuda :: inv_laplace_enumerate(twodads::field_k_t src_name, twodads::field_k_t dst_name, uint t_src)
+void slab_cuda :: inv_laplace_enumerate(twodads::field_k_t f_name, uint t_src)
 {
-    cuda_arr_cmplx* arr_in = get_field_k_by_name[src_name];
-    cuda_arr_cmplx* arr_out = get_field_k_by_name[dst_name];
+    cuda_arr_cmplx* arr = get_field_k_by_name[f_name];
 
     const uint Nx21 = Nx / 2 + 1;
-    const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
-    const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
 
-    d_inv_laplace_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec3_enumerate<<<grid_nx21_sec3, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec4_enumerate<<<grid_nx21_sec4, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
+    d_inv_laplace_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_inv_laplace_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_inv_laplace_sec3_enumerate<<<grid_nx21_sec3, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_inv_laplace_sec4_enumerate<<<grid_nx21_sec4, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
+    d_inv_laplace_zero<<<1, 1>>>(arr -> get_array_d(0));
 #ifdef DEBUG
     gpuStatus();
 #endif

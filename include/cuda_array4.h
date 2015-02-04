@@ -65,12 +65,12 @@ inline void gpuVerifyLaunch(const char* file, int line)
 #ifdef __CUDACC__
 /// Device function to compute column and row
 __device__ inline int d_get_col() {
-    return (blockIdx.y * blockDim.y + threadIdx.y);
+    return (blockIdx.x * blockDim.x + threadIdx.x);
 }
 
 
 __device__ inline int d_get_row() {
-    return (blockIdx.x * blockDim.x + threadIdx.x);
+    return (blockIdx.y * blockDim.y + threadIdx.y);
 }
 
 
@@ -105,51 +105,45 @@ public:
 
 // Template kernel for d_enumerate_d and d_enumerate_c using the ca_val class
 template <typename T>
-__global__ void d_enumerate(T* array, uint Nx, uint My)
+__global__ void d_enumerate(T* array, uint My, uint Nx)
 {
     const int col = d_get_col();
     const int row = d_get_row();
-    const int index = row * (My) + col;
+    const int index = row * Nx + col;
 
     if (index < Nx * My)
-    {
         array[index] = T(index);
-    }
 }
 
 
 // Template version of d_enumerate_t_x
 template <typename T>
-__global__ void d_enumerate_t(T** array_t, uint t, uint Nx, uint My)
+__global__ void d_enumerate_t(T** array_t, uint t, uint My, uint Nx)
 {
     const int col = d_get_col();
     const int row = d_get_row();
-    const int index = row * My + col;
+    const int index = row * Nx + col;
 
 	if (index < Nx * My)
-    {
         array_t[t][index] = T(index);
-    }
 }
 
 template <typename T>
-__global__ void d_set_constant_t(T** array_t, T val, uint t, uint Nx, uint My)
+__global__ void d_set_constant_t(T** array_t, T val, uint t, uint My, uint Nx)
 {
     const int col = d_get_col();
     const int row = d_get_row();
-	const int index = row * My + col;
+	const int index = row * Nx + col;
 	if (index < Nx * My)
 		array_t[t][index] = val;
 }
 
 
 template <typename T>
-__global__ void d_alloc_array_d_t(T** array_d_t, T* array,  uint tlevs,  uint Nx,  uint My)
+__global__ void d_alloc_array_d_t(T** array_d_t, T* array,  uint tlevs,  uint My,  uint Nx)
 {
 	if (threadIdx.x < tlevs)
-	{
 		array_d_t[threadIdx.x] = &array[threadIdx.x * Nx * My];
-	}
 }
 
 
@@ -187,12 +181,12 @@ __global__ void test_alloc(T** array_t,  uint tlevs)
 /// op(lhs[0][idx], rhs[tlev][idx])
 template <typename T, typename O>
 __global__
-void d_op_arr_t(T** lhs, T** rhs, uint tlev, O op, uint Nx, uint My)
+void d_op_arr_t(T** lhs, T** rhs, uint tlev, O op, uint My, uint Nx)
 {
     const int col = d_get_col();
     const int row = d_get_row();
-    const int idx = row * My + col;
-    if ((col < My) && (row < Nx))
+    const int idx = row * Nx + col;
+    if ((col < My) && (row < My))
     	lhs[0][idx] = op(lhs[0][idx], rhs[tlev][idx]);
 }
 
@@ -200,14 +194,13 @@ void d_op_arr_t(T** lhs, T** rhs, uint tlev, O op, uint Nx, uint My)
 // Add scalar
 template <typename T, typename O>
 __global__
-void d_op_scalar(T** lhs, T rhs, O op, uint Nx, uint My)
+void d_op_scalar(T** lhs, T rhs, O op, uint My, uint Nx)
 {
     const int col = d_get_col();
     const int row = d_get_row();
-    const int idx = row * My + col;
-    if ((col < My) && (row < Nx))
+    const int idx = row * Nx + col;
+    if ((col < Nx) && (row < My))
     	lhs[0][idx] = op(lhs[0][idx], rhs);
-        //lhs[0][idx] += rhs;
 }
 
 
@@ -215,16 +208,13 @@ void d_op_scalar(T** lhs, T rhs, O op, uint Nx, uint My)
 // Kill kx = 0 mode
 template <typename T>
 __global__
-void d_kill_kx0(T* arr, uint Nx, uint My)
+void d_kill_kx0(T* arr, uint My, uint Nx)
 {
     const int row = 0;
     const int col = d_get_col();
-    const int idx = row * My + col;
-    if (col > My)
-        return;
-
-    T zero(0.0);
-    arr[idx] = zero;
+    const int idx = row * Nx + col;
+    if(col < Nx)
+        arr[idx] = T(0.0);
 }
 
 
@@ -236,11 +226,8 @@ void d_kill_ky0(T* arr, uint Nx, uint My)
     const int row = d_get_row();
     const int col = 0;
     const int idx = row * My + col;
-    if (row > Nx)
-        return;
-
-    T zero(0.0);
-    arr[idx] = zero;
+    if(row < My)
+        arr[idx] = T(0.0);
 }
 
 
@@ -250,8 +237,7 @@ template <typename T>
 __global__
 void d_kill_k0(T* arr)
 {
-    T zero(0.0);
-    arr[0] = zero;
+    arr[0] = T(0.0);
 }
 
 
@@ -269,8 +255,8 @@ class cuda_array{
         ~cuda_array();
 
         // Test function
-        void enumerate_array(const uint);
-        void enumerate_array_t(const uint);
+        void enumerate_array(uint);
+        void enumerate_array_t(uint);
 
         // Operators
         cuda_array<T>& operator=(const cuda_array<T>&);
@@ -310,22 +296,22 @@ class cuda_array{
         friend std::ostream& operator<<(std::ostream& os, cuda_array<T> src)
         {
             const uint tl = src.get_tlevs();
-            const uint nx = src.get_nx();
             const uint my = src.get_my();
+            const uint nx = src.get_nx();
             src.copy_device_to_host();
             os << "\n";
             for(uint t = 0; t < tl; t++)
             {
-                for(uint n = 0; n < nx; n++)
+                for(uint m = 0; m < my; m++)
                 {
-                    for(uint m = 0; m < my; m++)
+                    for(uint n = 0; n < nx; n++)
                     {
                         // Remember to also set precision routines in CuCmplx :: operator<<
-                        os << std::setw(8) << std::setprecision(4) << src(t, n, m) << "\t";
+                        os << std::setw(8) << std::setprecision(4) << src(t, m, n) << "\t";
                     }
-                os << "\n";
+                os << endl;
                 }
-                os << "\n\n";
+                os << endl;
             }
             return (os);
         }
@@ -365,10 +351,10 @@ class cuda_array{
         void kill_k0();
 
         // Access to private members
-        inline uint get_nx() const {return Nx;};
-        inline uint get_my() const {return My;};
-        inline uint get_tlevs() const {return tlevs;};
-        inline int address(uint n, uint m) const {return (n * My + m);};
+        inline uint get_nx() const {return(Nx);};
+        inline uint get_my() const {return(My);};
+        inline uint get_tlevs() const {return(tlevs);};
+        inline int address(uint m, uint n) const {return(m * Nx + n);};
         inline dim3 get_grid() const {return grid;};
         inline dim3 get_block() const {return block;};
 
@@ -384,8 +370,8 @@ class cuda_array{
     private:
         // Size of data array. Host data
         const uint tlevs;
-        const uint Nx;
         const uint My;
+        const uint Nx;
 
         check_bounds bounds;
 
@@ -413,8 +399,8 @@ class cuda_array{
 // Template parameters: U is either CuCmplx<T> or T
 // T is usually double. But why not char or short int? :D
 template <typename T>
-cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
-    tlevs(t), Nx(nx), My(my), bounds(tlevs, Nx, My),
+cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
+    tlevs(t), My(my), Nx(nx), bounds(tlevs, My, Nx),
     array_d(NULL), array_d_t(NULL), array_d_t_host(NULL),
     array_h(NULL), array_h_t(NULL)
 {
@@ -424,10 +410,11 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     // blockDim.x is the x, one block for each row
     // Round integer division for grid.y, see: http://stackoverflow.com/questions/2422712/c-rounding-integer-division-instead-of-truncating
     // a la int a = (59 + (4 - 1)) / 4;
-    grid = dim3(Nx, (My + (cuda::blockdim_my - 1)) / cuda::blockdim_my);
+    //grid = dim3(Nx, (My + (cuda::blockdim_my - 1)) / cuda::blockdim_my);
+    grid = dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My);
 
     // Allocate device memory
-    size_t nelem = tlevs * Nx * My;
+    size_t nelem = tlevs * My * Nx;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(T*)));
 
@@ -435,9 +422,9 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     // Allocate pinned host memory for faster memory transfers
     gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(T)));
     // Initialize host memory all zero
-    for(int n = 0; n < Nx; n++)
-        for(int m = 0; m < My; m++)
-            array_h[n * My + m] = 0.0;
+    for(int m = 0; m < My; m++)
+        for(int n = 0; n < Nx; n++)
+            array_h[address(m, n)] = T(0.0);
 #endif
 #ifndef PINNED_HOST_MEMORY
     array_h = new T[nelem];
@@ -446,8 +433,6 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
 #endif
 
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
-    //array_h_t = (T**) calloc(tlevs, sizeof(T*));
-    //array_d_t_host = (T**) calloc(tlevs, sizeof(T*));
     array_h_t = new T*[tlevs];
     array_d_t_host = new T*[tlevs];
     // array_t[i] points to the i-th time level
@@ -459,12 +444,13 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
     for(uint tl = 0; tl < tlevs; tl++)
         array_h_t[tl] = &array_h[tl * Nx * My];
     set_all(0.0);
-//#ifdef DEBUG
-//    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << "\n";
-//    cout << "cuda::cuda_blockdim_x = " << cuda::cuda_blockdim_nx;
-//    cout << ", cuda::cuda_blockdim_y = " << cuda::cuda_blockdim_my << "\n";
-//    cout << "blockDim=(" << block.x << ", " << block.y << ")\n";
-//    cout << "gridDim=(" << grid.x << ", " << grid.y << ")\n";
+#ifdef DEBUG
+    cout << "cuda_array<T> :: cuda_array<T>(uint, uint, uint)" << endl;
+    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << endl;
+    cout << "cuda::blockdim_x = " << cuda::blockdim_nx;
+    cout << ", cuda::blockdim_y = " << cuda::blockdim_my <<endl;
+    cout << "blockDim=(" << block.x << ", " << block.y << ")" << endl;
+    cout << "gridDim=(" << grid.x << ", " << grid.y << ")" << endl;
 //    cout << "Device data at " << array_d << "\t";
 //    cout << "Host data at " << array_h << "\t";
 //    cout << nelem << " bytes of data\n";
@@ -476,7 +462,7 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
 //    }
 //    cout << "Testing allocation of array_d_t:\n";
 //    test_alloc<<<1, 1>>>(array_d_t, tlevs);
-//#endif // DEBUG
+#endif // DEBUG
 }
 
 
@@ -485,7 +471,7 @@ cuda_array<T> :: cuda_array(uint t, uint nx, uint my) :
 // and paste of the standard constructor plus a memcpy of the array data
 template <typename T>
 cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
-     tlevs(rhs.tlevs), Nx(rhs.Nx), My(rhs.My), bounds(tlevs, Nx, My),
+     tlevs(rhs.tlevs), My(rhs.My), Nx(rhs.Nx), bounds(tlevs, My, Nx),
      block(rhs.block), grid(rhs.grid), grid_full(rhs.grid_full),
     array_d(NULL), array_d_t(NULL), array_d_t_host(NULL),
     array_h(NULL), array_h_t(NULL)
@@ -498,9 +484,9 @@ cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
 #ifdef PINNED_HOST_MEMORY
     gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(T)));
     // Initialize host memory all zero
-    for(int n = 0; n < Nx; n++)
-        for(int m = 0; m < My; m++)
-            array_h[n * My + m] = 0.0;
+    for(int m = 0; m < My; m++)
+        for(int n = 0; n < Nx; n++)
+            array_h[address(m, n)] = 0.0;
 #endif
 #ifndef PINNED_HOST_MEMORY
     //array_h = (T*) calloc(nelem, sizeof(T));
@@ -513,7 +499,7 @@ cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
     array_h_t = new T*[tlevs];
     array_d_t_host = new T*[tlevs];
     // Set pointers on device
-    d_alloc_array_d_t<<<1, tlevs>>>(array_d_t, array_d, tlevs, Nx, My);
+    d_alloc_array_d_t<<<1, tlevs>>>(array_d_t, array_d, tlevs, My, Nx);
     // Update host copy
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
 
@@ -521,8 +507,8 @@ cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
     // local array
     for(tl = 0; tl < tlevs; tl++)
     {
-        gpuErrchk( cudaMemcpy(array_d_t_host[tl], rhs.get_array_d(tl), sizeof(T) * Nx * My, cudaMemcpyDeviceToDevice));
-        array_h_t[tl] = &array_h[tl * Nx * My];
+        gpuErrchk( cudaMemcpy(array_d_t_host[tl], rhs.get_array_d(tl), sizeof(T) * My * Nx, cudaMemcpyDeviceToDevice));
+        array_h_t[tl] = &array_h[tl * My * Nx];
     }
     //cudaDeviceSynchronize();
 }
@@ -533,22 +519,22 @@ cuda_array<T> :: cuda_array(const cuda_array<T>& rhs) :
 // and paste of the standard constructor plus a memcpy of the array data
 template <typename T>
 cuda_array<T> :: cuda_array(const cuda_array<T>* rhs) :
-     tlevs(rhs -> tlevs), Nx(rhs -> Nx), My(rhs -> My), bounds(tlevs, Nx, My),
+     tlevs(rhs -> tlevs), My(rhs -> My), Nx(rhs -> Nx), bounds(tlevs, My, Nx),
      block(rhs -> block), grid(rhs -> grid), grid_full(rhs -> grid_full),
     array_d(NULL), array_d_t(NULL), array_d_t_host(NULL),
     array_h(NULL), array_h_t(NULL)
 {
     uint tl = 0;
     // Allocate device memory
-    size_t nelem = tlevs * Nx * My;
+    size_t nelem = tlevs * My * Nx;
     gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
 #ifdef PINNED_HOST_MEMORY
     // Allocate host memory
     gpuErrchk(cudaMallocHost( (void**) &array_h, nelem * sizeof(T)));
     // Initialize host memory all zero
-    for(int n = 0; n < Nx; n++)
-        for(int m = 0; m < My; m++)
-            array_h[n * My + m] = 0.0;
+    for(int m = 0; m < My; m++)
+        for(int n = 0; n < Nx; n++)
+            array_h[address(m, n)] = T(0.0);
 #endif // PINNED_HOST_MEMORY
 #ifndef PINNED_HOST_MEMORY
     //array_h = (T*) calloc(nelem, sizeof(T));
@@ -561,7 +547,7 @@ cuda_array<T> :: cuda_array(const cuda_array<T>* rhs) :
     array_h_t = new T*[tlevs];
     array_d_t_host = new T*[tlevs];
     // Set pointers on device
-    d_alloc_array_d_t<<<1, tlevs>>>(array_d_t, array_d, tlevs, Nx, My);
+    d_alloc_array_d_t<<<1, tlevs>>>(array_d_t, array_d, tlevs, My, Nx);
     // Update host copy
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
 
@@ -597,21 +583,16 @@ cuda_array<T> :: ~cuda_array(){
 // Access functions for private members
 
 template <typename T>
-void cuda_array<T> :: enumerate_array(const uint t)
+void cuda_array<T> :: enumerate_array( uint t)
 {
-	if (!bounds(t, Nx-1, My-1))
-		throw out_of_bounds_err(string("cuda_array<T> :: enumerate_array(const int): out of bounds\n"));
-	d_enumerate<<<grid, block>>>(array_d, Nx, My);
-	//cudaDeviceSynchronize();
+	d_enumerate<<<grid, block>>>(array_d, My, Nx);
 }
 
 
 template <typename T>
-void cuda_array<T> :: enumerate_array_t(const uint t)
+void cuda_array<T> :: enumerate_array_t( uint t)
 {
-	if (!bounds(t, Nx-1, My-1))
-		throw out_of_bounds_err(string("cuda_array<T> :: enumerate_array_t(const int): out of bounds\n"));
-	d_enumerate_t<<<grid, block >>>(array_d_t, t, Nx, My);
+	d_enumerate_t<<<grid, block >>>(array_d_t, t, My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -631,7 +612,7 @@ cuda_array<T>& cuda_array<T> :: operator= (const cuda_array<T>& rhs)
         return *this;
 
     // Copy data from other array
-    gpuErrchk(cudaMemcpy(array_d_t_host[0], rhs.get_array_d(0), sizeof(T) * Nx * My, cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy(array_d_t_host[0], rhs.get_array_d(0), sizeof(T) * My * Nx, cudaMemcpyDeviceToDevice));
     // Leave the pointer to the time leves untouched!!!
     return *this;
 }
@@ -640,7 +621,7 @@ cuda_array<T>& cuda_array<T> :: operator= (const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator= (const T& rhs)
 {
-    d_set_constant_t<<<grid, block>>>(array_d_t, rhs, 0, Nx, My);
+    d_set_constant_t<<<grid, block>>>(array_d_t, rhs, 0, My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -654,7 +635,7 @@ cuda_array<T>& cuda_array<T> :: set_all(const T& rhs)
 {
 	for(uint t = 0; t < tlevs; t++)
     {
-		d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, Nx, My);
+		d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, My, Nx);
 #ifdef DEBUG
         gpuStatus();
 #endif
@@ -668,7 +649,7 @@ cuda_array<T>& cuda_array<T> :: set_all(const T& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: set_t(const T& rhs, uint t)
 {
-    d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, Nx, My);
+    d_set_constant_t<<<grid, block>>>(array_d_t, rhs, t, My, Nx);
     return *this;
 }
 
@@ -681,7 +662,7 @@ cuda_array<T>& cuda_array<T> :: operator+=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator+= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
-    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_add<T>(), Nx, My);
+    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_add<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -692,7 +673,7 @@ cuda_array<T>& cuda_array<T> :: operator+=(const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator+=(const T& rhs)
 {
-    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_add<T>(), Nx, My);
+    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_add<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -726,7 +707,7 @@ cuda_array<T>& cuda_array<T> :: operator-=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator-= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
-    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_sub<T>(), Nx, My);
+    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_sub<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -737,7 +718,7 @@ cuda_array<T>& cuda_array<T> :: operator-=(const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator-=(const T& rhs)
 {
-    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_sub<T>(), Nx, My);
+    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_sub<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -771,7 +752,7 @@ cuda_array<T>& cuda_array<T> :: operator*=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator*= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
-    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_mul<T>(), Nx, My);
+    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_mul<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -782,7 +763,7 @@ cuda_array<T>& cuda_array<T> :: operator*=(const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator*=(const T& rhs)
 {
-    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_mul<T>(), Nx, My);
+    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_mul<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -816,7 +797,7 @@ cuda_array<T>& cuda_array<T> :: operator/=(const cuda_array<T>& rhs)
     if ((void*) this == (void*) &rhs)
         throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator*= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
 
-    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_div<T>(), Nx, My);
+    d_op_arr_t<<<grid, block>>>(array_d_t, rhs.get_array_d_t(), 0, d_op_div<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -827,7 +808,7 @@ cuda_array<T>& cuda_array<T> :: operator/=(const cuda_array<T>& rhs)
 template <typename T>
 cuda_array<T>& cuda_array<T> :: operator/=(const T& rhs)
 {
-    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_div<T>(), Nx, My);
+    d_op_scalar<<<grid, block>>>(array_d_t, rhs, d_op_div<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -854,20 +835,20 @@ cuda_array<T> cuda_array<T> :: operator/(const T& rhs)
 
 
 template <typename T>
-inline T& cuda_array<T> :: operator()(uint t, uint n, uint m)
+inline T& cuda_array<T> :: operator()(uint t, uint m, uint n)
 {
-	if (!bounds(t, n, m))
+	if (!bounds(t, m, n))
 		throw out_of_bounds_err(string("T& cuda_array<T> :: operator()(uint, uint, uint): out of bounds\n"));
-	return (*(array_h_t[t] + address(n, m)));
+	return (*(array_h_t[t] + address(m, n)));
 }
 
 
 template <typename T>
-inline T cuda_array<T> :: operator()(uint t, uint n, uint m) const
+inline T cuda_array<T> :: operator()(uint t, uint m, uint n) const
 {
 	if (!bounds(t, n, m))
 		throw out_of_bounds_err(string("T cuda_array<T> :: operator()(uint, uint, uint): out of bounds\n"));
-	return (*(array_h_t[t] + address(n, m)));
+	return (*(array_h_t[t] + address(m, n)));
 }
 
 
@@ -882,7 +863,7 @@ void cuda_array<T> :: advance()
 
     // Cycle pointer array on device and zero out last time level
 	d_advance<<<1, 1>>>(array_d_t, tlevs);
-    d_set_constant_t<<<grid, block>>>(array_d_t, T(0.0), 0, Nx, My);
+    d_set_constant_t<<<grid, block>>>(array_d_t, T(0.0), 0, My, Nx);
     // Cycle pointer array on host
     T* tmp = array_d_t_host[tlevs - 1];
     for(int t = tlevs - 1; t > 0; t--)
@@ -903,10 +884,10 @@ inline void cuda_array<T> :: copy_device_to_host()
 {
     //const size_t line_size = Nx * My * tlevs * sizeof(T);
     //gpuErrchk(cudaMemcpy(array_h, array_d, line_size, cudaMemcpyDeviceToHost));
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     for(uint t = 0; t < tlevs; t++)
     {
-        gpuErrchk(cudaMemcpy(&array_h[t * (Nx * My)], array_d_t_host[t], line_size, cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(&array_h[t * My * Nx], array_d_t_host[t], line_size, cudaMemcpyDeviceToHost));
     }
 }
 
@@ -915,7 +896,7 @@ inline void cuda_array<T> :: copy_device_to_host()
 template <typename T>
 inline void cuda_array<T> :: copy_device_to_host(uint tlev)
 {
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     gpuErrchk(cudaMemcpy(array_h_t[tlev], array_d_t_host[tlev], line_size, cudaMemcpyDeviceToHost));
 }
 
@@ -924,7 +905,7 @@ inline void cuda_array<T> :: copy_device_to_host(uint tlev)
 template <typename T>
 inline void cuda_array<T> :: copy_device_to_host(T* rhs) 
 {
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     gpuErrchk(cudaMemcpy(rhs, array_d_t_host[0], line_size, cudaMemcpyDeviceToHost));
 }
 
@@ -932,7 +913,7 @@ inline void cuda_array<T> :: copy_device_to_host(T* rhs)
 template <typename T>
 inline void cuda_array<T> :: copy(uint t_dst, uint t_src)
 {
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
 }
 
@@ -940,7 +921,7 @@ inline void cuda_array<T> :: copy(uint t_dst, uint t_src)
 template <typename T>
 inline void cuda_array<T> :: copy(uint t_dst, const cuda_array<T>& src, uint t_src)
 {
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], src.get_array_d(t_src), line_size, cudaMemcpyDeviceToDevice));
 }
 
@@ -949,7 +930,7 @@ template <typename T>
 inline void cuda_array<T> :: move(uint t_dst, uint t_src)
 {
     // Copy data
-    const size_t line_size = Nx * My * sizeof(T);
+    const size_t line_size = My * Nx * sizeof(T);
     gpuErrchk(cudaMemcpy(array_d_t_host[t_dst], array_d_t_host[t_src], line_size, cudaMemcpyDeviceToDevice));
     // Clear source
     d_set_constant_t<<<grid, block>>>(array_d_t, T(0.0), t_src, Nx, My);
@@ -971,7 +952,7 @@ inline void cuda_array<T> :: swap(uint t1, uint t2)
 template <typename T>
 inline void cuda_array<T> :: kill_kx0()
 {
-    d_kill_kx0<<<grid.x, block.x>>>(array_d, Nx, My);
+    d_kill_kx0<<<grid.x, block.x>>>(array_d, My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -982,7 +963,7 @@ inline void cuda_array<T> :: kill_kx0()
 template <typename T>
 inline void cuda_array<T> :: kill_ky0()
 {
-    d_kill_ky0<<<grid.y, block.y>>>(array_d, Nx, My);
+    d_kill_ky0<<<grid.y, block.y>>>(array_d, My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
@@ -1003,8 +984,8 @@ inline void cuda_array<T> :: kill_k0()
 template <typename T>
 inline void cuda_array<T> :: normalize()
 {
-    cuda::real_t norm = 1. / T(Nx * My);
-    d_op_scalar<<<grid, block>>>(array_d_t, norm, d_op_mul<T>(), Nx, My);
+    cuda::real_t norm = 1. / T(My * Nx);
+    d_op_scalar<<<grid, block>>>(array_d_t, norm, d_op_mul<T>(), My, Nx);
 #ifdef DEBUG
     gpuStatus();
 #endif
