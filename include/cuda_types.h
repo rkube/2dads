@@ -4,25 +4,33 @@
 #include "vector_types.h"
 #include "cufft.h"
 #include "cucmplx.h"
+
 #include <ostream>
 #include <assert.h>
 #include <vector>
 
-
 namespace cuda
 {
-    //typedef cufftDoubleComplex cmplx_t;
-    //typedef double2 cmplx_t;
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
-    const unsigned int cuda_blockdim_nx = 1; ///< Block dimension in radial (x) direction
-    const unsigned int cuda_blockdim_my = 16; ///< Block dimension in poloidal(y) direction
-    //const real_t PI = 3.14159265358979323846264338327950288;
-    const real_t PI = 3.141592653589793; ///< $\pi$
-    const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
-    const real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
+    constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
+    constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
 
-    const int max_initc = 6; /// < Maximal number of initial conditions
+    constexpr unsigned int blockdim_nx_max{1024};
+    constexpr unsigned int blockdim_my_max{1024};
+
+    constexpr unsigned int griddim_nx_max{1024};
+    constexpr unsigned int griddim_my_max{1024};
+
+    //const real_t PI = 3.14159265358979323846264338327950288;
+    constexpr real_t PI = 3.141592653589793; ///< $\pi$
+    constexpr real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
+    constexpr real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
+    constexpr real_t epsilon{0.000001};
+    constexpr int max_initc{6}; /// < Maximal number of initial conditions
+
+    constexpr int io_w{7}; //width of fields used in cout
+    constexpr int io_p{4}; //precision when printing with cout
 
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when
@@ -32,14 +40,14 @@ namespace cuda
     {
     public:
         // Provide standard ctor for pre-C++11
-        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, unsigned int n, unsigned int m) :
-            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), Nx(n), My(m) {};
+        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, unsigned int my, unsigned int nx) :
+            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), My(my), Nx(nx) {};
         const real_t x_left;
         const real_t delta_x;
         const real_t y_lo;
         const real_t delta_y;
-        const unsigned int Nx;
         const unsigned int My;
+        const unsigned int Nx;
 
         friend std::ostream& operator<<(std::ostream& os, const slab_layout_t s)
         {
@@ -47,8 +55,8 @@ namespace cuda
             os << "delta_x = " << s.delta_x << "\t";
             os << "y_lo = " << s.y_lo << "\t";
             os << "delta_y = " << s.delta_y << "\t";
-            os << "Nx = " << s.Nx << "\t";
             os << "My = " << s.My << "\n";
+            os << "Nx = " << s.Nx << "\t";
             return os;
         }
     } __attribute__ ((aligned (8)));
@@ -82,15 +90,15 @@ namespace cuda
     {
     public:
         // Provide a standard constructor for pre-C++11
-        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int n, unsigned int m, unsigned int l) :
-        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), Nx(n), My(m), level(l) {};
+        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int my, unsigned int nx, unsigned int l) :
+        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx(nx), level(l) {};
         const real_t delta_t;
         const real_t length_x;
         const real_t length_y;
         const real_t diff;
         const real_t hv;
-        const unsigned int Nx;
         const unsigned int My;
+        const unsigned int Nx;
         const unsigned int level;
         friend std::ostream& operator<<(std::ostream& os, const stiff_params_t s)
         {
@@ -99,8 +107,8 @@ namespace cuda
             os << "length_y = " << s.length_y << "\t";
             os << "diff = " << s.diff << "\t";
             os << "hv = " << s.hv << "\t";
-            os << "Nx = " << s.Nx << "\t";
             os << "My = " << s.My << "\t";
+            os << "Nx = " << s.Nx << "\t";
             os << "level = " << s.level << "\n";
             return os;
         }

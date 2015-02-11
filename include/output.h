@@ -7,11 +7,11 @@
  *
  */
 
-#ifndef OUTPUT_CLASS
-#define OUTPUT_CLASS
+#ifndef OUTPUT_H
+#define OUTPUT_H
 
-#include <string>
 #include <vector>
+#include <map>
 #include <H5Cpp.h>
 #include "2dads_types.h"
 #include "cuda_types.h"
@@ -39,8 +39,13 @@ public:
 
     //void update_array(slab_cuda&);
     // Output counter and array dimensions
+    inline uint get_output_counter() const {return(output_counter);};
+    inline void increment_output_counter() {output_counter++;};
+    inline uint get_nx() const {return(Nx);};
+    inline uint get_my() const {return(My);};
+private:
     uint output_counter;
-    const uint Nx, My;
+    const uint My, Nx;
 };
 
 
@@ -53,13 +58,18 @@ public:
     /// Cleanup.
     ~output_h5();
     
-    /// Write variable type var_type from passed slab_array to output file.
+    /// @brief Call this routine to write output
+    /// @detailed Note that get_field_by_name, when called with a twodads::output_t
+    /// @detailed also calls cuda_array<%>.copy_device_to_host
     void write_output(slab_cuda&, twodads::real_t);
-    void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t);
+    /// @brief Write output field
+    /// @detailed This assumes that the host data src points to is up-to-date. 
+    void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t);
 
 private:
     string filename;
     H5File* output_file;
+    //const size_t fdim[2];
     
     Group* group_theta;
     Group* group_theta_x;
@@ -90,9 +100,9 @@ private:
     DataSpace dspace_theta_rhs;
     DSetCreatPropList ds_creatplist;
     // Mapping from field types to dataspace
-    DataSpace* get_dspace_from_field(twodads::output_t);
+    map<twodads::output_t, DataSpace*> dspace_map;
     // Mapping from field types to dataspace names
-    string get_fname_str_from_field(twodads::output_t);
+    map<twodads::output_t, string> fname_map;
 };
 
-#endif //OUTPUT_CLASS
+#endif //OUTPUT_H

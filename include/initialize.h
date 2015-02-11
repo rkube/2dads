@@ -4,11 +4,11 @@
 #define INITIALIZE_H
 
 #include "cuda_types.h"
-#include "cuda_array3.h"
+#include "cuda_array4.h"
 #include <vector>
 
-typedef cuda_array<cuda::cmplx_t, cuda::real_t> cuda_arr_cmplx;
-typedef cuda_array<cuda::real_t, cuda::real_t> cuda_arr_real;
+typedef cuda_array<cuda::cmplx_t> cuda_arr_cmplx;
+typedef cuda_array<cuda::real_t> cuda_arr_real;
 
 void init_simple_sine(cuda_arr_real*, vector<double>, cuda::slab_layout_t);
 

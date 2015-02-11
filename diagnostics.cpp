@@ -5,13 +5,12 @@
 /// Contains diagnostic routines for turbulence simulation
 
 
-#include "diagnostics.h"
-#include <string>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include "diagnostics.h"
 
 using namespace std;
 
@@ -20,15 +19,15 @@ diagnostics :: diagnostics(slab_config const config) :
     slab_layout{config.get_nx(), config.get_my(), config.get_runnr(), config.get_xleft(),
                 config.get_deltax(), config.get_ylow(), config.get_deltay(),
                 config.get_deltat()},
-    theta(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    theta_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    theta_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
-    omega(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    omega_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    omega_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
-    strmf(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    strmf_x(config.get_nthreads(), 1, config.get_nx(), config.get_my()), 
-    strmf_y(config.get_nthreads(), 1, config.get_nx(), config.get_my()),
+    theta(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    theta_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    theta_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
+    omega(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    omega_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    omega_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
+    strmf(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    strmf_x(config.get_nthreads(), 1, config.get_my(), config.get_nx()), 
+    strmf_y(config.get_nthreads(), 1, config.get_my(), config.get_nx()),
     time(0.0),
     old_com_x(0.0),
     old_com_y(0.0),
@@ -95,18 +94,14 @@ diagnostics :: diagnostics(slab_config const config) :
 }
 
 
-diagnostics::~diagnostics()
-{
-}
-
-
 
 /*
  ************** Logfile stuff **************************************************
  */
 
 
-void diagnostics::write_logfile() {
+void diagnostics::write_logfile() 
+{
 	ofstream logfile;
 	stringstream filename;
 	filename << "log." << setw(3) << setfill('0') << slab_layout.runnr;
@@ -127,13 +122,16 @@ void diagnostics::write_logfile() {
  */ 
 
 
-void diagnostics :: init_diagnostic_output(string filename, string header, bool& init_flag){
+void diagnostics :: init_diagnostic_output(string filename, string header, bool& init_flag)
+{
     cout << "Initializing output file " << filename << "\n";
-    if ( init_flag == false ) {
+    if ( init_flag == false ) 
+    {
         ofstream output;
         output.exceptions(ofstream::badbit);
         output.open(filename.data(), ios::trunc);
-        if ( !output ) {
+        if ( !output ) 
+        {
             throw new std::exception;
         }
         output << header;
@@ -145,15 +143,15 @@ void diagnostics :: init_diagnostic_output(string filename, string header, bool&
 	
 void diagnostics :: update_arrays(slab_cuda& slab)
 {
-    theta.update(slab.theta);
-    theta_x.update(slab.theta_x);
-    theta_y.update(slab.theta_y);
-    omega.update(slab.omega);
-    omega_x.update(slab.omega_x);
-    omega_y.update(slab.omega_y);
-    strmf.update(slab.strmf);
-    strmf_x.update(slab.strmf_x);
-    strmf_y.update(slab.strmf_y);
+	slab.get_data_host(twodads::field_t::f_theta,   theta.get_array()  , slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_theta_x, theta_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_theta_y, theta_y.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega,   omega.get_array(),   slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega_x, omega_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega_y, omega_y.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf,   strmf.get_array(),   slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf_x, strmf_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf_y, strmf_y.get_array(), slab_layout.My, slab_layout.Nx);
 }
 
 /*
@@ -219,22 +217,27 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 	// Compute maxima for theta and strmf, integrated particle density,
 	// center of mass coordinates and relative dispersion tensor components
-	for(int n = 0; n < int(slab_layout.Nx); n++){
-		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
-		for(int m = 0; m < int(slab_layout.My); m++){
-			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
+    for(int m = 0; m < int(slab_layout.My); m++)
+    {
+        y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
+        for(int n = 0; n < int(slab_layout.Nx); n++)
+        {
+            x = slab_layout.x_left + double(n) * slab_layout.delta_x;
+            theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
 			theta_int += theta_val;
 			theta_int_x += theta_val * x;
 			theta_int_y += theta_val * y;
  
-			if ( fabs(theta_val) >= theta_max) {
+			if ( fabs(theta_val) >= theta_max) 
+            {
 				theta_max = fabs(theta_val);
 				theta_max_x = x;
 				theta_max_y = y;
 			}
-			if ( fabs ( strmf(n,m) ) >= strmf_max ) {
-				strmf_max = fabs( strmf(n,m) );
+
+			if ( fabs ( strmf(n,m) ) >= strmf_max ) 
+            {
+				strmf_max = fabs(strmf(m, n));
 				strmf_max_x = x;
 				strmf_max_y = y;
 			}
@@ -243,13 +246,15 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 	
 	theta_int_x /= theta_int;
 	theta_int_y /= theta_int;
-	for(int n = 0; n < int(slab_layout.Nx); n++){
-		x = slab_layout.x_left + double(n) * slab_layout.delta_x;
-		for(int m = 0; m < int(slab_layout.My); m++){
-			y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
-            theta_val = (use_log_theta ? exp(theta(n,m)) - theta_bg : theta(n,m));
-			wxx = theta_val * ( x - theta_int_x ) * (x - theta_int_x);
-			wyy = theta_val * ( y - theta_int_y ) * (y - theta_int_y);
+    for(int m = 0; m < int(slab_layout.My); m++)
+    {
+        y = slab_layout.y_lo + double(m) * slab_layout.delta_y;
+        for(int n = 0; n < int(slab_layout.Nx); n++)
+        {
+            x = slab_layout.x_left + double(n) * slab_layout.delta_x;
+            theta_val = (use_log_theta ? exp(theta(m, n)) - theta_bg : theta(m, n));
+			wxx = theta_val * (x - theta_int_x) * (x - theta_int_x);
+			wyy = theta_val * (y - theta_int_y) * (y - theta_int_y);
 		}
 	}
 	wxx /= theta_int;
@@ -272,7 +277,8 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 
 	// Write to output file
 	output.open("blobs.dat", ios::app);	
-	if ( output.is_open() ){
+	if ( output.is_open() )
+    {
 		output << time << "\t";
 		output << setw(12) << theta_max << "\t" << setw(12) << theta_max_x << "\t" << setw(12) << theta_max_y << "\t";
 		output << setw(12) << strmf_max << "\t" << setw(12) << strmf_max_x << "\t" << setw(12) << strmf_max_y << "\t";
@@ -284,30 +290,12 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 }
 
 
-///@brief Compute energy integrals for various turbulence models
-///@param time Time of output
-///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13
-///@detailed $D_{1} = \frac{1}{2A} \int \mathrm{d}A n^2$
-///@detailed $D_{2} = \frac{1}{2A} \int \mathrm{d}A \left\nabla_\perp \phi\right)^2$
-///@detailed $D_{3} = \frac{1}{2A} \int \mathrm{d}A \Omega^2$
-///@detailed $D_{4} = -\frac{1}{A} \int \mathrm{d}A \widetilde{n}\widetilde{\phi_y}$
-///@detailed $D_{5} = \frac{1}{A} \int \mathrm{d}A \left(\bar{n} - \bar{\phi}\right)^2$
-///@detailed $D_{6} = \frac{1}{A} \int \mathrm{d}A \left(\widetilde{n} - \widetilde{\phi}\right)^2$
-///@detailed $D_{7} = \frac{1}{A} \int \mathrm{d}A \bar{\phi} \left( \bar{\phi} - \bar{n} \right)$
-///@detailed $D_{8] = \frac{1}{A} \int \mathrm{d}A \widetilde{\phi} \left( \widetilde{\phi} - \widetilde{n}\right)$
-///@detailed $D_{9} = \frac{1}{A} \int \mathrm{d}A 0$
-///@detailed $D_{10} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp^2 n$
-///@detailed $D_{11} = \frac{1}{A} \int \mathrm{d}A \nabla_\perp \phi \nabla_\perp \Omega$
-///@detailed $D_{12} = \frac{1}{A} \int \mathrm{d}A n_{xxx}^2 + n_{yyy}^2$
-///@detailed $D_{13} = \frac{1}{A} \int \mathrm{d}A \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}$
-
-
 void diagnostics::diag_energy(const twodads::real_t time)
 {
     ofstream output;
-    double Lx = slab_layout.delta_y * double(slab_layout.My);
-    double Ly = slab_layout.delta_x * double(slab_layout.Nx);
-
+    const double Lx = slab_layout.delta_y * double(slab_layout.My);
+    const double Ly = slab_layout.delta_x * double(slab_layout.Nx);
+    const double invdA = 1. / (Lx * Ly);
 
     diag_array<double> strmf_tilde(move(strmf.tilde()));
     diag_array<double> strmf_bar(move(strmf.bar()));
@@ -317,9 +305,9 @@ void diagnostics::diag_energy(const twodads::real_t time)
     diag_array<double> theta_tilde(move(theta.tilde()));
     diag_array<double> theta_bar(move(theta.bar())); 
 
-    const double E{(omega_tilde * omega_tilde).get_mean()};
-    const double K{(strmf_x_tilde * strmf_x_tilde + strmf_y * strmf_y).get_mean()};
-    const double T{(strmf_x_tilde * strmf_y.tilde() * omega_bar).get_mean()};
+    const double E{0.5 * invdA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+    const double K{((strmf_x_tilde * strmf_x_tilde) + (strmf_y * strmf_y)).get_mean()};
+    const double T{((strmf_x_tilde * strmf_y.tilde()) * omega_bar).get_mean()};
     const double U{(strmf_x.bar() * strmf_x.bar()).get_mean()};
     const double W{(omega_bar * omega_bar).get_mean()};
 
@@ -338,7 +326,8 @@ void diagnostics::diag_energy(const twodads::real_t time)
     const double D13{ ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
 	output.open("energy.dat", ios::app);
-	if ( output.is_open() ) {
+	if (output.is_open()) 
+    {
 		output << time << "\t";
 		output << setw(12) << E << "\t" << setw(12) << K << "\t" << setw(12) << T << "\t" << setw(12) << U << "\t" << setw(12) << W << "\t";
 		output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
@@ -419,10 +408,6 @@ void diagnostics::diag_energy(const twodads::real_t time)
 //    }
 //}
 
-/// @brief write output for probes
-/// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
-/// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
-/// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
 void diagnostics::diag_probes(const twodads::real_t time)
 {
 	ofstream output;
@@ -449,7 +434,7 @@ void diagnostics::diag_probes(const twodads::real_t time)
             filename << "probe" << setw(3) << setfill('0') << n * n_probes + m << ".dat";
             output.open(filename.str().data(), ofstream::app );
             if ( output.is_open() ){
-                output << time << "\t";                                                           // time
+                output << time << "\t";                                  // time
                 output << setw(12) << theta_tilde  (np, mp) << "\t";     // n_tilde
                 output << setw(12) << theta        (np, mp) << "\t";     // n
                 output << setw(12) << strmf        (np, mp) << "\t";     // phi
@@ -467,4 +452,4 @@ void diagnostics::diag_probes(const twodads::real_t time)
     }
 }
 
-    // End of file diagnostics.cpp
+// End of file diagnostics.cpp

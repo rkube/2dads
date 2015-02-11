@@ -23,7 +23,7 @@ class diagnostics {
         /// This initializes the diagnostic arrays and diagnostic variables
 		diagnostics(slab_config const);
         /// does nothing
-		~diagnostics();
+		~diagnostics() {};
 
         /// Update the diag_array members from GPU memory. They are used to
         /// compute diagnostic quantities    
@@ -42,6 +42,7 @@ class diagnostics {
         ///@brief Compute energy integrals for various turbulence models
         ///@param time Time of output
         ///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 <br>
+        ///@detailed \f$E = \frac{1}{2} \int \mathrm{d}A\, \left( \widetilde{n} + \phi_x^2  + \phi_y^ \right)^2 \f$ <br>
         ///@detailed \f$D_{1} = \frac{1}{2A} \int \mathrm{d}A\, n^2 \f$  <br>
         ///@detailed \f$D_{2} = \frac{1}{2A} \int \mathrm{d}A\, \left( \nabla_\perp \phi \right)^2 \f$  <br>
         ///@detailed \f$D_{3} = \frac{1}{2A} \int \mathrm{d}A\, \Omega^2\f$ <br>
@@ -56,7 +57,10 @@ class diagnostics {
         ///@detailed \f$D_{12} = \frac{1}{A} \int \mathrm{d}A\, n_{xxx}^2 + n_{yyy}^2\f$ <br>
         ///@detailed \f$D_{13} = \frac{1}{A} \int \mathrm{d}A\, \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}\f$ <br>
         void diag_energy(twodads::real_t const);
-        /// @brief Write time series of physical variables
+        /// @brief write output for probes
+        /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
+        /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
+        /// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
         void diag_probes(twodads::real_t const);
         /// @brief Write simulation parameters to log file
         void diag_rhs(twodads::real_t const);

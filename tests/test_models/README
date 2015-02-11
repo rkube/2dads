@@ -1,0 +1,8 @@
+Contents:
+
+run_diff: Run with diffusion model to test linear part of time integrator
+run_NS: Run Navier Stokes simulation
+run_ohw_c??: ORdinary HW model
+run_mhw_c??: Modified HW model
+
+

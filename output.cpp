@@ -7,12 +7,16 @@
  *
  */
 
-#include "output.h"
+//<<<<<<< HEAD
+//#include "output.h"
+//=======
+//>>>>>>> new_index
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include "output.h"
 
 
 using namespace std;
@@ -21,13 +25,11 @@ using namespace H5;
 // Constructor of the base class
 output :: output(slab_config config) :
     output_counter(0),
-    Nx(config.get_nx()),
-    My(config.get_my())
+    My(config.get_my()),
+    Nx(config.get_nx())
 {
 }
 
-
-//output_h5 :: output_h5(vector<twodads::output_t> o_list, uint _nx, uint _my) :
 output_h5 :: output_h5(slab_config config) :
     output(config),
     filename("output.h5"),
@@ -45,15 +47,42 @@ output_h5 :: output_h5(slab_config config) :
     group_theta_rhs(new Group(output_file -> createGroup("/TRHS"))),
 	dspace_file(NULL),
     o_list(config.get_output())
+    // Initialize DataSpace objects in a later for-loop
+    // But populate dspace_map with pointers.
 {
 	// DataSpace dimension 
-	const hsize_t fdim[] = {Nx, My};
+	const hsize_t fdim[] = {get_my(), get_nx()};
 	// Hyperslab parameter for ghost point array output
 	const hsize_t offset[] = {0,0};
-	const hsize_t count[] = {Nx, My};
+	const hsize_t count[] = {get_my(), get_nx()};
 	DSetCreatPropList ds_creatplist;  
 	dspace_file = new DataSpace(2, count); 
 
+    // populate dspace_map
+    dspace_map[twodads::output_t::o_theta] = &dspace_theta;
+    dspace_map[twodads::output_t::o_theta_x] = &dspace_theta_x;
+    dspace_map[twodads::output_t::o_theta_y] = &dspace_theta_y;
+    dspace_map[twodads::output_t::o_omega] = &dspace_omega;
+    dspace_map[twodads::output_t::o_omega_x] = &dspace_omega_x;
+    dspace_map[twodads::output_t::o_omega_y] = &dspace_omega_y;
+    dspace_map[twodads::output_t::o_strmf] = &dspace_strmf;
+    dspace_map[twodads::output_t::o_strmf_x] = &dspace_strmf_x;
+    dspace_map[twodads::output_t::o_strmf_y] = &dspace_strmf_y;
+    dspace_map[twodads::output_t::o_theta_rhs] = &dspace_theta_rhs;
+    dspace_map[twodads::output_t::o_omega_rhs] = &dspace_omega_rhs;
+    // populate field name map
+
+    fname_map[twodads::output_t::o_theta] = "T/";
+    fname_map[twodads::output_t::o_theta_x] = "Tx/";
+    fname_map[twodads::output_t::o_theta_y] = "Ty/";
+    fname_map[twodads::output_t::o_omega] = "O/";
+    fname_map[twodads::output_t::o_omega_x] = "Ox/";
+    fname_map[twodads::output_t::o_omega_y] = "Oy/";
+    fname_map[twodads::output_t::o_strmf] = "S/";
+    fname_map[twodads::output_t::o_strmf_x] = "Sx/";
+    fname_map[twodads::output_t::o_strmf_y] = "Sy/";
+    fname_map[twodads::output_t::o_theta_rhs] = "TRHS/";
+    fname_map[twodads::output_t::o_omega_rhs] = "ORHS/";
 	// Iterate over defined output functions and add them to container
 	#ifdef DEBUG
 		cout << "Initializing HDF5 output\n";
@@ -63,7 +92,7 @@ output_h5 :: output_h5(slab_config config) :
     DataSpace* dspace;
     for(auto it: o_list)
     {
-        dspace = get_dspace_from_field(it);
+        dspace = dspace_map[it];
         (*dspace) = DataSpace(2, fdim);
         (*dspace).selectHyperslab(H5S_SELECT_SET, count, offset, NULL, NULL);
     }
@@ -71,6 +100,8 @@ output_h5 :: output_h5(slab_config config) :
     output_file -> flush(H5F_SCOPE_LOCAL);
     output_file -> close();
     delete output_file; 
+
+
 }
 
 
@@ -91,34 +122,32 @@ output_h5 :: ~output_h5()
 }
 
 
-/// @brief Call this routine to write output
-/// @detailed Note that get_field_by_name, when called with a twodads::output_t
-/// @detailed also calls cuda_array<%>.copy_device_to_host
 void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 {
-    cuda_array<cuda::real_t, cuda::real_t>* arr;
+    cuda_array<cuda::real_t>* arr;
     // Iterate over list of fields we need to write output for
     for(auto it : o_list)
     {
-        arr = slab.get_field_by_name(it);
+        // Make sure that get_array_ptr calls copy_device_to_host! 
+        slab.copy_device_to_host(it);
+        arr = slab.get_array_ptr(it);
         surface(it, arr, time);
     }
-    output_counter++;
+    increment_output_counter();
 }
 
 
 
-/// @brief Write output field
-/// @detailed This assumes that the host data src points to is up-to-date. 
-void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t, cuda::real_t>* src, const cuda::real_t time)
+void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
 {
+    // update host data on src
+    //src -> copy_device_to_host();
     // Dataset name is /[OST]/[0-9]*
-    //string dataset_name = get_fname_str_from_field(field_name) + "/" + to_string(output_counter); 
     stringstream foo;
-    foo << get_fname_str_from_field(field_name) << "/" << to_string(output_counter);
+    foo << fname_map[field_name] << "/" << to_string(get_output_counter());
     string dataset_name(foo.str());
     output_file = new H5File(filename, H5F_ACC_RDWR);
-	DataSpace* dspace_ptr = get_dspace_from_field(field_name);
+    DataSpace* dspace_ptr = dspace_map[field_name];
 
 #ifdef DEBUG
     cout << "Dataset name: " << dataset_name << "\n";
@@ -138,102 +167,5 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t,
     delete output_file;
 }	
 
-DataSpace* output_h5 :: get_dspace_from_field(twodads::output_t field_name)
-{
-    switch(field_name)
-    {
-        case twodads::output_t::o_theta:
-            return &dspace_theta;
-            break;
-        case twodads::output_t::o_theta_x:
-            return &dspace_theta_x;
-            break;
-        case twodads::output_t::o_theta_y:
-            return &dspace_theta_y;
-            break;
-        case twodads::output_t::o_omega:
-            return &dspace_omega;
-            break;
-        case twodads::output_t::o_omega_x:
-            return &dspace_omega_x;
-            break;
-        case twodads::output_t::o_omega_y:
-            return &dspace_omega_y;
-            break;
-        case twodads::output_t::o_strmf:
-            return &dspace_strmf;
-            break;
-        case twodads::output_t::o_strmf_x:
-            return &dspace_strmf_x;
-            break;
-        case twodads::output_t::o_strmf_y:
-            return &dspace_strmf_y;
-            break;
-        case twodads::output_t::o_omega_rhs:
-            return &dspace_omega_rhs;
-            break;
-        case twodads::output_t::o_theta_rhs:
-            return &dspace_theta_rhs;
-            break;
-    }
-    // This should never happen
-    string err_msg("get_space_from_field: could not find field for twodads::output_t field_name");
-    throw name_error(err_msg);
-}
-
-
-// Return a string containing the field name for the dataset field_name
-string output_h5 :: get_fname_str_from_field(twodads::output_t field_name)
-{
-    switch (field_name)
-    {
-        case twodads::output_t::o_omega:
-            return string("O/");
-            break;
-            
-        case twodads::output_t::o_omega_x:
-            return string("Ox/");
-            break;
-
-        case twodads::output_t::o_omega_y:
-            return string("Oy/");
-            break;
-            
-        case twodads::output_t::o_theta:
-            return string("T/");
-            break;
-
-        case twodads::output_t::o_strmf:
-            return string("S/");
-            break;
-            
-        case twodads::output_t::o_strmf_x:
-            return string("Sx/");
-            break;
-            
-        case twodads::output_t::o_strmf_y:
-            return string("Sy/");
-            break;
-            
-        case twodads::output_t::o_theta_x:
-            return string("Tx/");
-            break;
-            
-        case twodads::output_t::o_theta_y:
-            return string("Ty/");
-            break;
-
-        case twodads::output_t::o_theta_rhs:
-            return string("TRHS/");
-            break;
-
-        case twodads::output_t::o_omega_rhs:
-            return string("ORHS/");
-            break;
-    }
-    // This should never happen
-    string err_msg("get_fname_str_from_field: could not find field for twodads::output_t field_name");
-    throw name_error(err_msg);
-}
 
 // End of file output.cpp

@@ -11,14 +11,13 @@
 #include <string>
 #include <exception>
 
-#ifndef __ERROR_H
-#define __ERROR_H
+#ifndef ERROR_H
+#define ERROR_H
 
 /// Out of bounds error code: Attempted access for element out of array bounds
 
 using namespace std;
 
-//class out_of_bounds_err : public exception{
 class out_of_bounds_err : public exception
 {
     public:

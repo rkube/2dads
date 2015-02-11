@@ -5,18 +5,19 @@
 
 #include <iostream>
 #include <vector>
-#include "initialize.h"
 #include <stdio.h>
+#include "initialize.h"
 
 
 __global__ 
-void d_init_sine(cuda::real_t* array, cuda::slab_layout_t layout, double kx, double ky)
+void d_init_sine(cuda::real_t* array, const cuda::slab_layout_t layout, const double kx, const double ky)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row  = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * layout.My + col;
-    const double x = layout.x_left + double(row) * layout.delta_x;
-    const double y = layout.y_lo + double(col) * layout.delta_y;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * layout.Nx + col;
+
+    const double x = layout.x_left + double(col) * layout.delta_x;
+    const double y = layout.y_lo + double(row) * layout.delta_y;
 
     if ((col >= layout.Nx) || (row >= layout.My))
         return;
@@ -25,15 +26,15 @@ void d_init_sine(cuda::real_t* array, cuda::slab_layout_t layout, double kx, dou
 
 
 __global__
-void d_init_exp(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
+void d_init_exp(cuda::real_t* array, const cuda::slab_layout_t layout, const cuda::init_params_t params)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * layout.My + col;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * layout.Nx + col;
     const double x = layout.x_left + double(row) * layout.delta_x;
     const double y = layout.y_lo + double(col) * layout.delta_y;
 
-    if ((col >= layout.My) || (row >= layout.Nx))
+    if ((col >= layout.Nx) || (row >= layout.My))
         return;
 
     array[idx] = params.i1 + params.i2 * exp( -(x - params.i3) * (x - params.i3) / (2.0 * params.i4 * params.i4) 
@@ -42,15 +43,15 @@ void d_init_exp(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_para
 
 
 __global__
-void d_init_exp_log(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
+void d_init_exp_log(cuda::real_t* array, const cuda::slab_layout_t layout, const cuda::init_params_t params)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * layout.My + col;
-    const double x = layout.x_left + double(row) * layout.delta_x;
-    const double y = layout.y_lo + double(col) * layout.delta_y;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * layout.Nx + col;
+    const double x = layout.x_left + double(col) * layout.delta_x;
+    const double y = layout.y_lo + double(row) * layout.delta_y;
 
-    if ((col >= layout.My) || (row >= layout.Nx))
+    if ((col >= layout.Nx) || (row >= layout.My))
         return;
 
     array[idx] = params.i1 + params.i2 * exp( -(x - params.i3) * (x - params.i3) / (2.0 * params.i4 * params.i4) 
@@ -60,15 +61,15 @@ void d_init_exp_log(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_
 
 
 __global__
-void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_params_t params)
+void d_init_lapl(cuda::real_t* array, const cuda::slab_layout_t layout, const cuda::init_params_t params)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * layout.My + col;
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * layout.Nx + col;
     const double x = layout.x_left + double(row) * layout.delta_x;
     const double y = layout.y_lo + double(col) * layout.delta_y;
 
-    if ((col >= layout.My) || (row >= layout.Nx))
+    if ((col >= layout.Nx) || (row >= layout.My))
         return;
 
     array[idx] = exp(- 0.5 * (x * x + y * y)/(params.i4 * params.i4)) / (params.i4 * params.i4) * 
@@ -78,18 +79,19 @@ void d_init_lapl(cuda::real_t* array, cuda::slab_layout_t layout, cuda::init_par
 
 /// Initialize gaussian profile around a single mode
 __global__
-void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, double modex, double modey, double sigma)
+void d_init_mode_exp(cuda::cmplx_t* array, const cuda::slab_layout_t layout, const double amp, const double modex, const double modey, const double sigma)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * (layout.My / 2 + 1) + col;
-    if ((col >= layout.My / 2 + 1) || (row >= layout.Nx))
-        return;
-    double n = double(row);
-    double m = double(col);
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * (layout.Nx / 2 + 1) + col;
+    double n = double(col);
+    double m = double(row);
     double damp = exp ( -((n-modex)*(n-modex) / sigma) - ((m-modey)*(m-modey) / sigma) ); 
     double phase = 0.56051 * 2.0 * cuda::PI;  
     
+    if ((col >= layout.Nx / 2 + 1) || (row >= layout.My))
+        return;
+
     cuda::cmplx_t foo(damp * amp * cos(phase), damp * amp * sin(phase));
     array[idx] = foo;
     //printf("sigma = %f, re = %f, im = %f\n", sigma, array[idx].x, array[idx].y);
@@ -98,25 +100,26 @@ void d_init_mode_exp(cuda::cmplx_t* array, cuda::slab_layout_t layout, double am
 
 /// Initialize a single mode pointwise
 __global__
-void d_init_mode(cuda::cmplx_t* array, cuda::slab_layout_t layout, double amp, uint row, uint col)
+void d_init_mode(cuda::cmplx_t* array, const cuda::slab_layout_t layout, const double amp, const uint row, const uint col)
 {
-    const uint idx = row * (layout.My / 2 + 1) + col;
+    const uint idx = row * (layout.Nx / 2 + 1) + col;
     const double phase = 0.56051 * cuda::TWOPI;
-    CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
+    //CuCmplx<cuda::real_t> foo(amp * cos(phase), amp * sin(phase));
+    cuda::cmplx_t foo(amp * cos(phase), amp * sin(phase));
     array[idx] = foo;
     printf("d_init_mode: mode(%d, %d) at idx = %d = (%f, %f)\n",
-            row, col, idx, cos(phase), sin(phase));
+            row, col, idx, array[idx].re(), array[idx].im());
 }
 
 
 /// Initialize all modes to given value
 __global__
-void d_init_all_modes(cuda::cmplx_t* array, cuda::slab_layout_t layout, double real, double imag)
+void d_init_all_modes(cuda::cmplx_t* array, const cuda::slab_layout_t layout, const double real, const double imag)
 {
-    const uint col = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint row = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * (layout.My / 2 + 1) + col;
-    if ((col >= layout.My / 2 + 1) || (row >= layout.Nx))
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * (layout.Nx / 2 + 1) + col;
+    if ((col >= layout.Nx / 2 + 1) || (row >= layout.Nx))
         return;
 
     array[idx] = cuda::cmplx_t(real, imag);
@@ -126,25 +129,22 @@ void d_init_all_modes(cuda::cmplx_t* array, cuda::slab_layout_t layout, double r
 /// Initialize sinusoidal profile
 //void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr, 
 void init_simple_sine(cuda_arr_real* arr,
-        vector<double> initc,
-        cuda::slab_layout_t layout)
+        const vector<double> initc,
+        const cuda::slab_layout_t layout)
 {
-    dim3 grid = arr -> get_grid();
-    dim3 block = arr -> get_block();
-
     const double kx = initc[0] * cuda::TWOPI / double(layout.delta_x * double(arr -> get_nx()));
     const double ky = initc[1] * cuda::TWOPI / double(layout.delta_y * double(arr -> get_my()));
 
-    d_init_sine<<<grid, block>>>(arr -> get_array_d(0), layout, kx, ky);
+    d_init_sine<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(0), layout, kx, ky);
     cudaDeviceSynchronize();
 }
 
 
 /// Initialize field with a guassian profile
-void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
-        vector<double> initc,
-        cuda::slab_layout_t layout,
-        bool log_theta)
+void init_gaussian(cuda_arr_real* arr,
+        const vector<double> initc,
+        const cuda::slab_layout_t layout,
+        const bool log_theta)
 {
     cuda::init_params_t init_params;
 
@@ -164,9 +164,9 @@ void init_gaussian(cuda_array<cuda::real_t, cuda::real_t>* arr,
 
 
 /// Initialize real field with nabla^2 exp(-(x-x0)^2/ (2. * sigma^2) - (y - y0)^2 / (2. * sigma_y^2)
-void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
-        vector<double> initc,
-        cuda::slab_layout_t layout)
+void init_invlapl(cuda_arr_real* arr,
+        const vector<double> initc,
+        const cuda::slab_layout_t layout)
 {
 
     cuda::init_params_t init_params;
@@ -182,11 +182,11 @@ void init_invlapl(cuda_array<cuda::real_t, cuda::real_t>* arr,
 }
 
 // Initialize all modes with constant value
-void init_all_modes(cuda_arr_cmplx* arr, vector<double> initc, cuda::slab_layout_t layout, uint tlev)
+void init_all_modes(cuda_arr_cmplx* arr, const vector<double> initc, const cuda::slab_layout_t layout, const uint tlev)
 {
     double real = initc[0];
     double imag = initc[1];
-d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
+    d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
 }
 
 
@@ -195,27 +195,35 @@ d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(t
 /// init_function  = *_mode
 /// initial_conditions = amp_0 kx_0 ky_0 sigma_0   amp_1 kx_1 ky_1 sigma_1 .... amp_N kx_N ky_N sigma_N 
 /// kx -> row, ky -> column. 
-/// kx is the x-mode number: kx = 0, 1, ...Nx -1
+/// kx is the x-mode number: kx = 0, 1, ...Nx / 2 
 /// ky is the y-mode number: ky = 0... My / 2
-void init_mode(cuda_array<cuda::cmplx_t, cuda::real_t>* arr,
-        vector<double> initc,
-        cuda::slab_layout_t layout,
-        uint tlev)
+void init_mode(cuda_arr_cmplx* arr,
+        const vector<double> initc,
+        const cuda::slab_layout_t layout,
+        const uint tlev)
 {
     const unsigned int num_modes = initc.size() / 4;
     (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
 
-#ifdef DEBUG
+//#ifdef DEBUG
     cout << "Initializing modes:\n";
-#endif
+//#endif
     for(uint n = 0; n < num_modes; n++)
     {
-#ifdef DEBUG
+//#ifdef DEBUG
         cout << "mode " << n << ": amp=" << initc[4*n] << " kx=" << initc[4*n+1] << ", ky=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
-#endif
+//#endif
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
-        //d_init_mode<<<1, 1>>>(arr -> get_array_d(0), layout, initc[4*n], uint(initc[4*n+1]), uint(initc[4*n+2])); 
     }
+
+    // Zero out kx=0,ky=0 mode
+    d_init_mode<<<1, 1>>>(arr -> get_array_d(tlev), layout, 0.0, 0, 0);
+
+#ifdef DEBUG
+    cout << "Initialized field:\n";
+    cout << (*arr) << "\n";
+#endif
+
 }
 
 // End of file initialize.cu
