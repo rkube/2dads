@@ -11,18 +11,15 @@ using namespace std;
 // bar:   get poloidal mean
 // tilde: get poloidal fluctuation around mean
 
-//template __device__ __host__ double d_op_add<double>(double, double);
-//template __device__ __host__ double d_op_max<double>(double, double);
-//template __device__ __host__ double d_op_min<double>(double, double);
-//
-//typedef double (*op_func_t) (double, double);
-//
-//__constant__ op_func_t op_func_table[] = {d_op_add, d_op_max, d_op_min};
-
 int main(void)
 {
-    const unsigned int Nx = 16;
-    const unsigned int My = 16;
+    constexpr unsigned int Nx{16};
+    constexpr unsigned int My{16};
+
+    //cout << "Enter Nx: " << endl;
+    //cin >> Nx;
+    //cout << "Enter My: " << endl;
+    //cin >> My;
 
     const double Lx = 1.0;
     const double Ly = 1.0;
@@ -30,8 +27,8 @@ int main(void)
     const double dx = 2. * Lx / ((double) Nx);
     const double dy = 2. * Ly / ((double) My);
 
-    cuda_array<double, double> carr(1, My, Nx);
-    cuda_darray<double> darr(My, Nx);
+    cout << "creating cuda_array<double>" << endl;
+    cuda_array<double> carr(1, My, Nx);
 
     double x = 0.0;
     double y = 0.0;
@@ -44,19 +41,44 @@ int main(void)
             carr(0, m, n) = 0.3 * x + sin(2.0 * M_PI * y);
         }
     }
-    cout << "Copy host to device" << endl;
     carr.copy_host_to_device();
-    cout << "darr = carr" << endl;
-    darr = carr;
-    cout << darr << "\n";
+    cout << "carr = \n" << carr << endl;
+    cout << "creating cuda_darray<double>" << endl;
+    cuda_darray<double> darr(carr);
 
-    darr.reduce_profile();
-    darr.reduce_max();
-    darr.reduce_mean();
-    darr.reduce_min();
+    cout << "darr = \n" << darr << endl;
+    double profile[Nx];
+
+//    darr.get_profile(profile);
+//
+//    cout << "main(): profile = " << endl;
+//    for(unsigned int n = 0; n < Nx; n++)
+//    	cout << profile[n] << "\t";
+//    cout << endl;
 
     cout << "max = " << darr.get_max() << endl;
     cout << "min = " << darr.get_min() << endl;
-    cout << "mean = " << darr.get_mean() << endl;
-    //darr.get_mean()
+    cout << "sum = " << darr.get_sum() << endl;
+    cout << "mean = "<< darr.get_mean() << endl;
+
+    // This calls one full constructor and
+    // move constructors of cuda_darray and cuda_array(delegated from cuda_darray)
+    cuda_darray<double> darr_tilde(std::move(darr.tilde()));
+    cout << darr_tilde;
+    cout << "profile of tilde_array: ";
+    darr_tilde.get_profile(profile);
+    for(unsigned int n = 0; n< Nx; n++)
+    	cout << profile[n] << "\t";
+    cout << endl;
+
+    // This calls one full constructor and
+    // move constructors of cuda_darray and cuda_array(delegated from cuda_darray)
+    cuda_darray<double> darr_bar(std::move(darr.bar()));
+    cout << darr_bar;
+    cout << "profile of bar_array: ";
+    darr_bar.get_profile(profile);
+    for(unsigned int n = 0; n< Nx; n++)
+    	cout << profile[n] << "\t";
+    cout << endl;
+
 }

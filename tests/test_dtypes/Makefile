@@ -12,5 +12,8 @@ test_memcpy: test_memcpy.cu
 test_cucmplx: test_cucmplx.cpp $(PROJ_INCDIR)/cucmplx.h
 	$(CC) $(CFLAGS) -o test_cucmplx test_cucmplx.cpp $(INCLUDES)
 
+test_operators: test_operators.cu $(PROJ_INCDIR)/cuda_operators.h
+	$(CUDACC) $(CUDACFLAGS) -DDEBUG -o test_operators test_operators.cu $(INCLUDES) $(CUDALFLAGS)
+
 clean:
 	rm test_memcpy test_cucmplx

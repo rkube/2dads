@@ -9,6 +9,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include "slab_config.h"
 #include "error.h"
 #include "2dads_types.h"
@@ -97,7 +100,7 @@ slab_config :: slab_config() :
 	string output_str;
     string theta_rhs_str;
     string omega_rhs_str;
-    string init_function_str;
+    //string init_function_str;
     string strmf_solver_str;    
 
     // Add recognized options to cf_opts
@@ -164,25 +167,8 @@ slab_config :: slab_config() :
 	if ( vm.count("diagnostics") ){
 		boost::split(diagnostics_split_vec, diagnostics_str, boost::is_any_of(" \t"), boost::token_compress_on);
 	}
-    for(auto str : diagnostics_split_vec){
-        cout << "diagnstics_str = " << str << " ";
+    for(auto str : diagnostics_split_vec)
         diagnostics.push_back(diagnostic_map[str]);
-        switch(diagnostic_map[str])
-        {
-            case twodads::diagnostic_t::diag_blobs:
-                cout << " -> blobs" << endl;
-                break;
-            case twodads::diagnostic_t::diag_energy:
-                cout << " -> energy" << endl;
-                break;
-            case twodads::diagnostic_t::diag_probes:
-                cout << " -> probes" << endl;
-                break;
-            default:
-                cout << "not found!" << endl;
-                break;
-        }
-    }
 
 
 	// Split output_str at whitespaces and store substrings in output
@@ -191,46 +177,7 @@ slab_config :: slab_config() :
 		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
 
     for(auto str: output_split_vec)
-    {
-    	cout << "output_split_vec = " << str << " -> ";
         output.push_back(output_map[str]);
-        switch(output_map[str]){
-            case twodads::output_t::o_theta:
-                cout << "o_theta" << endl;
-                break;
-            case twodads::output_t::o_theta_x:
-                cout << "o_theta_x" << endl;
-                break;
-            case twodads::output_t::o_theta_y:
-                cout << "o_theta_y" << endl;
-                break;
-            case twodads::output_t::o_omega:
-                cout << "o_omega" << endl;
-                break;
-            case twodads::output_t::o_omega_x:
-                cout << "o_omega_x" << endl;
-                break;
-            case twodads::output_t::o_omega_y:
-                cout << "o_omega_y" << endl;
-                break;
-            case twodads::output_t::o_strmf:
-                cout << "o_strmf" << endl;
-                break;
-            case twodads::output_t::o_strmf_x:
-                cout << "o_strmf_x" << endl;
-                break;
-            case twodads::output_t::o_strmf_y:
-                cout << "o_strmf_y" << endl;
-                break;
-            case twodads::output_t::o_theta_rhs:
-                cout << "o_theta_rhs" << endl;
-                break;
-            case twodads::output_t::o_omega_rhs:
-                cout << "o_omega_rhs" << endl;
-                break;
-        }
-
-    }
 
     // Parse string shift_modes, string is in the form shift_modes = (kx1 ky1), (kx2 ky2), (kx3 ky3) ... (kxn kyn)
     /*if ( vm.count("shift_modes") ){
@@ -286,57 +233,6 @@ slab_config :: slab_config() :
     theta_rhs = rhs_func_map[theta_rhs_str];
     omega_rhs = rhs_func_map[omega_rhs_str];
     
-    cout << "theta_rhs_str = " << theta_rhs_str << "-> ";
-    switch(theta_rhs)
-    {
-    	case twodads::rhs_t::theta_rhs_ns:
-    		cout << " theta_rhs_ns" << endl;
-    		break;
-        case twodads::rhs_t::theta_rhs_lin:
-            cout << " theta_rhs_lin" << endl;
-            break;
-        case twodads::rhs_t::theta_rhs_log:
-            cout << " theta_rhs_log" << endl;
-            break;
-        case twodads::rhs_t::theta_rhs_hw:
-            cout << " theta_rhs_hw" << endl;
-            break;
-        case twodads::rhs_t::theta_rhs_hwmod:
-            cout << " theta_rhs_hwmod" << endl;
-            break;
-        case twodads::rhs_t::theta_rhs_null:
-            cout << " theta_rhs_null" << endl;
-            break;
-        default:
-            cout << " not found" << endl;
-            break;
-    }
-
-    cout << "omega_rhs_str = " << omega_rhs_str << "-> ";
-    switch(omega_rhs)
-    {
-        case twodads::rhs_t::omega_rhs_ns:
-            cout << " omega_rhs_ns" << endl;
-            break;
-        case twodads::rhs_t::omega_rhs_hw:
-            cout << " omega_rhs_hw" << endl;
-            break;
-        case twodads::rhs_t::omega_rhs_hwmod:
-            cout << " omega_rhs_hwmod" << endl;
-            break;
-        case twodads::rhs_t::omega_rhs_hwzf:
-            cout << " omega_rhs_hwzf" << endl;
-            break;
-        case twodads::rhs_t::omega_rhs_null:
-            cout << "omega_rhs_null" << endl;
-            break;
-        case twodads::rhs_t::omega_rhs_ic:
-            cout << "omega_rhs_ic" << endl;
-            break;
-        default:
-            cout << " not found" << endl;
-            break;
-    }
 }
 
 

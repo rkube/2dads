@@ -28,7 +28,7 @@ ptr_theta_x = ctypes.c_void_p(theta_x.ctypes.data)
 ptr_theta_y = ctypes.c_void_p(theta_y.ctypes.data)
 
 # call library function
-slab_derivs_dll = ctypes.cdll.LoadLibrary('test_derivs_py.so')
+slab_derivs_dll = ctypes.cdll.LoadLibrary('test_derivs.so')
 
 slab_derivs_dll.test_derivs(ptr_theta, ptr_theta_x, ptr_theta_y)
 

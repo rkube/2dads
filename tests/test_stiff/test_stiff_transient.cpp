@@ -55,16 +55,15 @@ int main(void)
         slab.update_real_fields(tlevs - t - 1);
         slab.rhs_fun(tlevs - t - 1);
 
-        cout << "omega_rhs_hat=\n";
-        slab.print_field(twodads::field_k_t::f_omega_rhs_hat);
-        cout << "theta_rhs_hat=\n";
-        slab.print_field(twodads::field_k_t::f_theta_rhs_hat);
-        
         if(t == 1)
         {
             slab.move_t(twodads::field_k_t::f_theta_rhs_hat, tlevs - t - 2, 0);
             slab.move_t(twodads::field_k_t::f_omega_rhs_hat, tlevs - t - 2, 0);
         }
+        cout << "omega_rhs_hat=\n";
+        slab.print_field(twodads::field_k_t::f_omega_rhs_hat);
+        cout << "theta_rhs_hat=\n";
+        slab.print_field(twodads::field_k_t::f_theta_rhs_hat);
     }
 
     for(; t < num_tsteps + 1; t++)

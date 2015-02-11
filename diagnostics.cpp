@@ -5,7 +5,6 @@
 /// Contains diagnostic routines for turbulence simulation
 
 
-#include <string>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -95,11 +94,6 @@ diagnostics :: diagnostics(slab_config const config) :
 }
 
 
-diagnostics::~diagnostics()
-{
-}
-
-
 
 /*
  ************** Logfile stuff **************************************************
@@ -149,15 +143,15 @@ void diagnostics :: init_diagnostic_output(string filename, string header, bool&
 	
 void diagnostics :: update_arrays(slab_cuda& slab)
 {
-    theta.update(slab.theta);
-    theta_x.update(slab.theta_x);
-    theta_y.update(slab.theta_y);
-    omega.update(slab.omega);
-    omega_x.update(slab.omega_x);
-    omega_y.update(slab.omega_y);
-    strmf.update(slab.strmf);
-    strmf_x.update(slab.strmf_x);
-    strmf_y.update(slab.strmf_y);
+	slab.get_data_host(twodads::field_t::f_theta,   theta.get_array()  , slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_theta_x, theta_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_theta_y, theta_y.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega,   omega.get_array(),   slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega_x, omega_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_omega_y, omega_y.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf,   strmf.get_array(),   slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf_x, strmf_x.get_array(), slab_layout.My, slab_layout.Nx);
+	slab.get_data_host(twodads::field_t::f_strmf_y, strmf_y.get_array(), slab_layout.My, slab_layout.Nx);
 }
 
 /*
@@ -299,9 +293,9 @@ void diagnostics::diag_blobs(const twodads::real_t time)
 void diagnostics::diag_energy(const twodads::real_t time)
 {
     ofstream output;
-    double Lx = slab_layout.delta_y * double(slab_layout.My);
-    double Ly = slab_layout.delta_x * double(slab_layout.Nx);
-
+    const double Lx = slab_layout.delta_y * double(slab_layout.My);
+    const double Ly = slab_layout.delta_x * double(slab_layout.Nx);
+    const double invdA = 1. / (Lx * Ly);
 
     diag_array<double> strmf_tilde(move(strmf.tilde()));
     diag_array<double> strmf_bar(move(strmf.bar()));
@@ -311,9 +305,9 @@ void diagnostics::diag_energy(const twodads::real_t time)
     diag_array<double> theta_tilde(move(theta.tilde()));
     diag_array<double> theta_bar(move(theta.bar())); 
 
-    const double E{(theta_tilde * theta_tilde + strmf_x * strmf_x + strmf_y * strmf_y).get_mean()};
-    const double K{(strmf_x_tilde * strmf_x_tilde + strmf_y * strmf_y).get_mean()};
-    const double T{(strmf_x_tilde * strmf_y.tilde() * omega_bar).get_mean()};
+    const double E{0.5 * invdA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+    const double K{((strmf_x_tilde * strmf_x_tilde) + (strmf_y * strmf_y)).get_mean()};
+    const double T{((strmf_x_tilde * strmf_y.tilde()) * omega_bar).get_mean()};
     const double U{(strmf_x.bar() * strmf_x.bar()).get_mean()};
     const double W{(omega_bar * omega_bar).get_mean()};
 

@@ -10,11 +10,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <string>
+#include <iostream>
 #include <map>
-#include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include "2dads_types.h"
 
 using namespace std;
@@ -125,6 +122,7 @@ public:
 	inline int get_nthreads() const { return nthr; };
 	
 	/// Return the initialization routine.
+	inline string get_init_function_str() const {return init_function_str;};
 	inline twodads::init_fun_t get_init_function() const { return init_function; };
     /*!
 	 \brief Return type of RHS for theta equation. <br>
@@ -193,6 +191,7 @@ private:
     twodads::rhs_t theta_rhs;
     twodads::rhs_t omega_rhs;
     twodads::init_fun_t init_function;
+    string init_function_str;
 
     vector<twodads::diagnostic_t> diagnostics;
     vector<twodads::output_t> output;

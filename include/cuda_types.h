@@ -4,32 +4,33 @@
 #include "vector_types.h"
 #include "cufft.h"
 #include "cucmplx.h"
+
 #include <ostream>
 #include <assert.h>
 #include <vector>
 
-
 namespace cuda
 {
-    //typedef cufftDoubleComplex cmplx_t;
-    //typedef double2 cmplx_t;
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
-    const unsigned int blockdim_nx = 32; ///< Block dimension in radial (x) direction, columns
-    const unsigned int blockdim_my = 1;  ///< Block dimension in poloidal(y) direction, rows
+    constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
+    constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
 
-    const unsigned int blockdim_nx_max = 1024;
-    const unsigned int blockdim_my_max = 1024;
+    constexpr unsigned int blockdim_nx_max{1024};
+    constexpr unsigned int blockdim_my_max{1024};
 
-    const unsigned int griddim_nx_max = 1024;
-    const unsigned int griddim_my_max = 1024;
+    constexpr unsigned int griddim_nx_max{1024};
+    constexpr unsigned int griddim_my_max{1024};
 
     //const real_t PI = 3.14159265358979323846264338327950288;
-    const real_t PI = 3.141592653589793; ///< $\pi$
-    const real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
-    const real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
+    constexpr real_t PI = 3.141592653589793; ///< $\pi$
+    constexpr real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
+    constexpr real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
+    constexpr real_t epsilon{0.000001};
+    constexpr int max_initc{6}; /// < Maximal number of initial conditions
 
-    const int max_initc = 6; /// < Maximal number of initial conditions
+    constexpr int io_w{7}; //width of fields used in cout
+    constexpr int io_p{4}; //precision when printing with cout
 
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when

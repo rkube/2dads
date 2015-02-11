@@ -11,8 +11,8 @@
 #include <string>
 #include <exception>
 
-#ifndef __ERROR_H
-#define __ERROR_H
+#ifndef ERROR_H
+#define ERROR_H
 
 /// Out of bounds error code: Attempted access for element out of array bounds
 

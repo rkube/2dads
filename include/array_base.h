@@ -12,7 +12,7 @@
 #include <cmath>
 #include <cstring>
 #include "error.h"
-#include "check_bounds.h"
+#include "bounds.h"
 #include "2dads_types.h"
 
 /// @brief Template for the loop operator used in operator[+-*]=, run by each thread
@@ -198,7 +198,7 @@ class array_base{
         const uint My;
         const uint Nx;
         // Check for bounds
-        check_bounds bounds;
+        bounds check_bounds;
         // Actual array data
         T* array;
         T** array_t;
@@ -224,7 +224,7 @@ array_base<T, Derived> :: array_base(const uint nthr, const uint t, const uint m
     tlevs(t),
     My(m),
     Nx(n),
-    bounds(tlevs, My, Nx),
+    check_bounds(tlevs, My, Nx),
     array(nullptr),
     array_t(nullptr)
 {
@@ -239,15 +239,15 @@ array_base<T, Derived> :: array_base(const uint nthr, const uint t, const uint m
     assert(My % nthreads == 0);
     nelem = My / nthreads;
 
-#ifdef DEBUG 
-    cout << "array_base<T>::array_base(uint, uint, uint)\n";
-    cout << "\t\ttlevs = " << tlevs << "\tMy = " << My << "\tNx = " << Nx << "\n";
-    cout << "\t\tarray: " << sizeof(T) * tlevs * My * Nx << " bytes at " << array << "\n";
-    cout << "\t\tarray_t: " << sizeof(T*) * tlevs << " bytes at " << array_t << "\n";
-    for(uint tl = 0; tl < tlevs; tl++)
-        cout << "\t\tarray_t[" << tl << "] at " << array_t[tl] << "\n";
-    cout << "\t\tnthreads = " << nthreads << " threads, nelem = " << nelem << "\n";
-#endif 
+//#ifdef DEBUG
+//    cout << "array_base<T>::array_base(uint, uint, uint)\n";
+//    cout << "\t\ttlevs = " << tlevs << "\tMy = " << My << "\tNx = " << Nx << "\n";
+//    cout << "\t\tarray: " << sizeof(T) * tlevs * My * Nx << " bytes at " << array << "\n";
+//    cout << "\t\tarray_t: " << sizeof(T*) * tlevs << " bytes at " << array_t << "\n";
+//    for(uint tl = 0; tl < tlevs; tl++)
+//        cout << "\t\tarray_t[" << tl << "] at " << array_t[tl] << "\n";
+//    cout << "\t\tnthreads = " << nthreads << " threads, nelem = " << nelem << "\n";
+//#endif
 }
 
 
@@ -308,7 +308,7 @@ array_base<T, Derived> :: array_base(array_base<T, Derived>&& rhs) :
     tlevs(rhs.tlevs),
     My(rhs.My),
     Nx(rhs.Nx), 
-    bounds(tlevs, My, Nx)
+    check_bounds(tlevs, My, Nx)
 {
     // See Stroustrup C++, 17.5.2
     array = rhs.array;
@@ -349,8 +349,7 @@ template <class T, class Derived>
 inline T& array_base<T, Derived> :: operator()(uint t, uint m, uint n)
 {
 #ifdef DEBUG
-    if(!bounds(t, m, n))
-        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+	check_bounds(t, m, n);
 #endif
     return (*(array_t[t] + address(m, n)));
 }
@@ -360,8 +359,7 @@ template <class T, class Derived>
 inline T array_base<T, Derived> :: operator()(uint t, uint m, uint n) const
 {
 #ifdef DEBUG
-    if(!bounds(t, n, m))
-        throw out_of_bounds_err(string("T array_base<T, Derived> :: operator()(uint, uint, uint): out of bounds\n"));
+	check_bounds(t, m, n);
 #endif
     return (*(array_t[t] + address(m, n)));
 }
@@ -371,8 +369,7 @@ template <class T, class Derived>
 inline T& array_base<T, Derived> :: operator()(uint m, uint n)
 {
 #ifdef DEBUG
-    if(!bounds(n, m))
-        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint): out of bounds\n"));
+	check_bounds(m, n);
 #endif 
     return (*(array + address(m, n)));
 }
@@ -382,8 +379,7 @@ template <class T, class Derived>
 inline T array_base<T, Derived> :: operator()(uint m, uint n) const
 {
 #ifdef DEBUG
-    if(!bounds(m, n))
-        throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint): out of bounds\n"));
+	check_bounds(m, n);
 #endif
     return (*(array + address(m, n)));
 }
@@ -399,8 +395,7 @@ inline T array_base<T, Derived> :: operator()(const uint t, int m_in, int n_in) 
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
 #ifdef DEBUG
-    if(!bounds(t, m, n))
-        throw out_of_bounds_err(string("T array_base<T, Derived> :: operator()(uint, uint, uint): out of bounds\n"));
+    check_bounds(m, n);
 #endif
     return (*(array_t[t] + address(m, n)));
 }
@@ -412,8 +407,7 @@ inline T& array_base<T, Derived> :: operator()(const uint t, int m_in, int n_in)
     uint m = (m_in > 0 ? m_in : My + m_in) % My;
     uint n = (n_in > 0 ? n_in : Nx + n_in) % Nx;
 #ifdef DEBUG
-    if(!bounds(t, m, n))
-        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+    check_bounds(m, n);
 #endif
     return (*(array_t[t] + address(m, n)));
 }
@@ -427,8 +421,7 @@ inline T array_base<T, Derived> :: operator()(int m_in, int n_in) const
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
 #ifdef DEBUG
-    if(!bounds(m, n))
-        throw out_of_bounds_err(string("T array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+    check_bounds(m, n);
 #endif
     return (*(array + address(m, n)));
 }
@@ -442,8 +435,7 @@ inline T& array_base<T, Derived> :: operator()(int m_in, int n_in)
     //if(n_in < 0)
     //    cout << "n_in = " << n_in << "-> " << n << "\n";
 #ifdef DEBUG
-    if(!bounds(m, n))
-        throw out_of_bounds_err(string("T& array_base<T> :: operator()(uint, uint, uint): out of bounds\n"));
+    check_bounds(m, n);
 #endif
     return (*(array + address(m, n)));
 }
@@ -468,11 +460,9 @@ Derived& array_base<T, Derived> :: operator=(const T& rhs)
 template <class T, class Derived>
 Derived& array_base<T, Derived> :: operator=(const array_base<T, Derived>& rhs)
 {
-    if(!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
-        throw out_of_bounds_err(string("array_base<T>& array_base<T>::operator=(const array_base<T>& rhs): Index out of bounds: n\n"));
     if( (void*) this == (void*) &rhs)
         return static_cast<Derived &>(*this);
-
+    check_bounds(rhs.get_my(), rhs.get_nx());
     memcpy(array, rhs.get_array(0), sizeof(T) * Nx * My);
     return static_cast<Derived &>(*this);
 }
@@ -483,10 +473,9 @@ Derived& array_base<T, Derived> :: operator=(const array_base<T, Derived>& rhs)
 template <class T, class Derived>
 array_base<T, Derived>& array_base<T, Derived>::operator=(array_base<T, Derived>&& rhs)
 {
-    if(!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
-        throw out_of_bounds_err(string("array_base<T>& array_base<T>::operator=(const array_base<T>& rhs): Index out of bounds: n\n"));
     if( (void*) this == (void*) &rhs)
         return *this;
+    check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
 
     T* tmp_array = array;
     T** tmp_array_t = array_t;
@@ -503,11 +492,10 @@ array_base<T, Derived>& array_base<T, Derived>::operator=(array_base<T, Derived>
 template <class T, class Derived>
 Derived& array_base<T, Derived> :: operator+=(const Derived& rhs)
 {
-    if(!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
-        throw out_of_bounds_err(string("fftw_array::operator=(const fftw_array& rhs): Index out of bounds: n\n"));
 	if ( (void*) this == (void*) &rhs) 
         throw operator_err(string("array_base<T>& array_base<T>::operator*=(const array_base<T>& rhs): this == rhs\n"));
 
+	check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
     std::vector<std::thread> thr;
     for(unsigned int n = 0; n < nthreads; n++) 
         thr.push_back(std::thread(calc_loop<Derived, std::plus<T>>, static_cast<Derived*>(this), &rhs, n * nelem, (n + 1) * nelem));
@@ -523,10 +511,9 @@ Derived& array_base<T, Derived> :: operator+=(const Derived& rhs)
 template <class T, class Derived>
 Derived& array_base<T, Derived> :: operator-=(const Derived& rhs)
 {
-    if(!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
-        throw out_of_bounds_err(string("fftw_array::operator=(const fftw_array& rhs): Index out of bounds: n\n"));
 	if ( (void*) this == (void*) &rhs) 
         throw operator_err(string("array_base<T>& array_base<T>::operator-=(const array_base<T>& rhs): this == rhs\n"));
+	check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
 
     std::vector<std::thread> thr;
     for(unsigned int n = 0; n < nthreads; n++) 
@@ -542,11 +529,10 @@ Derived& array_base<T, Derived> :: operator-=(const Derived& rhs)
 template <class T, class Derived>
 Derived& array_base<T, Derived> :: operator*=(const Derived& rhs)
 {
-    if(!bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx()))
-        throw out_of_bounds_err(string("array_base::operator=(const fftw_array& rhs): Index out of bounds: n\n"));
 	if ( (void*) this == (void*) &rhs) 
         throw operator_err(string("array_base<T>& array_base<T>::operator*=(const array_base<T>& rhs): this == rhs\n"));
 
+	check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
     std::vector<std::thread> thr;
     for(unsigned int n = 0; n < nthreads; n++) 
         thr.push_back(std::thread(calc_loop<Derived, std::multiplies<T>>, static_cast<Derived *>(this), &rhs, n * nelem, (n + 1) * nelem));
@@ -645,8 +631,8 @@ Derived array_base<T, Derived>::operator*(const Derived& rhs) const
 template <class T, class Derived>
 void array_base<T, Derived>::copy(const uint t_dst, const uint t_src)
 {
-    if(!bounds(t_src, 0, 0) || !bounds(t_dst, 0, 0))
-        throw out_of_bounds_err("void array_base<T>::copy_array(uint dst , uint src): out of bounds\n");
+    check_bounds(t_src, 0, 0);
+    check_bounds(t_dst, 0, 0);
     memcpy(array_t[t_dst], array_t[t_src], sizeof(T) * My * Nx);
 }
 
@@ -658,8 +644,8 @@ void array_base<T, Derived>::copy(const uint t_dst, const uint t_src)
 template <class T, class Derived>
 void array_base<T, Derived>::copy(const uint t_dst, const Derived& src, const uint t_src)
 {
-    if(!bounds(t_src, 0, 0) || !bounds(t_dst, 0, 0))
-        throw out_of_bounds_err("void array_base<T>::copy_array(uint t_dst, array_base<T> src, uint t_src): out of bounds\n");
+    check_bounds(t_src, 0, 0);
+    check_bounds(t_dst, 0, 0);
     memcpy(array_t[t_dst], src.array_t[t_src], sizeof(T) * My * Nx);
 }
 

@@ -1,40 +1,42 @@
-///
-///  To write diagnostics for turbulence simulations
-/// 
+/*
+ * diagnostics_cu.h
+ *
+ *  Created on: Feb 5, 2015
+ *      Author: rku000
+ */
 
-
-#ifndef DIAGNOSTICS_H
-#define DIAGNOSTICS_H
+#ifndef DIAGNOSTICS_CU_H_
+#define DIAGNOSTICS_CU_H_
 
 #include "2dads_types.h"
 #include "cuda_types.h"
 #include "error.h"
 #include "slab_config.h"
 #include "slab_cuda.h"
-#include "diag_array.h"
-
+#include "cuda_darray.h"
 
 using namespace std;
 
-class diagnostics {
+class diagnostics_cu {
 	public:
-		
+		typedef void (diagnostics_cu::*diag_func_ptr)(twodads::real_t const);
         /// Default constructor, pass a slab_config object.
         /// This initializes the diagnostic arrays and diagnostic variables
-		diagnostics(slab_config const);
+		diagnostics_cu(const slab_config&);
         /// does nothing
-		~diagnostics() {};
+		~diagnostics_cu();
 
         /// Update the diag_array members from GPU memory. They are used to
-        /// compute diagnostic quantities    
-        void update_arrays(slab_cuda&);
+        /// compute diagnostic quantities
+        void update_arrays(const slab_cuda&);
+		//void update_array(const cuda_array<double>*, const twodads::field_t);
 
         /// Call all diagnostic routines, as specified in the slab_config object
-        void write_diagnostics(twodads::real_t const, const slab_config&);
+        void write_diagnostics(const twodads::real_t, const slab_config&);
 
     private:
 		/// Initialize diagnostic routines: Write file headers
-		void init_diagnostic_output(string, string, bool&);
+		void init_diagnostic_output(string, string);
 
 		/// @brief Write blob diagnostics:
         /// @detailed blobs.dat: t theta_max theta_max_x theta_max_y strmf_max strmf_max_x strmf_max_y int(theta) int(theta *x) int(theta_y) V_(X,COM) V(Y,COM) WXX WYY DXX DYY
@@ -63,32 +65,38 @@ class diagnostics {
         /// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
         void diag_probes(twodads::real_t const);
         /// @brief Write simulation parameters to log file
-        void diag_rhs(twodads::real_t const);
+        //void diag_rhs(twodads::real_t const);
         /// @brief Creates a log file
-		void write_logfile();		
-	   
+		void write_logfile();
+
         twodads::diag_data_t slab_layout;
 
-        diag_array<double> theta, theta_x, theta_y;
-        diag_array<double> omega, omega_x, omega_y;
-        diag_array<double> strmf, strmf_x, strmf_y;
+        cuda_darray<twodads::real_t> theta, theta_x, theta_y;
+        cuda_darray<twodads::real_t> omega, omega_x, omega_y;
+        cuda_darray<twodads::real_t> strmf, strmf_x, strmf_y;
+        cuda_darray<twodads::real_t> theta_rhs, omega_rhs;
 
-		twodads::real_t time; /// Real time 
-		twodads::real_t old_com_x; /// Old radial COM velocity of the blob
-		twodads::real_t old_com_y; /// Old poloidal COM velocity of the blob
-		twodads::real_t old_wxx; /// Old dispersion tensor of the blob
-		twodads::real_t old_wyy; /// Old dispersion tensor of the blob
-		twodads::real_t t_probe; /// Time for probe diagnostics
-	
+        twodads::real_t* x_vec;
+        twodads::real_t* y_vec;
+        cuda_darray<twodads::real_t> x_arr, y_arr;
+
+		twodads::real_t time; /// Simulation time time
+		twodads::real_t dt_diag; /// Time step between diagnostic output
+
         unsigned int n_probes; /// Number of probes
 		bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
         twodads::real_t theta_bg; /// Subtract uniform background on theta
-		// Flags which output files have been initialized
-		bool init_flag_blobs; /// True if blobs.dat has been initialized
-        bool init_flag_energy; /// True if energy.dat has been initialized
-        bool init_flag_particles; /// Not implemented yet
-        bool init_flag_tprobe; /// Not implemented yet
-        bool init_flag_oprobe; /// Not implemented yet
-};
 
-#endif //DIAGNOSTICS_H	
+        const map<twodads::field_t, cuda_darray<cuda::real_t>*> get_darr_by_name;
+        static map<twodads::diagnostic_t, diag_func_ptr> get_diag_func_by_name;
+
+        static map<twodads::diagnostic_t, diag_func_ptr> create_diag_func_map()
+        {
+        	map<twodads::diagnostic_t, diag_func_ptr> my_map;
+        	my_map[twodads::diagnostic_t::diag_energy] = &diagnostics_cu::diag_energy;
+        	my_map[twodads::diagnostic_t::diag_blobs]  = &diagnostics_cu::diag_blobs;
+        	my_map[twodads::diagnostic_t::diag_probes] = &diagnostics_cu::diag_probes;
+        	return(my_map);
+        }
+};
+#endif /* DIAGNOSTICS_CU_H_ */

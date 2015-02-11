@@ -2,7 +2,7 @@
  *  output.h
  *  2dads-oo
  *
-ose*  Created by Ralph Kube on 01.12.10.
+ *  Created by Ralph Kube on 01.12.10.
  *  Copyright 2010 __MyCompanyName__. All rights reserved.
  *
  */
@@ -10,7 +10,6 @@ ose*  Created by Ralph Kube on 01.12.10.
 #ifndef OUTPUT_H
 #define OUTPUT_H
 
-#include <string>
 #include <vector>
 #include <map>
 #include <H5Cpp.h>
@@ -40,6 +39,11 @@ public:
 
     //void update_array(slab_cuda&);
     // Output counter and array dimensions
+    inline uint get_output_counter() const {return(output_counter);};
+    inline void increment_output_counter() {output_counter++;};
+    inline uint get_nx() const {return(Nx);};
+    inline uint get_my() const {return(My);};
+private:
     uint output_counter;
     const uint My, Nx;
 };
@@ -65,6 +69,7 @@ public:
 private:
     string filename;
     H5File* output_file;
+    //const size_t fdim[2];
     
     Group* group_theta;
     Group* group_theta_x;

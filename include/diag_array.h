@@ -20,11 +20,11 @@
 #include <thread>
 #include <functional>
 #include "error.h"
-#include "check_bounds.h"
+#include "bounds.h"
 #include "2dads_types.h"
 #include "array_base.h"
 #include "cuda_array4.h"
-
+// #include "cuda_operators.h"
 
 using namespace std;
 
@@ -179,7 +179,7 @@ public:
             }                                                                                                
             return (os);                                                                                     
         }                                          
-        // Inine these definitions to avoid linker confusion when these guys
+        // Inline these definitions to avoid linker confusion when these guys
         // pop up in multiple object files
         inline T get_mean() const;
         inline T get_mean_t() const;
@@ -255,12 +255,11 @@ diag_array<T> :: diag_array(uint nthreads, uint tlevs, uint My, uint Nx) :
 /// @Copy data pointed to by in to memory localtion pointed to by array
 /// @details assumes that nthreads=1, tlevs=1
 template <class T>
-void diag_array<T> :: update(cuda_array<T>& in)
+void diag_array<T> :: update(cuda_array<T>& rhs)
 {
-    size_t memsize = My * Nx;
-    if(!(*this).bounds(in.get_tlevs(), in.get_my(), in.get_nx()))
-        throw out_of_bounds_err(string("diag_array<T> :: update(cuda_array< T>& in): dimensions do not match!\n"));
-    gpuErrchk(cudaMemcpy(array, in.get_array_d(), memsize * sizeof(T), cudaMemcpyDeviceToHost));
+    size_t line_size = My * Nx;
+    check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
+    gpuErrchk(cudaMemcpy(array, rhs.get_array_d(), line_size * sizeof(T), cudaMemcpyDeviceToHost));
 //#ifdef DEBUG
 //    cout << "diag_array::update(), host address: " << array << "\n";
 //#endif

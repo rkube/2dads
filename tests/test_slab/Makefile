@@ -20,11 +20,12 @@ test_dft: $(DEP_OBJ) test_dft.cpp
 	$(CC) $(CFLAGS) -o test_dft $(PROJ_OBJDIR)/initialize.o  $(PROJ_OBJDIR)/slab_config.o  $(PROJ_OBJDIR)/slab_cuda.o test_dft.cpp $(INCLUDES) $(LFLAGS)
 
 # Test that derivation routines work
-test_derivs: $(DEP_OBJ)
+test_derivs: $(DEP_OBJ) test_derivs.cpp
 	$(CC) $(CFLAGS) -o test_derivs $(PROJ_OBJDIR)/initialize.o $(PROJ_OBJDIR)/slab_config.o $(PROJ_OBJDIR)/slab_cuda.o test_derivs.cpp $(INCLUDES) $(LFLAGS)
 
-test_derivs_so: $(DEP_OBJ_PIC)
-	$(CC) $(CFLAGS) -shared -fPIC -Wl,-soname=test_derivs_py -o test_derivs_py.so $(PROJ_OBJDIR)/initialize_pic.o $(PROJ_OBJDIR)/slab_config_pic.o $(PROJ_OBJDIR)/slab_cuda_pic.o test_derivs_py.cpp $(INCLUDES) $(LFLAGS)
+test_derivs_so: $(DEP_OBJ_PIC) test_derivs_so.cpp
+	echo "======= Remember to update pic_objs in root directory ======="
+	$(CC) $(CFLAGS) -shared -fPIC -Wl,-soname=test_derivs -o test_derivs.so $(PROJ_OBJDIR)/initialize_pic.o $(PROJ_OBJDIR)/slab_config_pic.o $(PROJ_OBJDIR)/slab_cuda_pic.o test_derivs_so.cpp $(INCLUDES) $(LFLAGS)
 
 
 

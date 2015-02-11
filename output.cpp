@@ -47,10 +47,10 @@ output_h5 :: output_h5(slab_config config) :
     // But populate dspace_map with pointers.
 {
 	// DataSpace dimension 
-	const hsize_t fdim[] = {My, Nx};
+	const hsize_t fdim[] = {get_my(), get_nx()};
 	// Hyperslab parameter for ghost point array output
 	const hsize_t offset[] = {0,0};
-	const hsize_t count[] = {My, Nx};
+	const hsize_t count[] = {get_my(), get_nx()};
 	DSetCreatPropList ds_creatplist;  
 	dspace_file = new DataSpace(2, count); 
 
@@ -125,10 +125,11 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
     for(auto it : o_list)
     {
         // Make sure that get_array_ptr calls copy_device_to_host! 
+        slab.copy_device_to_host(it);
         arr = slab.get_array_ptr(it);
         surface(it, arr, time);
     }
-    output_counter++;
+    increment_output_counter();
 }
 
 
@@ -136,10 +137,10 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
 {
     // update host data on src
-    src -> copy_device_to_host();
+    //src -> copy_device_to_host();
     // Dataset name is /[OST]/[0-9]*
     stringstream foo;
-    foo << fname_map[field_name] << "/" << to_string(output_counter);
+    foo << fname_map[field_name] << "/" << to_string(get_output_counter());
     string dataset_name(foo.str());
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];

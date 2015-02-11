@@ -4,16 +4,17 @@ include Makefile.inc
 TEST_DIR = tests
 OBJ_DIR = /home/rku000/cuda-workspace/cuda_array2/obj/
 
-.PHONY: slab_config output diagnostics initialize slab_cuda tests clean dist 2dads
+.PHONY: clean
 
-all: output initialize diagnostics slab_config slab_cuda shader
+all: output.o initialize.o diagnostics.o diagnostics_cu.o slab_config.o slab_cuda.o shader.o
 
 DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
 
 SOURCES_CPP=shader.cpp slab_config.cpp output.cpp slab_config.cpp
 SOURCES_CU=initialize.cu slab_cuda.cu
 
-OBJECTS=$(OBJ_DIR)/shader.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
+#OBJECTS=$(OBJ_DIR)/shader.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
+OBJECTS=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o $(OBJ_DIR)/diagnostics_cu.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
 
 
 shader.o: shader.cpp
@@ -28,14 +29,18 @@ output.o: output.cpp include/output.h
 diagnostics.o: diagnostics.cpp include/diagnostics.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
 
+diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
+
 initialize.o: initialize.cu include/initialize.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/initialize.o initialize.cu $(INCLUDES)
 
-slab_cuda.o: slab_cuda.cu include/slab_cuda.h
+slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
-2dads: slab_config.o output.o diagnostics.o initialize.o slab_cuda.o
-	$(CC) $(CFLAGS) -o run/2dads $(OBJ_DIR)/slab_cuda.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o main.cpp $(INCLUDES) $(LFLAGS) 
+2dads: $(OBJECTS)
+	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
+	#$(CUDACC) $(CUDACFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 tests: cuda_array2 slab_cuda initialize output diagnostics
 	$(MAKE) -C $(TEST_DIR)
