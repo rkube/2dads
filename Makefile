@@ -4,7 +4,7 @@ include Makefile.inc
 TEST_DIR = tests
 OBJ_DIR = /home/rku000/cuda-workspace/cuda_array2/obj/
 
-.PHONY: clean
+.PHONY: clean dist
 
 all: output.o initialize.o diagnostics.o diagnostics_cu.o slab_config.o slab_cuda.o shader.o
 
@@ -62,7 +62,6 @@ dist:
 	cp Makefile dist/Makefile_nemesis
 	cp Makefile.inc dist/Makefile_nemesis.inc
 	cp include/*.h dist/include/
-	cp tests/test_hw.cpp dist/main.cpp
 	tar cvfj 2dads-cuda-`date +%Y-%m-%d`.tar.bz2 dist/*
 
 clean:
