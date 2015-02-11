@@ -38,7 +38,7 @@ initialize.o: initialize.cu include/initialize.h
 slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
-2dads: $(OBJECTS)
+2dads: shader.o slab_config.o output.o diagnostics.o diagnostics_cu.o initialize.o slab_cuda.o
 	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 	#$(CUDACC) $(CUDACFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
