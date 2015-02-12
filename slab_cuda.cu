@@ -14,6 +14,10 @@ using namespace std;
 //    Call:  d_d_dy_lo<<<grid_dy_half, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
 //    block_nx21    = dim3(cuda::blockdim_x, 1)
 //    grid_dy_half  = dim3(((Nx / 2 + 1) + cuda::blockdim_nx - 1) / cuda::blockdim_nx, My / 2)
+
+
+
+
 __global__
 void d_d_dy_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double Ly)
 {
@@ -134,6 +138,7 @@ void d_d_dx_lo(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint 
 
     if((row < My) && (col < Nx21 - 1))
         out[index] = in[index] * cuda::cmplx_t(0.0, two_pi_L * double(col));
+    return;
     //if ((col >= Nx21 - 1) || (row >= My))
     //    return;
     //(a + ib) * ik = -(b * k) + i(a * k)
@@ -150,7 +155,6 @@ void d_d_dx_lo_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
 
     if((row < My) && (col < Nx21 - 1))
         arr[index] = cuda::cmplx_t(double(row), double(col));
-
     return;
     //if ((col >= Nx21 - 1) || (row >= My))
     //    return;

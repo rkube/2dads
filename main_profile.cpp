@@ -1,18 +1,19 @@
+/*
+ * main_profile.cpp
+ *
+ *  Created on: Feb 11, 2015
+ *      Author: rku000
+ *
+ *
+ * Run time integration without output or diagnostics
+ */
+
+
 #include <iostream>
-//<<<<<<< HEAD
-//#include "slab_cuda.h"
-//#include "diagnostics.h"
-//#include "output.h"
-//=======
 #include <GLFW/glfw3.h>
-//>>>>>>> new_index
 #include "cuda_runtime_api.h"
 #include "slab_cuda.h"
-#include "diagnostics.h"
-#include "diagnostics_cu.h"
-#include "output.h"
 
-extern template class diag_array<double>;
 
 using namespace std;
 
@@ -23,8 +24,6 @@ int main(void)
 
     slab_cuda slab(my_config);
     output_h5 slab_output(my_config);
-    diagnostics slab_diag(my_config);
-    diagnostics_cu slab_diag_cu(my_config);
 
     twodads::real_t time(0.0);
     twodads::real_t delta_t(my_config.get_deltat());
@@ -38,13 +37,6 @@ int main(void)
     slab.init_dft();
     slab.initialize();
 
-    slab_output.write_output(slab, time);
-
-    slab_diag.update_arrays(slab);
-    slab_diag.write_diagnostics(time, my_config);
-
-    slab_diag_cu.update_arrays(slab);
-    slab_diag_cu.write_diagnostics(time, my_config);
 
     // Integrate the first two steps with a lower order scheme
     for(t = 1; t < tlevs - 1; t++)
@@ -74,24 +66,14 @@ int main(void)
         slab.update_real_fields(1);
         slab.rhs_fun(1);
 
-        if(t % tout_full == 0)
-        {
-            slab_output.write_output(slab, time);
-        }
-        if(t % tout_diag == 0)
-        {
-            slab_diag.update_arrays(slab);
-            slab_diag.write_diagnostics(time, my_config);
-
-            slab_diag_cu.update_arrays(slab);
-            slab_diag_cu.write_diagnostics(time, my_config);
-        }
-        if(t % 10000 == 0)
+        if(t % 100 == 0)
         {
             cout << t << "/" << num_tsteps << "\n";
         }
     }
     return(0);
 }
+
+
 
 

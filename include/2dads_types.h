@@ -94,6 +94,7 @@ namespace twodads {
     enum class diagnostic_t {diag_blobs,  ///< Information on blob dynamics
         diag_energy, ///< Energetics for turbulence simulations
         diag_probes, ///< Time series from probes
+        diag_mem     ///< GPU memory usage information
     };
     
     /*!

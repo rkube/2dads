@@ -73,6 +73,9 @@ diagnostics :: diagnostics(slab_config const config) :
                 init_diagnostic_output(string("energy.dat"), header, init_flag_energy);
                 break;
 
+            case twodads::diagnostic_t::diag_mem:
+            	cout << "diag_memory\n";
+            	break;
             default:
                 string err_msg("diagnostics::diagnostics: unknown diagnostic function requested.");
                 throw name_error(err_msg);
@@ -176,6 +179,9 @@ void diagnostics::write_diagnostics(const twodads::real_t time, const slab_confi
             case twodads::diagnostic_t::diag_probes:
                 diag_probes(time);
                 break;
+            case twodads::diagnostic_t::diag_mem:
+            	// do nothing
+            	break;
         }
     }
 }

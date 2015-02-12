@@ -7,10 +7,6 @@
  *
  */
 
-//<<<<<<< HEAD
-//#include "output.h"
-//=======
-//>>>>>>> new_index
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -149,9 +145,9 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];
 
-#ifdef DEBUG
-    cout << "Dataset name: " << dataset_name << "\n";
-#endif //DEBUG
+//#ifdef DEBUG
+//    cout << "Dataset name: " << dataset_name << "\n";
+//#endif //DEBUG
         FloatType float_type(PredType::NATIVE_DOUBLE);
     DataSpace att_space(H5S_SCALAR);
 	

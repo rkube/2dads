@@ -38,9 +38,11 @@ class diagnostics_cu {
 		/// Initialize diagnostic routines: Write file headers
 		void init_diagnostic_output(string, string);
 
+		/// @brief Print GPU memry usage to terminal
+		void diag_mem(const twodads::real_t);
 		/// @brief Write blob diagnostics:
         /// @detailed blobs.dat: t theta_max theta_max_x theta_max_y strmf_max strmf_max_x strmf_max_y int(theta) int(theta *x) int(theta_y) V_(X,COM) V(Y,COM) WXX WYY DXX DYY
-        void diag_blobs(twodads::real_t const);
+        void diag_blobs(const twodads::real_t);
         ///@brief Compute energy integrals for various turbulence models
         ///@param time Time of output
         ///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 <br>
@@ -58,12 +60,12 @@ class diagnostics_cu {
         ///@detailed \f$D_{11} = \frac{1}{A} \int \mathrm{d}A\, \nabla_\perp \phi \nabla_\perp \Omega\f$ <br>
         ///@detailed \f$D_{12} = \frac{1}{A} \int \mathrm{d}A\, n_{xxx}^2 + n_{yyy}^2\f$ <br>
         ///@detailed \f$D_{13} = \frac{1}{A} \int \mathrm{d}A\, \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}\f$ <br>
-        void diag_energy(twodads::real_t const);
+        void diag_energy(const twodads::real_t);
         /// @brief write output for probes
         /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
         /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
         /// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
-        void diag_probes(twodads::real_t const);
+        void diag_probes(const twodads::real_t);
         /// @brief Write simulation parameters to log file
         //void diag_rhs(twodads::real_t const);
         /// @brief Creates a log file
@@ -96,6 +98,7 @@ class diagnostics_cu {
         	my_map[twodads::diagnostic_t::diag_energy] = &diagnostics_cu::diag_energy;
         	my_map[twodads::diagnostic_t::diag_blobs]  = &diagnostics_cu::diag_blobs;
         	my_map[twodads::diagnostic_t::diag_probes] = &diagnostics_cu::diag_probes;
+        	my_map[twodads::diagnostic_t::diag_mem]    = &diagnostics_cu::diag_mem;
         	return(my_map);
         }
 };

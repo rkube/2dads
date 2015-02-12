@@ -55,12 +55,15 @@ map<string, twodads::output_t> slab_config::output_map = {
     {"strmf_x", twodads::output_t::o_strmf_x},
     {"strmf_y", twodads::output_t::o_strmf_y},
     {"theta_rhs", twodads::output_t::o_theta_rhs},
-    {"omega_rhs", twodads::output_t::o_omega_rhs}};
+    {"omega_rhs", twodads::output_t::o_omega_rhs}
+};
 
 map<string, twodads::diagnostic_t> slab_config::diagnostic_map = {
     {"blobs", twodads::diagnostic_t::diag_blobs},
     {"energy", twodads::diagnostic_t::diag_energy},
-    {"probes", twodads::diagnostic_t::diag_probes}};
+    {"probes", twodads::diagnostic_t::diag_probes},
+	{"memory", twodads::diagnostic_t::diag_mem}
+};
 
 map<string, twodads::init_fun_t> slab_config::init_func_map = {
     {"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
@@ -71,7 +74,8 @@ map<string, twodads::init_fun_t> slab_config::init_func_map = {
     {"init_test", twodads::init_fun_t::init_test},
     {"theta_mode", twodads::init_fun_t::init_theta_mode},
     {"omega_mode", twodads::init_fun_t::init_omega_mode},
-    {"both_mode", twodads::init_fun_t::init_both_mode}};
+    {"both_mode", twodads::init_fun_t::init_both_mode}
+};
 
 map<string, twodads::rhs_t> slab_config::rhs_func_map = {
     {"theta_rhs_ns", twodads::rhs_t::theta_rhs_ns},
@@ -85,7 +89,8 @@ map<string, twodads::rhs_t> slab_config::rhs_func_map = {
     {"omega_rhs_hwmod", twodads::rhs_t::omega_rhs_hwmod},
     {"omega_rhs_hwzf", twodads::rhs_t::omega_rhs_hwzf},
     {"omega_rhs_ic", twodads::rhs_t::omega_rhs_ic},
-    {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}};
+    {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}
+};
 
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :

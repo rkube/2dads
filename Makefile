@@ -40,7 +40,10 @@ slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
 
 2dads: shader.o slab_config.o output.o diagnostics.o diagnostics_cu.o initialize.o slab_cuda.o
 	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
-	#$(CUDACC) $(CUDACFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
+
+2dads_profile: slab_config.o initialize.o slab_cuda.o
+	$(CC) $(CFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
+	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 tests: cuda_array2 slab_cuda initialize output diagnostics
 	$(MAKE) -C $(TEST_DIR)

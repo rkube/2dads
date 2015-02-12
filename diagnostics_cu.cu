@@ -12,13 +12,15 @@
 const map <twodads::diagnostic_t, std::string> dfile_fname{
 	{twodads::diagnostic_t::diag_blobs, "cu_blobs.dat"},
 	{twodads::diagnostic_t::diag_probes, "cu_probes.dat"},
-	{twodads::diagnostic_t::diag_energy, "cu_energy.dat"}
+	{twodads::diagnostic_t::diag_energy, "cu_energy.dat"},
+	{twodads::diagnostic_t::diag_mem, "cu_memory.day"}
 };
 
 const map <twodads::diagnostic_t, std::string> dfile_header{
 	{twodads::diagnostic_t::diag_blobs,  "#01: time\t\t#02: theta_max\t#03: theta_max_x\t#04: theta_max_y\n#05: strmf_max\t#06: strmf_max_x\t#07: strmf_max_y\n#08: theta_int\t#09: theta_int_x\t#10: theta_int_y\n#11: COMvx\t#12: COMvy\t#13: Wxx\t#14: Wyy\t#15: Dxx\t#16: Dyy\n"},
 	{twodads::diagnostic_t::diag_energy, "#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: W\t#07: D1\t#08: D2\t#09: D3\t:#10: D4\t#11: D5\t#12:D6\t#13: D7\t#14: D8\t#15: D9\t#16: D10\t#17: D11\t#18: D12\t#19: D13\n"},
-	{twodads::diagnostic_t::diag_probes, "#01: time\t#02: n_tilde\t#03: n\t#04: phi\t#05: phi_tilde\t#06: Omega\t#07: Omega_tilde\t#08: v_x\t#09: v_y\t#10: v_y_tilde\t#11: Gamma_r\n"}
+	{twodads::diagnostic_t::diag_probes, "#01: time\t#02: n_tilde\t#03: n\t#04: phi\t#05: phi_tilde\t#06: Omega\t#07: Omega_tilde\t#08: v_x\t#09: v_y\t#10: v_y_tilde\t#11: Gamma_r\n"},
+	{twodads::diagnostic_t::diag_mem, "none"}
 };
 
 map <twodads::diagnostic_t, diagnostics_cu::diag_func_ptr> diagnostics_cu :: get_diag_func_by_name = diagnostics_cu :: create_diag_func_map();
@@ -89,6 +91,8 @@ diagnostics_cu :: ~diagnostics_cu()
 	if(y_vec != nullptr)
 		delete [] y_vec;
 }
+
+
 void diagnostics_cu :: write_diagnostics(const twodads::real_t time, const slab_config& config)
 {
 	diag_func_ptr dfun_ptr{nullptr};
@@ -100,7 +104,6 @@ void diagnostics_cu :: write_diagnostics(const twodads::real_t time, const slab_
     	((*this).*(dfun_ptr))(time);
     }
 }
-
 
 
 void diagnostics_cu::write_logfile()
@@ -149,6 +152,19 @@ void diagnostics_cu :: update_arrays(const slab_cuda& slab)
 	slab.get_data_device(twodads::field_t::f_strmf_y, strmf_y.get_array_d(), slab_layout.My, slab_layout.Nx);
 }
 
+
+void diagnostics_cu :: diag_mem(const twodads::real_t time)
+{
+	size_t free_bytes;
+	size_t total_bytes;
+
+	gpuErrchk(cudaMemGetInfo(&free_bytes, &total_bytes));
+
+	cerr << "GPU memory usage:   ";
+	cerr << "used: " << (total_bytes - free_bytes) / 1048576 << " MB\t";
+	cerr << "free: " << free_bytes / 1048576 << " MB\t";
+	cerr << "total:" << total_bytes / 1048675 << " MB\n";
+}
 
 void diagnostics_cu :: diag_probes(const twodads::real_t time)
 {
@@ -338,12 +354,21 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 	if(output.is_open())
 	{
 		output << time << "\t";
-		output << setw(12) << theta_max << "\t" << setw(12) << theta_max_x << setw(12) << theta_max_y << "\t";
-		output << setw(12) << strmf_max << "\t" << setw(12) << strmf_max_x << setw(12) << strmf_max_y << "\t";
-		output << setw(12) << theta_int << "\t" << setw(12) << theta_com_x << setw(12) << theta_com_y << "\t";
-		output << setw(12) << com_vx << "\t" << setw(12) << com_vy << "\t";
-		output << setw(12) << wxx << "\t" << wyy << "\t";
-		output << setw(12) << dxx << "\t" << setw(12) << dyy;
+		output << setw(12) << theta_max << "\t";
+		output << setw(12) << theta_max_x << "\t";
+		output << setw(12) << theta_max_y << "\t";
+		output << setw(12) << strmf_max << "\t";
+		output << setw(12) << strmf_max_x << "\t";
+		output << setw(12) << strmf_max_y << "\t";
+		output << setw(12) << theta_int << "\t";
+		output << setw(12) << theta_com_x << "\t";
+		output << setw(12) << theta_com_y << "\t";
+		output << setw(12) << com_vx << "\t";
+		output << setw(12) << com_vy << "\t";
+		output << setw(12) << wxx << "\t";
+		output << setw(12) << wyy << "\t";
+		output << setw(12) << dxx << "\t";
+		output << setw(12) << dyy << "\n";
 		output << "\n";
 		output.close();
 	}
@@ -352,20 +377,36 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 void diagnostics_cu :: diag_energy(const twodads::real_t time)
 {
 	ofstream output;
-	static const twodads::real_t Lx{slab_layout.delta_y * twodads::real_t(slab_layout.My)};
-	static const twodads::real_t Ly{slab_layout.delta_x * twodads::real_t(slab_layout.Nx)};
-	static const twodads::real_t invdA{1. / (Lx * Ly)};
+	//static const twodads::real_t Lx{slab_layout.delta_y * twodads::real_t(slab_layout.My)};
+	//static const twodads::real_t Ly{slab_layout.delta_x * twodads::real_t(slab_layout.Nx)};
+	static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
 
 	cuda_darray<twodads::real_t> strmf_tilde(std::move(strmf.tilde()));
 	cuda_darray<twodads::real_t> theta_tilde(std::move(theta.tilde()));
+	cuda_darray<twodads::real_t> omega_tilde(std::move(omega.tilde()));
+	cuda_darray<twodads::real_t> strmf_x_tilde(std::move(strmf_x.tilde()));
+	cuda_darray<twodads::real_t> strmf_y_tilde(std::move(strmf_y.tilde()));
 
-	const twodads::real_t E {0.5 * invdA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_mean()};
+	// Total energy, thermal and kinetic
+	const twodads::real_t E{0.5 * dA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
+	// Kinetic energy
+	const twodads::real_t K{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
+	// Generalized enstrophy
+	const twodads::real_t U{0.5 * dA * ((theta_tilde - omega_tilde) * (theta_tilde - omega_tilde)).get_sum()};
+	// T
+	const twodads::real_t T{0.5 * dA * (strmf_x_tilde * strmf_y_tilde).get_sum()};
+	// W
+	cout << "diag_energy: " << time << setw(12) << E << "\n";
 
 	output.open("cu_energy.dat", ios::app);
 	if(output.is_open())
 	{
 		output << time << "\t";
-		output << setw(12) << E << "\n";
+		output << setw(12) << E << "\t";
+		output << setw(12) << K << "\t";
+		output << setw(12) << T << "\t";
+		output << setw(12) << U << "\t";
+		output << "\n";
 		output.close();
 	}
 }
