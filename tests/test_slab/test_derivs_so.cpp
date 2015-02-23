@@ -29,9 +29,9 @@ extern "C" void test_derivs(void* p_theta, void* p_theta_x, void* p_theta_y)
     slab_cuda slab(my_config);
     slab.initialize();
 
-    slab.get_data(twodads::field_t::f_theta, (double*) p_theta);
-    slab.get_data(twodads::field_t::f_theta_x, (double*) p_theta_x);
-    slab.get_data(twodads::field_t::f_theta_y, (double*) p_theta_y);
+    slab.get_data_host(twodads::field_t::f_theta, (double*) p_theta, my_config.get_my(), my_config.get_nx() / 2 + 1);
+    slab.get_data_host(twodads::field_t::f_theta_x, (double*) p_theta_x, my_config.get_my(), my_config.get_nx() / 2 + 1);
+    slab.get_data_host(twodads::field_t::f_theta_y, (double*) p_theta_y, my_config.get_my(), my_config.get_nx() / 2 + 1);
 
 //    cout << "theta_hat=" << endl;
 //    slab.print_field(twodads::field_k_t::f_theta_hat);

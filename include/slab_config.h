@@ -25,8 +25,18 @@ using namespace std;
 class slab_config {
 
 public:
-    slab_config();
-	~slab_config();
+    /*!
+     * \brief Standard constructor reads input.ini from pwd,
+     * call slab_config('.') as delegating constructor
+     */
+    slab_config() : slab_config(string(".")) {};
+
+    /*
+     * \brief Constructor, reads input.ini in directory, specified by argument
+     */
+    slab_config(string);
+
+	~slab_config() {};
 
     // Inspectors for private members
 	inline unsigned int get_runnr() const { return runnr; };
@@ -163,9 +173,13 @@ public:
      */
 	inline double get_deltay() const { return( (yup - ylow) / double(My) ); };
 
+    /*!
+     * \brief Prints all parameters
+     */
+
+    void print_config() const;
+
     void test_modes() const;
-
-
 private:
 	// Configuration variables
 	unsigned int runnr;
@@ -209,10 +223,10 @@ private:
     // helper functions
 	void split_at_whitespace(const string, vector<double>*);
     // Mappings from values in input.ini to enums in twodads.h
-    static map<std::string, twodads::output_t> output_map;
-    static map<std::string, twodads::diagnostic_t> diagnostic_map;
-    static map<std::string, twodads::init_fun_t> init_func_map;
-    static map<std::string, twodads::rhs_t> rhs_func_map;
+    static const map<std::string, twodads::output_t> output_map;
+    static const map<std::string, twodads::diagnostic_t> diagnostic_map;
+    static const map<std::string, twodads::init_fun_t> init_func_map;
+    static const map<std::string, twodads::rhs_t> rhs_func_map;
 };
 
 #endif //CONFIG_H

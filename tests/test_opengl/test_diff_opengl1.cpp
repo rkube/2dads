@@ -303,7 +303,7 @@ int main(void)
     // Initialize OpenGL
     // Use a buffer to copy data from the CUDA device to host memory
     cuda::real_t* buffer = new cuda::real_t[my_config.get_nx() * my_config.get_my()];
-    slab.get_data(twodads::field_t::f_theta, buffer);
+    slab.get_data_host(twodads::field_t::f_theta, buffer, my_config.get_my(), my_config.get_nx());
     mygl_context context(640, 480, my_config);
 
     context.draw(0.0);
@@ -338,7 +338,7 @@ int main(void)
         if(t % tout_full == 0)
         {
             slab_output.write_output(slab, time);
-            slab.get_data(twodads::field_t::f_theta, buffer);
+            slab.get_data_host(twodads::field_t::f_theta, buffer, my_config.get_my(), my_config.get_nx());
             context.fill_buffer(buffer);
             context.draw(time);
         }

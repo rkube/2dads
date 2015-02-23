@@ -1,11 +1,5 @@
 #include <iostream>
-//<<<<<<< HEAD
-//#include "slab_cuda.h"
-//#include "diagnostics.h"
-//#include "output.h"
-//=======
 #include <GLFW/glfw3.h>
-//>>>>>>> new_index
 #include "cuda_runtime_api.h"
 #include "slab_cuda.h"
 #include "diagnostics.h"
@@ -80,8 +74,8 @@ int main(void)
         }
         if(t % tout_diag == 0)
         {
-            slab_diag.update_arrays(slab);
-            slab_diag.write_diagnostics(time, my_config);
+            //slab_diag.update_arrays(slab);
+            //slab_diag.write_diagnostics(time, my_config);
 
             slab_diag_cu.update_arrays(slab);
             slab_diag_cu.write_diagnostics(time, my_config);

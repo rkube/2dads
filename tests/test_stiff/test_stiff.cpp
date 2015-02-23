@@ -27,12 +27,11 @@ int main(void)
     cout << "theta_rhs_hat=\n";
     slab.print_field(twodads::field_k_t::f_theta_rhs_hat);
     cout << "integrating\n";
-    slab.integrate_stiff_debug(twodads::field_k_t::f_omega_hat, uint(2), uint(7), uint(2));
+    //slab.integrate_stiff_debug(twodads::field_k_t::f_omega_hat, uint(2), uint(7), uint(2));
     slab.integrate_stiff(twodads::field_k_t::f_omega_hat, uint(2)); 
     slab.integrate_stiff(twodads::field_k_t::f_theta_hat, uint(2)); 
     cout << "omega_hat=\n";
     slab.print_field(twodads::field_k_t::f_omega_hat);
     cout << "theta_hat=\n";
     slab.print_field(twodads::field_k_t::f_theta_hat);
-
 }

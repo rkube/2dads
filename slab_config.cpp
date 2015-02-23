@@ -7,26 +7,25 @@
  *
  */
 
-//<<<<<<< HEAD
-//#include "slab_config.h"
-//#include "error.h"
-//#include "2dads_types.h"
-//=======
-//>>>>>>> new_index
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <algorithm>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/filesystem.hpp>
 #include "slab_config.h"
 #include "error.h"
 #include "2dads_types.h"
 
 using namespace std;
 namespace po = boost::program_options;
+namespace fs = boost::filesystem;
 
 // Split string params at whitespaces and put values in vector values
-void slab_config :: split_at_whitespace(const string params_str, vector<double>* result){
+void slab_config :: split_at_whitespace(const string params_str, vector<double>* result)
+{
 
 	// Split string params into substrings which are separated by whitespace characters
 	vector<string> split_vector;
@@ -44,7 +43,8 @@ void slab_config :: split_at_whitespace(const string params_str, vector<double>*
 }
 
 
-map<string, twodads::output_t> slab_config::output_map = {
+const map<string, twodads::output_t> slab_config::output_map 
+{
     {"theta", twodads::output_t::o_theta},
     {"theta_x", twodads::output_t::o_theta_x},
     {"theta_y", twodads::output_t::o_theta_y},
@@ -58,14 +58,16 @@ map<string, twodads::output_t> slab_config::output_map = {
     {"omega_rhs", twodads::output_t::o_omega_rhs}
 };
 
-map<string, twodads::diagnostic_t> slab_config::diagnostic_map = {
+const map<string, twodads::diagnostic_t> slab_config::diagnostic_map 
+{
     {"blobs", twodads::diagnostic_t::diag_blobs},
     {"energy", twodads::diagnostic_t::diag_energy},
     {"probes", twodads::diagnostic_t::diag_probes},
 	{"memory", twodads::diagnostic_t::diag_mem}
 };
 
-map<string, twodads::init_fun_t> slab_config::init_func_map = {
+const map<string, twodads::init_fun_t> slab_config::init_func_map 
+{
     {"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
     {"both_gaussian", twodads::init_fun_t::init_both_gaussian},
     {"theta_sine", twodads::init_fun_t::init_theta_sine},
@@ -74,10 +76,12 @@ map<string, twodads::init_fun_t> slab_config::init_func_map = {
     {"init_test", twodads::init_fun_t::init_test},
     {"theta_mode", twodads::init_fun_t::init_theta_mode},
     {"omega_mode", twodads::init_fun_t::init_omega_mode},
-    {"both_mode", twodads::init_fun_t::init_both_mode}
+    {"both_mode", twodads::init_fun_t::init_both_mode},
+    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath}
 };
 
-map<string, twodads::rhs_t> slab_config::rhs_func_map = {
+const map<string, twodads::rhs_t> slab_config::rhs_func_map 
+{
     {"theta_rhs_ns", twodads::rhs_t::theta_rhs_ns},
     {"theta_rhs_lin", twodads::rhs_t::theta_rhs_lin},
     {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
@@ -94,7 +98,7 @@ map<string, twodads::rhs_t> slab_config::rhs_func_map = {
 
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
-slab_config :: slab_config() :
+slab_config :: slab_config(string basedir) :
 	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
 	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
 	tout(0.0), log_theta(false), do_dealiasing(false), particle_tracking(0), 
@@ -103,7 +107,14 @@ slab_config :: slab_config() :
 	po::options_description cf_opts("Allowed options");
 	po::variables_map vm;
 
-    string filename("input.ini");
+    cout << "slab_config::slab_config(basedir) \n";
+    cout << "\tbasedir = " << basedir << endl;
+
+    fs::path dir(basedir);
+    fs::path file("input.ini");
+    fs::path full_path = dir / file;
+    cout << "\tfs::path = " << full_path << endl;
+
 	// Temporary strings that need to be parsed
 	string model_params_str;
 	string initc_str;
@@ -146,16 +157,20 @@ slab_config :: slab_config() :
         ("nprobes", po::value<unsigned int> (&nprobes), "Number of radial probes");
         //("shift_modes", po::value<string> (&shift_modes_str), "Modes whose phase is shifted randomly");
 	}
-	catch(exception& e){
+	catch(exception& e)
+    {
 		cout << e.what() << "\n";
 	}
     
 	// Parse configuration file
-	ifstream cf_stream( "input.ini" );
-	if ( ! cf_stream ){
-		cerr << "Could not open config file " << filename.data() << "\n";
+	ifstream cf_stream(full_path.string());
+	if (!cf_stream )
+    {
+		cerr << "slab_config::slab_config(string): Could not open config file: " << full_path.string() << "\n";
         exit(1);
-	}else {
+	}
+    else 
+    {
         po::store( parse_config_file(cf_stream, cf_opts ), vm);
 		po::notify(vm);
 	}
@@ -165,31 +180,55 @@ slab_config :: slab_config() :
 	
 	// Split model_params and initial_condition strings at whitespaces, 
 	// convert substrings into floats and store in approproate vectors
-	if ( vm.count("model_params") ){
+	if (vm.count("model_params"))
 		split_at_whitespace(model_params_str, &model_params);
-	}
 
-	if ( vm.count("initial_conditions") ){
+	if (vm.count("initial_conditions"))
 		split_at_whitespace(initc_str, &initc);
-	}
 
     vector<string> diagnostics_split_vec;
 	// Split up diagnostics_str at whitespaces and store substrings in diagnostics
-	if ( vm.count("diagnostics") ){
+	if (vm.count("diagnostics"))
 		boost::split(diagnostics_split_vec, diagnostics_str, boost::is_any_of(" \t"), boost::token_compress_on);
-	}
+	
     for(auto str : diagnostics_split_vec)
-        diagnostics.push_back(diagnostic_map[str]);
-
+    {
+        try
+        {
+            diagnostics.push_back(diagnostic_map.at(str));
+        }
+        catch (const std::out_of_range & oor)
+        {
+            stringstream err_msg;
+            err_msg << "Invalid diagnostic: " << str << endl;
+            err_msg << "Valid strings are: " << endl;
+            for(auto const &it : diagnostic_map)
+                err_msg << it.first << endl;
+            throw out_of_range(err_msg.str());
+        }
+    }
 
 	// Split output_str at whitespaces and store substrings in output
     vector<string> output_split_vec;
-	if ( vm.count("output") )
+	if (vm.count("output"))
 		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
 
     for(auto str: output_split_vec)
-        output.push_back(output_map[str]);
-
+    {
+        try
+        {
+            output.push_back(output_map.at(str));
+        }
+        catch (const std::out_of_range & oor )
+        {
+            stringstream err_msg;
+            err_msg << "Invalid output:" << str << endl;
+            err_msg << "Valid strings are: " << endl;
+            for(auto const &it : output_map)
+                err_msg << it.first << endl;
+            throw out_of_range(err_msg.str());
+        }
+    }
     // Parse string shift_modes, string is in the form shift_modes = (kx1 ky1), (kx2 ky2), (kx3 ky3) ... (kxn kyn)
     /*if ( vm.count("shift_modes") ){
         cout << "Reading tuples from " << shift_modes_str << "\n";	
@@ -207,52 +246,54 @@ slab_config :: slab_config() :
     }*/
 
     // Assign theta_rhs, omega_rhs, and init_function by parsing the string 
-   
-    init_function = init_func_map[init_function_str]; 
-    /*
-	else if (init_function_str.compare(string("omega_random_k")) == 0)
-		init_function = twodads::init_fun_t::init_omega_random_k;
-    
-	else if (init_function_str.compare(string("omega_random_k2")) == 0)
-		init_function = twodads::init_fun_t::init_omega_random_k2;
-    
-	else if (init_function_str.compare(string("both_random_k")) == 0)
-		init_function = twodads::init_fun_t::init_both_random_k;
-    
-    else if (init_function_str.compare(string("theta_mode")) == 0)
-		init_function = twodads::init_fun_t::init_theta_mode;
-    
-    else if (init_function_str.compare(string("theta_const")) == 0)
-        init_function = twodads::init_fun_t::init_theta_const;
+    try 
+    {
+        init_function = init_func_map.at(init_function_str); 
+    }
+    catch (const std::out_of_range & oor)
+    {
+        stringstream err_msg;
+        err_msg << "Invalid initial_function" << init_function_str << endl;
+        err_msg << "Valid strings are: " << endl;
+        for (auto const &it : init_func_map)
+            err_msg << it.first << endl;
+        throw out_of_range(err_msg.str());
+    }
 
-    else if (init_function_str.compare(string("init_const_k")) == 0)
-        init_function = twodads::init_fun_t::init_const_k;
-
-    else if (init_function_str.compare(string("omega_exp_k")) == 0)
-        init_function = twodads::init_fun_t::init_omega_exp_k;
-    
-    else if (init_function_str.compare(string("omega_dlayer")) == 0)
-        init_function = twodads::init_fun_t::init_omega_dlayer;
-    
-	else if (init_function_str.compare(string("from_file")) == 0)
-		init_function = twodads::init_fun_t::init_file;
-    */
-	//else 
-	//	init_function = twodads::init_fun_t::init_NA;
 
     // Set RHS type of theta equation
-    theta_rhs = rhs_func_map[theta_rhs_str];
-    omega_rhs = rhs_func_map[omega_rhs_str];
-    
+    try
+    {
+        theta_rhs = rhs_func_map.at(theta_rhs_str);
+    }
+    catch (const std::out_of_range & oor)
+    {
+        stringstream err_msg;
+        err_msg << "Invalid RHS for theta: " << theta_rhs_str << endl;
+        err_msg << "Valid strings are: " << endl;
+        for (auto const &it : rhs_func_map)
+            err_msg << it.first << endl;
+        throw out_of_range(err_msg.str());
+    }
+
+    try
+    {
+        omega_rhs = rhs_func_map.at(omega_rhs_str);
+    }
+    catch (const std::out_of_range & oor)
+    {
+        stringstream err_msg;
+        err_msg << "Invalid RHS for omega: " << omega_rhs_str << endl;
+        err_msg << "Valid strings are: " << endl;
+        for (auto const &it : rhs_func_map)
+            err_msg << it.first << endl;
+        throw out_of_range(err_msg.str());
+    }
 }
 
 
-slab_config :: ~slab_config () {
-}
-
-
-int slab_config :: consistency() {
-
+int slab_config :: consistency() 
+{
 	// Test for empty output line
 	if (get_output().size() == 0) 
 		throw config_error("No output variables specified. If no full output is desired, write output = None\n");
@@ -277,6 +318,61 @@ int slab_config :: consistency() {
         throw config_error("Nx must be a multiple of nthreads\n");
             
 	return (0);
+}
+
+
+void slab_config :: print_config() const 
+{
+    cout << "01: runnr = " << get_runnr() << endl;
+    cout << "02 xleft = " << get_xleft() << endl;
+    cout << "03 xright = " << get_xright() << endl;
+    cout << "04 ylow = " << get_ylow() << endl;
+    cout << "05 yup = " << get_yup() << endl;
+    cout << "06 Nx = " << get_nx() << endl;
+    cout << "07 My = " << get_my() << endl;
+    cout << "08 scheme = .... defaults to ss3, not parsed" << endl; 
+    cout << "09 tlevs = ... defaults to 4, not parsed" << endl;
+    cout << "10 deltat = " << get_deltat() << endl;
+    cout << "11 tend = " << get_tend() << endl;
+    cout << "12 tdiag = " << get_tdiag() << endl;
+    cout << "13 tout = " << get_tout() << endl;
+    cout << "14 log_theta = " << get_log_theta() << endl;
+    cout << "15 do_particle_tracking = " << do_particle_tracking() << endl;
+    cout << "16 nprobes = " << get_nprobe() << endl;
+
+    // Use reverse map lookup technique to map twodads::... types to their keys in
+    // maps defined in the top of this file:
+    // http://stackoverflow.com/questions/5749073/reverse-map-lookup
+    
+    //namespace
+    //{
+        //typedef map<string, twodads::rhs_t> Map;
+        //typedef Map::key_type key;
+        //typedef Map::value_type pair;
+        //typedef Map::mapped_type value;
+
+        //twodads::rhs_t findval = get_theta_rhs_type();
+        for (auto const &it : rhs_func_map)
+        {
+            cout << it.first << endl;
+        }
+//        auto it = find_if(rhs_func_map.begin(), rhs_func_map.end(), 
+//                [findval](const pair & p){
+//                    return p.second == findval;
+//                });
+//        if (it == rhs_func_map.end())
+//           cerr << "theta_rhs not found" << endl; 
+//        else 
+//            cout << "17 theta_rhs = " << (*it).first << endl;
+    //}
+//    cout << "18 omega_rhs = "
+//    cout << "19 strmf_solver = "
+//    cout << "20 init_function = "
+//    cout << "21 initial_conditions = "
+//    cout << "22 model_params = "
+//    cout << "23 output = "
+// `  cout << "24 diagnostics = "
+//    cout << "25 nthreads = "
 }
 
 

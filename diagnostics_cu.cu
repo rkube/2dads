@@ -23,7 +23,7 @@ const map <twodads::diagnostic_t, std::string> dfile_header{
 	{twodads::diagnostic_t::diag_mem, "none"}
 };
 
-map <twodads::diagnostic_t, diagnostics_cu::diag_func_ptr> diagnostics_cu :: get_diag_func_by_name = diagnostics_cu :: create_diag_func_map();
+//map <twodads::diagnostic_t, diagnostics_cu::diag_func_ptr> diagnostics_cu :: get_diag_func_by_name = "diagnostics_cu :: create_diag_func_map();
 
 
 diagnostics_cu :: diagnostics_cu(const slab_config& config) :
@@ -61,7 +61,11 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
                 	 {twodads::field_t::f_strmf_y,   &strmf_y},
                 	 {twodads::field_t::f_theta_rhs, &theta_rhs},
                 	 {twodads::field_t::f_omega_rhs, &omega_rhs}
-                }
+                },
+    get_dfunc_by_name{{twodads::diagnostic_t::diag_energy,  &diagnostics_cu::diag_energy},
+                      {twodads::diagnostic_t::diag_blobs,  &diagnostics_cu::diag_blobs},
+                      {twodads::diagnostic_t::diag_probes,  &diagnostics_cu::diag_probes},
+                      {twodads::diagnostic_t::diag_mem,  &diagnostics_cu::diag_mem}}
 {
     stringstream filename;
     string header;
@@ -98,7 +102,7 @@ void diagnostics_cu :: write_diagnostics(const twodads::real_t time, const slab_
 	diag_func_ptr dfun_ptr{nullptr};
     for(auto diag_name : config.get_diagnostics())
     {
-    	dfun_ptr = get_diag_func_by_name.at(diag_name);
+    	dfun_ptr = get_dfunc_by_name.at(diag_name);
     	// Syntax for calling pointer to member functions:
     	// http://www.parashift.com/c++-faq/macro-for-ptr-to-memfn.html
     	((*this).*(dfun_ptr))(time);
@@ -369,7 +373,6 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 		output << setw(12) << wyy << "\t";
 		output << setw(12) << dxx << "\t";
 		output << setw(12) << dyy << "\n";
-		output << "\n";
 		output.close();
 	}
 }

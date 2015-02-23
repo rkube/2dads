@@ -52,11 +52,11 @@ int main(void)
     // Integrate the first two steps with a lower order scheme
     for(t = 1; t < tlevs - 1; t++)
     {
-        for(auto mode : mode_list)
-        {
-            cout << "mode with kx = " << mode.kx << " ky = " << mode.ky << "\n";
-            slab.integrate_stiff_debug(twodads::field_k_t::f_theta_hat, t + 1, mode.kx, mode.ky);
-        } 
+        //for(auto mode : mode_list)
+        //{
+        //    cout << "mode with kx = " << mode.kx << " ky = " << mode.ky << "\n";
+        //    slab.integrate_stiff_debug(twodads::field_k_t::f_theta_hat, t + 1, mode.kx, mode.ky);
+        //} 
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, t + 1);
 
         time += delta_t;
@@ -75,11 +75,11 @@ int main(void)
 
     for(; t < num_tsteps + 1; t++)
     {
-        for(auto mode : mode_list)
-        {
-            cout << "mode with kx = " << mode.kx << " ky = " << mode.ky << "\n";
-            slab.integrate_stiff_debug(twodads::field_k_t::f_theta_hat, tlevs, mode.kx, mode.ky);
-        } 
+        //for(auto mode : mode_list)
+        //{
+        //    cout << "mode with kx = " << mode.kx << " ky = " << mode.ky << "\n";
+        //    slab.integrate_stiff_debug(twodads::field_k_t::f_theta_hat, tlevs, mode.kx, mode.ky);
+        //} 
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, tlevs);
         //slab.integrate_stiff(twodads::dyn_field_t::d_omega, tlevs);
         //slab.dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, 0);

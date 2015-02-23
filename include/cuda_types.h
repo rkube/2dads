@@ -22,7 +22,6 @@ namespace cuda
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
 
-    //const real_t PI = 3.14159265358979323846264338327950288;
     constexpr real_t PI = 3.141592653589793; ///< $\pi$
     constexpr real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
     constexpr real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
@@ -90,16 +89,16 @@ namespace cuda
     {
     public:
         // Provide a standard constructor for pre-C++11
-        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int my, unsigned int nx, unsigned int l) :
-        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx(nx), level(l) {};
+        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int my, unsigned int nx21, unsigned int l) :
+        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx21(nx21), level(l) {};
         const real_t delta_t;
         const real_t length_x;
         const real_t length_y;
         const real_t diff;
         const real_t hv;
-        const unsigned int My;
-        const unsigned int Nx;
-        const unsigned int level;
+        const int My;
+        const int Nx21;
+        const int level;
         friend std::ostream& operator<<(std::ostream& os, const stiff_params_t s)
         {
             os << "delta_t = " << s.delta_t << "\t";
@@ -108,15 +107,20 @@ namespace cuda
             os << "diff = " << s.diff << "\t";
             os << "hv = " << s.hv << "\t";
             os << "My = " << s.My << "\t";
-            os << "Nx = " << s.Nx << "\t";
+            os << "Nx21 = " << s.Nx21 << "\t";
             os << "level = " << s.level << "\n";
             return os;
         }
 
     } __attribute__ ((aligned (8)));
 
-    const real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
-    const real_t ss3_beta_r[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}}; ///< Coefficients for explicit part in time integration
+    constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
+    constexpr real_t ss3_beta_r[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}}; ///< Coefficients for explicit part in time integration
+
+#ifdef __CUDACC__
+    __constant__ const real_t ss3_alpha_d[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}};
+    __constant__ const real_t ss3_beta_d[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}};
+#endif //__CUDACC__
 };
 
 #endif //CUDA_TYPES

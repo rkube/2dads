@@ -90,16 +90,8 @@ class diagnostics_cu {
         twodads::real_t theta_bg; /// Subtract uniform background on theta
 
         const map<twodads::field_t, cuda_darray<cuda::real_t>*> get_darr_by_name;
-        static map<twodads::diagnostic_t, diag_func_ptr> get_diag_func_by_name;
-
-        static map<twodads::diagnostic_t, diag_func_ptr> create_diag_func_map()
-        {
-        	map<twodads::diagnostic_t, diag_func_ptr> my_map;
-        	my_map[twodads::diagnostic_t::diag_energy] = &diagnostics_cu::diag_energy;
-        	my_map[twodads::diagnostic_t::diag_blobs]  = &diagnostics_cu::diag_blobs;
-        	my_map[twodads::diagnostic_t::diag_probes] = &diagnostics_cu::diag_probes;
-        	my_map[twodads::diagnostic_t::diag_mem]    = &diagnostics_cu::diag_mem;
-        	return(my_map);
-        }
+        // Initialize map with pointer to member functions as values...
+        // Works, but is this right??
+        const map<twodads::diagnostic_t, diag_func_ptr> get_dfunc_by_name;
 };
 #endif /* DIAGNOSTICS_CU_H_ */

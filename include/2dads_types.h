@@ -12,15 +12,15 @@ namespace twodads {
     //typedef std::complex<twodads::real_t> cmplx_t;
 
     // Use PI from math.h
-    constexpr real_t PI =3.14159265358979323846264338327950288;
+    constexpr real_t PI = 3.141592653589793;
     constexpr real_t epsilon{0.000001};
 
     constexpr int io_w{8}; //width of fields used in cout
     constexpr int io_p{4}; //precision when printing with cout
 
     // Coefficients for stiffly stable time integration
-    const real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
-    const real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
+    constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
+    constexpr real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
 
     // Dynamic fields
     // c++11 can used scoped enums, i.e. in a cpp it reads dyn_field_t::f_theta
@@ -63,6 +63,7 @@ namespace twodads {
         init_theta_sine,  ///< Initializes sinusoidal profile for theta
         init_omega_sine,  ///< Initializes sinusoidal profile for omega
         init_both_sine,  ///< Initializes sinusoidal profile for theta and omega
+        init_turbulent_bath, ///< Initialize all modes randomly
         init_test, ///< Who knows?
         init_theta_mode, ///< Initializes single modes for theta_hat
         init_omega_mode, ///< Initializes single modes for omega_hat

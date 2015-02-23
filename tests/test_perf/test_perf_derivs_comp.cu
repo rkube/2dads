@@ -242,9 +242,9 @@ void d_dy_dx_32(cmplx_t* in, cmplx_t* out_x, cmplx_t* out_y, const double two_pi
 
 int main(void)
 {
-	constexpr int Nx{512};
+	constexpr int Nx{256};
 	constexpr int Nx21{Nx / 2 + 1};
-	constexpr int My{512};
+	constexpr int My{256};
 	constexpr double Lx{10.0};
 	constexpr double Ly{10.0};
 	constexpr double dx{Lx / Nx};
@@ -253,7 +253,7 @@ int main(void)
 	constexpr double two_pi_Ly{2.0 * 3.1415926 / Ly};
 
 
-	constexpr int blocksize_nx{64};
+	constexpr int blocksize_nx{32};
 	constexpr int num_blocks_x{ (Nx21 + blocksize_nx - 1) / blocksize_nx};
 	constexpr int num_blocks_y{((My / 2 + 1) + blocksize_nx - 1) / blocksize_nx};
 
@@ -267,22 +267,33 @@ int main(void)
 
 	dim3 bs_d_11(blocksize_nx, 1);
 	dim3 gs_d_11(num_blocks_x, My / 2);
+	cout << "bs_d_11 = (" << bs_d_11.x << ", " << bs_d_11.y << ")\t";
+	cout << "gs_d_11 = (" << gs_d_11.x << ", " << gs_d_11.y << ")\n";
 
 	dim3 bs_d_21(blocksize_nx, 1);
 	dim3 gs_d_21(num_blocks_x, 1);
+	cout << "bs_d_21 = (" << bs_d_21.x << ", " << bs_d_21.y << ")\t";
+	cout << "gs_d_21 = (" << gs_d_21.x << ", " << gs_d_21.y << ")\n";
 
 	dim3 bs_d_31(blocksize_nx, 1);
 	dim3 gs_d_31(num_blocks_x, My / 2 - 1);
+	cout << "bs_d_31 = (" << bs_d_31.x << ", " << bs_d_31.y << ")\t";
+	cout << "gs_d_31 = (" << gs_d_31.x << ", " << gs_d_31.y << ")\n";
 
 	dim3 bs_d_12(1, blocksize_nx);
 	dim3 gs_d_12(1, num_blocks_y);
+	cout << "bs_d_12 = (" << bs_d_12.x << ", " << bs_d_12.y << ")\t";
+	cout << "gs_d_12 = (" << gs_d_12.x << ", " << gs_d_12.y << ")\n";
 
 	dim3 bs_d_22(1, 1);
 	dim3 gs_d_22(1, 1);
+	cout << "bs_d_22 = (" << bs_d_22.x << ", " << bs_d_22.y << ")\t";
+	cout << "gs_d_22 = (" << gs_d_22.x << ", " << gs_d_22.y << ")\n";
 
 	dim3 bs_d_32(1, blocksize_nx);
 	dim3 gs_d_32(1, num_blocks_y);
-
+	cout << "bs_d_32 = (" << bs_d_32.x << ", " << bs_d_32.y << ")\t";
+	cout << "gs_d_32 = (" << gs_d_32.x << ", " << gs_d_32.y << ")\n";
 
 
 
@@ -347,6 +358,10 @@ int main(void)
 	err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) c_arr_x.get_array_d(), r_arr_x.get_array_d());
 	err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) c_arr_y.get_array_d(), r_arr_y.get_array_d());
 
+	r_arr.normalize();
+	r_arr_x.normalize();
+	r_arr_y.normalize();
+
 	r_arr_x.copy_device_to_host();
 	r_arr_y.copy_device_to_host();
 
@@ -368,12 +383,13 @@ int main(void)
 	for(int t = 0; t < 1000; t++)
 	{
 		d_dy_dx_11<My, Nx21><<<bs_d_11, gs_d_11, 0, streams[0]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		d_dy_dx_21<My, Nx21><<<bs_d_21, gs_d_21, 0, streams[1]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		d_dy_dx_31<My, Nx21><<<bs_d_31, gs_d_31, 0, streams[2]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		d_dy_dx_12<My, Nx21><<<bs_d_12, gs_d_12, 0, streams[3]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		d_dy_dx_22<My, Nx21><<<bs_d_22, gs_d_22, 0, streams[4]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		d_dy_dx_32<My, Nx21><<<bs_d_32, gs_d_32, 0, streams[5]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
-		cout << t << endl;
+		d_dy_dx_21<My, Nx21><<<bs_d_21, gs_d_21, 0, streams[0]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
+		d_dy_dx_31<My, Nx21><<<bs_d_31, gs_d_31, 0, streams[1]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
+		d_dy_dx_12<My, Nx21><<<bs_d_12, gs_d_12, 0, streams[1]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
+		d_dy_dx_22<My, Nx21><<<bs_d_22, gs_d_22, 0, streams[0]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
+		d_dy_dx_32<My, Nx21><<<bs_d_32, gs_d_32, 0, streams[1]>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), two_pi_Lx, two_pi_Ly);
+		if(t % 50 == 0)
+			cout << t << endl;
 	}
 }
 

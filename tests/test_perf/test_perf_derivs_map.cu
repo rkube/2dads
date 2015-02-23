@@ -28,6 +28,8 @@
 
 typedef CuCmplx<double> cmplx_t;
 
+#define ELEM_PER_THREAD_T 1
+
 
 using namespace std;
 
@@ -153,36 +155,79 @@ void gen_k_map_enum(cmplx_t* kmap)
 }
 
 
-// T elements per kernel
+
+
 template <int MY, int NX21, int T>
 __global__
 void d_dx_dy_map(cmplx_t*  in, cmplx_t*  out_x, cmplx_t*  out_y, cmplx_t*  kmap)
 {
-	const int row = blockIdx.y * blockDim.y + threadIdx.y;
+	// offset to index for current row.
+	const int row_offset = (blockIdx.y * blockDim.y + threadIdx.y) * NX21;
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int index = row * NX21 + col;
+	int index = row_offset + col;
+	int t;
 
 #pragma unroll 4
-	for(int t = 0; t < T; t++)
+	for(t = 0; t < T; t++)
 	{
-		col = blockIdx.x * blockDim.x + threadIdx.x;
-		index = row * NX21 + col;
 		if(col < NX21)
 		{
+			index = row_offset + col;
 			out_x[index] = in[index] * cmplx_t(0.0, kmap[index].re());
 			out_y[index] = in[index] * cmplx_t(0.0, kmap[index].im());
 		}
 		else
 			break;
+		col++;
+		index++;
 	}
 }
 
 
+// Same as above, but with shared memory
+template <int MY, int NX21, int T>
+__global__
+void d_dx_dy_map_sh(cmplx_t* in, cmplx_t* out_x, cmplx_t* out_y, cmplx_t* kmap)
+{
+	extern __shared__ cmplx_t shmem[];
+	const int row_offset = (blockIdx.y * blockDim.y + threadIdx.y) * NX21;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+	const int offset_s = 2 * threadIdx.x;
+	int t;
+
+#pragma unroll 1
+	for(t = 0; t < T; t++)
+	{
+		if(col < NX21)
+		{
+			shmem[offset_s + 2 * t    ] = in[row_offset + col];
+			shmem[offset_s + 2 * t + 1] = kmap[row_offset + col];
+		}
+		col++;
+	}
+	col = blockIdx.x * blockDim.x + threadIdx.x;
+
+#pragma unroll 1
+	for(t = 0; t < T; t++)
+	{
+		if(col < NX21)
+		{
+			out_x[row_offset + col] = shmem[offset_s + 2 * t] * cmplx_t(0.0, shmem[offset_s + 2 * t + 1].re());
+			out_y[row_offset + col] = shmem[offset_s + 2 * t] * cmplx_t(0.0, shmem[offset_s + 2 * t + 1].im());
+		}
+		col++;
+	}
+}
+
+
+
+
 int main(void)
 {
-	constexpr int Nx{256};
+	constexpr int Nx{512};
 	constexpr int Nx21{Nx / 2 + 1};
-	constexpr int My{256};
+	constexpr int My{512};
 	constexpr double Lx{10.0};
 	constexpr double Ly{10.0};
 	constexpr double dx{Lx / Nx};
@@ -194,7 +239,10 @@ int main(void)
 	constexpr int blocksize_nx{32};
 	constexpr int blocksize_my{1};
 
-	const int elem_per_thread{8};
+	const int elem_per_thread{ELEM_PER_THREAD_T};
+
+	// d_dy_dx_map kernel loads kmap and input array into shared memory
+	const size_t shmem_size = 2 * elem_per_thread * blocksize_nx * sizeof(cmplx_t);
 
 	constexpr int num_block_x{(Nx21 + (elem_per_thread * blocksize_nx - 1)) / (elem_per_thread * blocksize_nx)};
 
@@ -248,7 +296,9 @@ int main(void)
 
 //	void d_dx_dy_map(cmplx_t*  in, cmplx_t*  out_x, cmplx_t*  out_y, cmplx_t*  kmap)
 
-	d_dx_dy_map<My, Nx21, elem_per_thread><<<gridsize, blocksize>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
+	//d_dx_dy_map<My, Nx21, elem_per_thread><<<gridsize, blocksize>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
+	d_dx_dy_map_sh<My, Nx21, elem_per_thread><<<gridsize, blocksize, shmem_size>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
+
 	gpuErrchk(cudaPeekAtLastError());
 
 
@@ -257,8 +307,10 @@ int main(void)
 	err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) c_arr_x.get_array_d(), r_arr_x.get_array_d());
 	err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) c_arr_y.get_array_d(), r_arr_y.get_array_d());
 
-	r_arr_x.copy_device_to_host();
-	r_arr_y.copy_device_to_host();
+	r_arr.normalize();
+	r_arr_x.normalize();
+	r_arr_y.normalize();
+
 
 	// output
 	ofstream of;
@@ -277,8 +329,9 @@ int main(void)
 
 	for(int t = 0; t < 1000; t++)
 	{
-	    d_dx_dy_map<My, Nx21, elem_per_thread><<<gridsize, blocksize>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
-		cout << t << endl;
+	    d_dx_dy_map_sh<My, Nx21, elem_per_thread><<<gridsize, blocksize, shmem_size>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
+		if (t % 50 == 0)
+			cout << t << endl;
 	}
 }
 

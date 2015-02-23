@@ -65,11 +65,13 @@ class slab_cuda
         void set_t(const twodads::field_t, const cuda::real_t, const uint);
 
         /// @brief compute spectral derivative in x direction
-        void d_dx(const twodads::field_k_t, const twodads::field_k_t, const uint);
+        //void d_dx(const twodads::field_k_t, const twodads::field_k_t, const uint);
         /// @brief compute spectral derivative in y direction
-        void d_dy(const twodads::field_k_t, const twodads::field_k_t, const uint);
+        //void d_dy(const twodads::field_k_t, const twodads::field_k_t, const uint);
         /// @brief Solve laplace equation in k-space
-        void inv_laplace(const twodads::field_k_t, const twodads::field_k_t, const uint); ///< Invert Laplace operators
+        void inv_laplace(const twodads::field_k_t, const twodads::field_k_t, const uint); ///< Invert Laplace operator
+        /// @brief Compute spatial derivatives
+        void d_dx_dy(const twodads::field_k_t, const twodads::field_k_t, const twodads::field_k_t, const uint);
 
         /// Debug functions that only enumerate the array by row and col number
         /// format: cmplx: (sector * 1000 + col, row)
@@ -159,6 +161,10 @@ class slab_cuda
         cuda_array<cuda::cmplx_t> strmf_hat, strmf_x_hat, strmf_y_hat; ///< Fourier fields assoc. with strmf
         cuda_array<cuda::cmplx_t> tmp_array_hat; ///< Temporary data, Fourier field
 
+        cuda_array<cuda::cmplx_t> k_map;         ///< Wave-number coefficients
+        cuda_array<cuda::cmplx_t> k_map_dx1_dy1; ///< Coefficients for first order spatial derivatives
+
+
         cuda_array<cuda::cmplx_t> theta_rhs_hat; ///< non-linear RHS for time integration of theta
         cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
 
@@ -217,19 +223,42 @@ class slab_cuda
         const std::map<twodads::output_t, cuda_arr_real*> get_output_by_name;
 
 
-        cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration
-        cuda::real_t* d_ss3_beta; ///< Coefficients for explicit part of time integration
+//        cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration
+//        cuda::real_t* d_ss3_beta; ///< Coefficients for explicit part of time integration
+
+        ///@brief Compute RHS for Navier-Stokes Model
+        ///@detailed
         void theta_rhs_ns(uint); ///< Navier-Stokes 
         void theta_rhs_lin(uint); ///< Small amplitude blob
         void theta_rhs_log(uint); ///< Arbitrary amplitude blob
-        void theta_rhs_hw(uint); ///< Hasegawa-Wakatani model 
-        void theta_rhs_hwmod(uint); ///< Modified Hasegawa-Wakatani model
-        void theta_rhs_null(uint); ///< Zero explicit term
+
+        ///@brief Compute explicit part for Hasegawa-Wakatani model
+        ///@detailed $\mathcal{N}^0 = \left{n, \phi\right} + \mathcal{C} (\widetilde{phi} - n) - \phi_y$
+        ///@param uint t_src: Use data stored in theta_hat[t_src][%]
+        void theta_rhs_hw(uint);
+
+        ///@brief Compute explicit part of the modified Hasegawa-Wakatani model
+        ///@detailed $\mathcal{N}^t = \left{n, \phi\right} - \mathcal{C} (\widetilde{phi} - \widetilde{n}) - \phi_y$
+        ///@param uint t_src: Use data stored in theta_hat[t_src][%]
+        void theta_rhs_hwmod(uint);
+
+        ///@brief Dummy function, set explicit part to zero
+        ///@param uint t_src: Dummy parameter
+        void theta_rhs_null(uint);
 
         void omega_rhs_ns(uint); ///< Navier Stokes
-        void omega_rhs_hw(uint); ///< Hasegawa-Wakatani model
-        void omega_rhs_hwmod(uint); ///< Modified Hasegawa-Wakatani model
-        void omega_rhs_hwzf(uint); /// Modified Hasegawa-Wakatani, supress zonal flows
+
+        /// @brief RHS for the Hasegawa-Wakatani model
+        /// @detailed RHS = {Omega, phi} + C(phi - n)
+        void omega_rhs_hw(uint);
+
+        /// @brief RHS for modified Hasegawa-Wakatani model
+        /// @detailed: RHS = {Omega, phi} - \tilde{C(phi - n)}
+        void omega_rhs_hwmod(uint);
+
+        /// @brief RHS for modified Hasegawa-Wakatani model, remove zonal flows
+        /// @detailed: RHS = \tilde{\Omega, phi} - C(phi, n)
+        void omega_rhs_hwzf(uint);
         void omega_rhs_ic(uint); ///< Interchange turbulence
         void omega_rhs_null(uint); ///< Zero explicit term
 

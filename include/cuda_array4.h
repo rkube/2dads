@@ -226,6 +226,9 @@ void d_kill_k0(T* arr)
 }
 
 
+
+
+
 #endif // __CUDACC_
 
 /// T is the base type of T, for example T=CuCmplx<double>, T = double, T = float...
@@ -253,16 +256,29 @@ class cuda_array{
         /// @brief Perform element-wise arithmetic operation on array data with a scalar RHS
         /// @detailed O is of type d_op_[???]: d_op_assign, d_op_{add,sub,mul,div}assign
         /// @detailed see cuda_operators.h
-        /// @detailed performs O(array_d[tlev][idx], T), idx=0...Nx*My on array data
+        /// @detailed performs O(array_d[tlev][idx], T), idx=0...My * Nx on array data
         template<typename O>
         inline void op_scalar_t(const T&, const uint);
 
-        /// @brief Perform element-wise arithmetic operation on array data with a scalar RHS
+        /// @brief Perform element-wise arithmetic operation on array data with a array RHS
         /// @detailed O is of type d_op_[???]: d_op_assign, d_op_{add,sub,mul,div}assign
         /// @detailed see cuda_operators.h
-        /// @detailed performs O(array_d[tlev][idx], rhs[tlev][idx]), idx=0...Nx*My on array data
+        /// @detailed performs O(array_d[tlev][idx], rhs[tlev][idx]), idx=0...My * /Nx on array data
         template <typename O>
         inline void op_array_t(const cuda_array<T>&, const uint);
+
+
+        /// @brief Perform element-wise arithmetic operation on array data with array RHS
+        /// @detailed See op_array_t(const cuda_array<T>&, const uint). This method allows specification
+        /// @detailed of used time levels:
+        /// @detailed perform O(array_d[t_dst][idx], rhs[t_src][idx]), idx = 0 ... My * Nx
+        /// @param const uint t_dst: Time level of this
+        /// @param const cuda_array<T>& rhs: right hand side in operator expression
+        /// @param
+        //template <typename O>
+        //void op_array_t(const uint t_dst, const cuda_array<T>& rhs, const uint t_src);
+
+
 
         // Operators
         // operator= returns a cuda_array, so that it can be used in chaining assignments:
@@ -613,6 +629,22 @@ inline void cuda_array<T> :: op_array_t(const cuda_array<T>& rhs, const uint tle
 	gpuStatus();
 #endif
 }
+
+
+//template <typename T>
+//template <typename O>
+//inline void cuda_array<T> :: op_array_t(const uint t_dst, const cuda_array<T>& rhs, const uint t_src)
+//{
+//	if((void*) this == (void*) &rhs)
+//		throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator+= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
+//
+//	check_bounds(rhs.get_my(), rhs.get_nx());
+//
+//		d_op1_arr<T, O><<<grid, block>>>(get_array_d(t_dst), rhs.get_array_d(t_src), My, Nx);
+//	#ifdef DEBUG
+//		gpuStatus();
+//	#endif
+//}
 
 // Operators
 
