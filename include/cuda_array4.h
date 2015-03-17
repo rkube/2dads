@@ -16,8 +16,8 @@
  *
  */
 
-#ifndef CUDA_ARRAY4_H_
-#define CUDA_ARRAY4_H_
+#ifndef CUDA_ARRAY4_H
+#define CUDA_ARRAY4_H
 
 
 #include <iostream>
@@ -190,6 +190,23 @@ void d_op0_apply(T* lhs, const uint My, const uint Nx)
 		op(lhs[idx]);
 }
 
+// Apply function on each element
+template <typename T, typename O>
+__global__
+void d_op0_apply_fun(T* lhs, cuda::slab_layout_t sl, const uint My, const uint Nx)
+{
+    const uint col = d_get_col();
+    const uint row = d_get_row();
+    const uint idx = row * Nx + col;
+
+    const double x = sl.x_left + (T) col * sl.delta_x;
+    const double y = sl.y_lo + (T) row * sl.delta_y;
+    O fun;
+
+    if((col < Nx) && (row < My))
+        lhs[idx] = fun(x, y);
+}
+
 // Kill kx = 0 mode
 template <typename T>
 __global__
@@ -279,6 +296,9 @@ class cuda_array{
         //void op_array_t(const uint t_dst, const cuda_array<T>& rhs, const uint t_src);
 
 
+        /// @brief Evaluate the functor O on the array
+        template <typename O>
+        inline void op_scalar_fun(const cuda::slab_layout_t, const uint);
 
         // Operators
         // operator= returns a cuda_array, so that it can be used in chaining assignments:
@@ -457,7 +477,7 @@ cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
     array_h = new T[nelem];
 #endif
 	// Initialize array to zero
-    for(int n = 0; n < Nx * My; n++)
+    for(uint n = 0; n < Nx * My; n++)
         array_h[n] = T(0.0);
 
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
@@ -510,7 +530,9 @@ template <typename T>
 cuda_array<T> :: cuda_array(cuda_array<T>&& rhs) :
 	tlevs(rhs.get_tlevs()), My(rhs.get_my()), Nx(rhs.get_nx()),
 	array_bounds(tlevs, My, Nx),
-	grid(dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My)),
+    block(rhs.block),
+	//grid(dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My)),
+    grid(rhs.grid),
 	array_d(nullptr),
 	array_d_t(nullptr),
 	array_d_t_host(nullptr),
@@ -527,6 +549,8 @@ cuda_array<T> :: cuda_array(cuda_array<T>&& rhs) :
 //	cout << "array_h_t:      this" << array_h_t     << "\trhs:" << rhs.array_h_t << endl;
 //#endif //DEBUG
 
+    //cout << "\tblocksize = (" << get_block().x << ", " << get_block().y << ")" << endl;
+    //cout << "\tgridsize = (" << get_grid().x << ", " << get_grid().y << ")" << endl;
 	array_d = rhs.array_d;
 	rhs.array_d = nullptr;
 
@@ -614,6 +638,16 @@ inline void cuda_array<T> :: op_scalar_t(const T& rhs, const uint tlev)
 #endif
 }
 
+template <typename T>
+template <typename O>
+inline void cuda_array<T> :: op_scalar_fun(const cuda::slab_layout_t sl, const uint tlev)
+{
+    d_op0_apply_fun<T, O> <<<grid, block>>>(get_array_d(tlev), sl, My, Nx);
+#ifdef DEBUG
+    gpuStatus();
+#endif
+}
+
 
 // Perform operation element-wise on time level t
 template <typename T>
@@ -629,6 +663,9 @@ inline void cuda_array<T> :: op_array_t(const cuda_array<T>& rhs, const uint tle
 	gpuStatus();
 #endif
 }
+
+
+// Apply a function on the array
 
 
 //template <typename T>
@@ -669,6 +706,7 @@ cuda_array<T>& cuda_array<T> :: operator= (cuda_array<T>&& rhs)
 	if(this == &rhs)
 		return *this;
 	check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
+
 
 	array_d = rhs.array_d;
 	rhs.array_d = nullptr;
@@ -1035,4 +1073,4 @@ inline void cuda_array<T> :: normalize()
 #endif // __CUDACC__
 
 
-#endif /* CUDA_ARRAY4_H_ */
+#endif /* CUDA_ARRAY4_H */

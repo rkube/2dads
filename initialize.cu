@@ -8,6 +8,42 @@
 #include <stdio.h>
 #include "initialize.h"
 
+#define EPSILON 0.000001
+
+__global__
+void d_init_lamb_dipole(cuda::real_t* array, const cuda::slab_layout_t layout, 
+        const cuda::init_params_t params)
+{
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * layout.Nx + col;
+
+    const double x = layout.x_left + double(col) * layout.delta_x;
+    const double y = layout.y_lo + double(row) * layout.delta_y;
+
+    double r;
+    double theta;
+    double lbd;
+    double U;
+    double R;
+
+    if((col < layout.Nx) && (row < layout.My))
+    {
+        r = sqrt(x * x + y * y);
+        theta = atan2(x, y);
+        U = params.i1;
+        R = params.i2;
+        // lambda = BesselZero[1,1] / R
+        lbd = 3.831705970207 / R;
+        if(r < R)
+            array[idx] = 2 * lbd * U * j1(lbd * r) * cos(theta) / j0(3.831705970207);
+        else
+            array[idx] = 0.0;
+    }
+    return;
+
+}
+
 
 __global__ 
 void d_init_sine(cuda::real_t* array, const cuda::slab_layout_t layout, const double kx, const double ky)
@@ -113,18 +149,57 @@ void d_init_mode(cuda::cmplx_t* array, const cuda::slab_layout_t layout, const d
 
 
 /// Initialize all modes to given value
+/// Do not initialize Nyquist frequencies at col = Nx/2+1 and row = My/2+1
 __global__
 void d_init_all_modes(cuda::cmplx_t* array, const cuda::slab_layout_t layout, const double real, const double imag)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * (layout.Nx / 2 + 1) + col;
-    if ((col >= layout.Nx / 2 + 1) || (row >= layout.Nx))
-        return;
 
-    array[idx] = cuda::cmplx_t(real, imag);
+    if((col < layout.Nx / 2 + 1) && (row < layout.My))
+    	if((col == layout.Nx / 2 ) || (row == layout.My / 2))
+    		array[idx] = cuda::cmplx_t(real);
+    	else
+    		array[idx] = cuda::cmplx_t(real, imag);
+    return;
 }
 
+
+// Setup PRNG http://docs.nvidia.com/cuda/curand/device-api-overview.html#device-api-example
+__global__
+void d_setup_rand(curandState* state, const time_t seed, const cuda::slab_layout_t layout)
+{
+	const int row = blockIdx.y * blockDim.y + threadIdx.y;
+	const int col = blockIdx.x * blockDim.x + threadIdx.x;
+	const int index = row * layout.Nx + col;
+	curand_init((unsigned long) seed, index, 0, &state[index]);
+}
+
+
+__global__
+void d_init_random_modes(cuda::cmplx_t* array, curandState* state, const cuda::slab_layout_t layout)
+{
+	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+	const uint idx = row * (layout.Nx / 2 + 1) + col;
+
+	double phase{0.0};
+	double amplitude = 100.0 / sqrt(double(layout.Nx * layout.My));
+    if((col < layout.Nx / 2 + 1) && (row < layout.My))
+	{
+		phase = curand_uniform_double(&state[idx]) * cuda::TWOPI;
+		array[idx].set_re(amplitude * cos(phase));
+
+		// Set imaginary part of nyquist frequency terms to zero
+		// These frequencies are their own complex conjugate
+    	if((col == layout.Nx / 2 ) || (row == layout.My / 2))
+    		array[idx].set_im(0.0);
+    	else
+    		array[idx].set_im(amplitude * sin(phase));
+	}
+	return;
+}
 
 /// Initialize sinusoidal profile
 //void init_simple_sine(cuda_array<cuda::real_t, cuda::real_t>* arr, 
@@ -181,12 +256,30 @@ void init_invlapl(cuda_arr_real* arr,
     cudaDeviceSynchronize();
 }
 
-// Initialize all modes with constant value
-void init_all_modes(cuda_arr_cmplx* arr, const vector<double> initc, const cuda::slab_layout_t layout, const uint tlev)
+// Initialize all modes with random values
+void init_turbulent_bath(cuda_arr_cmplx* arr, const cuda::slab_layout_t layout, const uint tlev)
 {
-    double real = initc[0];
-    double imag = initc[1];
-    d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
+	curandState* state_d{nullptr};
+	gpuErrchk(cudaMalloc((void**) &state_d, layout.Nx * layout.My * sizeof(curandState)));
+
+	static time_t seed{time(NULL)};
+	static bool is_initialized{false};
+
+	// Do curand initialization only once
+	if(!is_initialized)
+	{
+		gpuErrchk(cudaMalloc((void**) &state_d, layout.Nx * layout.My * sizeof(curandState)));
+		d_setup_rand<<< arr -> get_grid(), arr -> get_block()>>>(state_d, seed, layout);
+		is_initialized = true;
+	}
+
+	d_init_random_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), state_d, layout);
+    gpuStatus();
+//	if(state_d != nullptr)
+//		gpuErrchk(cudaFree(state_d));
+	//cout << "Init_random_modes: arr = " << arr;
+
+    //d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
 }
 
 
@@ -205,25 +298,36 @@ void init_mode(cuda_arr_cmplx* arr,
     const unsigned int num_modes = initc.size() / 4;
     (*arr) = CuCmplx<cuda::real_t>(0.0, 0.0);
 
-//#ifdef DEBUG
-    cout << "Initializing modes:\n";
-//#endif
+
     for(uint n = 0; n < num_modes; n++)
     {
-//#ifdef DEBUG
-        cout << "mode " << n << ": amp=" << initc[4*n] << " kx=" << initc[4*n+1] << ", ky=" << initc[4*n+2] << ", sigma=" << initc[4*n+3] << "\n";
-//#endif
         d_init_mode_exp<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, initc[4*n], initc[4*n+1], initc[4*n+2], initc[4*n+3]);
     }
 
     // Zero out kx=0,ky=0 mode
     d_init_mode<<<1, 1>>>(arr -> get_array_d(tlev), layout, 0.0, 0, 0);
-
-#ifdef DEBUG
-    cout << "Initialized field:\n";
-    cout << (*arr) << "\n";
-#endif
-
+    gpuStatus();
 }
+
+
+/// Initialize a Lamb Dipole
+void init_lamb(cuda_arr_real* arr,
+        const vector<double> initc,
+        const cuda::slab_layout_t layout)
+{
+    cuda::init_params_t init_params;
+    init_params.i1 = (initc.size() > 1) ? initc[0] : 0.0;
+    init_params.i2 = (initc.size() > 2) ? initc[1] : 0.0;
+    init_params.i3 = (initc.size() > 3) ? initc[2] : 0.0;
+    init_params.i4 = (initc.size() > 4) ? initc[3] : 0.0;
+    init_params.i5 = (initc.size() > 5) ? initc[4] : 0.0;
+    init_params.i6 = (initc.size() > 6) ? initc[5] : 0.0;
+
+    cout << "i1 = " << init_params.i1 << ", i2 = " << init_params.i2 << ", 3 = " << init_params.i3 << endl;
+
+    d_init_lamb_dipole<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(), layout, init_params);
+    gpuStatus();
+}
+
 
 // End of file initialize.cu

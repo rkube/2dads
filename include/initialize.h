@@ -12,6 +12,9 @@
 typedef cuda_array<cuda::cmplx_t> cuda_arr_cmplx;
 typedef cuda_array<cuda::real_t> cuda_arr_real;
 
+
+void init_lamb_dipole(cuda_arr_real*, vector<double>, cuda::slab_layout_t);
+
 void init_simple_sine(cuda_arr_real*, vector<double>, cuda::slab_layout_t);
 
 void init_gaussian(cuda_arr_real*, vector<double>, cuda::slab_layout_t, bool);
@@ -21,5 +24,7 @@ void init_invlapl(cuda_arr_real*, vector<double>, cuda::slab_layout_t);
 void init_mode(cuda_arr_cmplx*, const vector<double>, const cuda::slab_layout_t, const uint tlev);
 
 void init_turbulent_bath(cuda_arr_cmplx*, cuda::slab_layout_t, uint);
+
+void init_lamb(cuda_arr_real*, const vector<double>, const cuda::slab_layout_t);
 
 #endif //INITIALIZE_H

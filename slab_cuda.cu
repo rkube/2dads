@@ -770,6 +770,7 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
     // Generate coefficients for spatial derivatives
     gen_k_map_dx1_dy1<<<grid_my_nx21, block_my_nx21>>>(k_map_dx1_dy1.get_array_d(), cuda::TWOPI / config.get_lengthx(),
     		cuda::TWOPI / config.get_lengthy(), My, Nx / 2 + 1);
+    gpuStatus();
 }
 
 
@@ -905,6 +906,16 @@ void slab_cuda :: initialize()
 
             inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
             //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
+            break;
+
+        // Initialize Lamb Dipole in Omega
+        case twodads::init_fun_t::init_lamb:
+            init_lamb(&omega, config.get_initc(), slab_layout);
+            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
+
+            theta_hat = cuda::cmplx_t(0.0, 0.0);
+
             break;
 
         case twodads::init_fun_t::init_file:
@@ -1228,6 +1239,7 @@ void slab_cuda :: d_dx_dy(const twodads::field_k_t src_name, const twodads::fiel
 			arr_x -> get_array_d(),
 			arr_y -> get_array_d(),
 			k_map_dx1_dy1.get_array_d(), My, Nx / 2 + 1);
+    gpuStatus();
 }
 
 
@@ -1245,9 +1257,7 @@ void slab_cuda :: inv_laplace(const twodads::field_k_t src_name, const twodads::
     d_inv_laplace_sec2<<<grid_nx21_sec2, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
     d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
 
-#ifdef DEBUG
     gpuStatus();
-#endif
 }
 
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
@@ -1260,9 +1270,7 @@ void slab_cuda :: inv_laplace_enumerate(const twodads::field_k_t f_name, const u
     d_inv_laplace_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
     d_inv_laplace_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
     d_inv_laplace_zero<<<1, 1>>>(arr -> get_array_d(0));
-#ifdef DEBUG
     gpuStatus();
-#endif
 }
 
 
@@ -1277,25 +1285,15 @@ void slab_cuda :: integrate_stiff(const twodads::field_k_t fname, const uint tle
     {
      case 2:
     	d_integrate_stiff_map_2<<<grid_my_nx21, block_my_nx21>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), stiff_params);
-    break;
+        break;
     case 3:
     	d_integrate_stiff_map_3<<<grid_my_nx21, block_my_nx21>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), stiff_params);
     	break;
     case 4:
     	d_integrate_stiff_map_4<<<grid_my_nx21, block_my_nx21>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), stiff_params);
-    	//if(fname == twodads::field_k_t::f_theta_hat)
-    	//	d_integrate_stiff_map_4_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), kmap.get_array_d(), stiff_params);
-
     	break;
     }
-
-//    d_integrate_stiff_sec1<<<grid_nx21_sec1, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
-//    d_integrate_stiff_sec2<<<grid_nx21_sec2, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
-//    d_integrate_stiff_sec3<<<grid_nx21_sec3, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
-//    d_integrate_stiff_sec4<<<grid_nx21_sec4, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev);
-#ifdef DEBUG
     gpuStatus();
-#endif
 }
 
 /// @brief Integrate only modes with ky=0
@@ -1305,6 +1303,7 @@ void slab_cuda :: integrate_stiff_ky0(const twodads::field_k_t fname, const uint
     cuda_arr_cmplx* A_rhs = rhs_array_map.at(fname);
 
     d_integrate_stiff_ky0<<<grid_dy_single, block_nx21>>>(A->get_array_d_t(), A_rhs->get_array_d_t(), stiff_params, tlev);
+    gpuStatus();
 }
 
 
@@ -1314,10 +1313,7 @@ void slab_cuda :: integrate_stiff_debug(const twodads::field_k_t fname, const ui
     cuda_arr_cmplx* A_rhs = rhs_array_map.at(fname);
 
     d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), stiff_params, tlev, row, col);
-#ifdef DEBUG
     gpuStatus();
-#endif
-        
 }
 
 
@@ -1334,9 +1330,7 @@ void slab_cuda :: theta_rhs_ns(const uint t_src)
 {
     //cout << "theta_rhs_ns\n";
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-#ifdef DEBUG
     gpuStatus();
-#endif
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
 
@@ -1344,11 +1338,9 @@ void slab_cuda :: theta_rhs_ns(const uint t_src)
 void slab_cuda :: theta_rhs_lin(const uint t_src)
 {
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
-
-#ifdef DEBUG
     gpuStatus();
-#endif
+
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
 
 
@@ -1363,21 +1355,18 @@ void slab_cuda :: theta_rhs_hw(const uint t_src)
     //cout << "theta_rhs_hw: tmp_array = " << tmp_array; 
     // Comupute poisson bracket
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    gpuStatus();
     //cout << "Poisson bracket (real space) = " << tmp_array;
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_tmp_hat, 0);
     //cout << "Poisson bracket (fourier space) = " << tmp_array_hat << endl;
     //Copy poisson bracket to new RHS
 
     d_theta_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(tmp_array_hat.get_array_d(), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(), C, My, Nx / 2 + 1);
+    gpuStatus();
 
     //cout << "After theta rhs hw" << tmp_array_hat << endl;
 
     theta_rhs_hat.op_array_t<d_op1_assign<cuda::cmplx_t> >(tmp_array_hat, 0);
-
-    //cout << "theta_rhs_hat = " << theta_rhs_hat << endl;
-#ifdef DEBUG
-    gpuStatus();
-#endif
 }
 
 
@@ -1386,14 +1375,14 @@ void slab_cuda :: theta_rhs_hwmod(const uint t_src)
 {
     static const cuda::real_t C = config.get_model_params(2);
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
     // Neglect ky=0 modes for in coupling term
     d_coupling_hwmod<<<grid_my_nx21, block_my_nx21>>>(theta_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
+    gpuStatus();
     theta_rhs_hat -= strmf_y_hat; 
 
-#ifdef DEBUG
     gpuStatus();
-#endif
 }
 
 
@@ -1402,10 +1391,8 @@ void slab_cuda :: theta_rhs_log(const uint t_src)
     //d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
     //d_theta_rhs_log<<<grid_my_nx21, block_my_nx21>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
     d_theta_rhs_log<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
-    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
-#ifdef DEBUG
     gpuStatus();
-#endif
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
 
 
@@ -1421,10 +1408,10 @@ void slab_cuda :: omega_rhs_null(const uint t)
 void slab_cuda :: omega_rhs_ns(const uint t_src)
 {
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
-#ifdef DEBUG
+    //d_pbracket<<<grid_my_nx, block_my_nx>>>(strmf_x.get_array_d(), strmf_y.get_array_d(), omega_x.get_array_d(), omega_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    
     gpuStatus();
-#endif
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
 }
 
 /// RHS for the Hasegawa-Wakatani model
@@ -1433,17 +1420,15 @@ void slab_cuda :: omega_rhs_hw(const uint t_src)
     static const cuda::real_t C = config.get_model_params(2);
     tmp_array.op_scalar_t<d_op1_assign<cuda::real_t> >(0.0, 0);
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_tmp_hat, 0);
 
     //omega_rhs_hat.op_scalar_t<d_op1_assign<cuda::cmplx_t> >(cuda::cmplx_t(0.0, 0.0), 0);
     //d_omega_rhs_hw_debug<<<1, 1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
     d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(tmp_array_hat.get_array_d(), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
+    gpuStatus();
 
     omega_rhs_hat.op_array_t<d_op1_assign<cuda::cmplx_t> >(tmp_array_hat, 0);
-
-    #ifdef DEBUG
-    gpuStatus();
-#endif
 }
 
 /// RHS for modified Hasegawa-Wakatani model
@@ -1453,11 +1438,10 @@ void slab_cuda :: omega_rhs_hwmod(const uint t_src)
     //cout << "omega_rhs_hw, grid_my_nx = (" << grid_my_nx.x << ", " << grid_my_nx.y << ")" << endl;
     //cout << "             block_my_nx = (" << block_my_nx.x << ", " << block_my_nx.y << ") " << endl;
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
-    d_coupling_hwmod<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
-#ifdef DEBUG
     gpuStatus();
-#endif
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
+    gpuStatus();
+    d_coupling_hwmod<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
 }
 
 
@@ -1466,24 +1450,25 @@ void slab_cuda :: omega_rhs_hwzf(const uint t_src)
 {
     static const cuda::real_t C = config.get_model_params(2);
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
+    gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
     d_kill_ky0<<<grid_ky0, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), My, Nx / 2 + 1);
-    d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
-#ifdef DEBUG
     gpuStatus();
-#endif
+    d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
+    gpuStatus();
 }
 
 
 void slab_cuda::omega_rhs_ic(const uint t_src)
 {
     // Convert model parameters to complex numbers
-    const cuda::real_t ic = config.get_model_params(2); 
-    const cuda::real_t sdiss = config.get_model_params(3);
-    const cuda::real_t cfric = config.get_model_params(4);
+    static const cuda::real_t ic = config.get_model_params(2); 
+    static const cuda::real_t sdiss = config.get_model_params(3);
+    static const cuda::real_t cfric = config.get_model_params(4);
 
     // Compute Poisson bracket in real space, use full grid/block
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
+    gpuStatus();
     //dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
 //#ifdef DEBUG
@@ -1493,9 +1478,7 @@ void slab_cuda::omega_rhs_ic(const uint t_src)
 //#endif //DEBUG
     //d_omega_ic_dummy<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
     d_omega_ic<<<grid_my_nx21, block_my_nx21>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(t_src), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), My, Nx / 2 + 1);
-#ifdef DEBUG
     gpuStatus();
-#endif
 }
 
 

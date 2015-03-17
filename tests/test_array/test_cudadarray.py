@@ -19,6 +19,11 @@ z = 0.3 * xx + np.sin(2. * np.pi * yy)
 
 print z
 
+print 'max = ', z.max()
+print 'min = ', z.min()
+print 'sum = ', z.sum()
+print 'mean = ', z.mean()
+
 print 'sum(axis=0)'
 print z.sum(axis=0)
 

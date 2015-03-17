@@ -13,17 +13,21 @@ const map <twodads::diagnostic_t, std::string> dfile_fname{
 	{twodads::diagnostic_t::diag_blobs, "cu_blobs.dat"},
 	{twodads::diagnostic_t::diag_probes, "cu_probes.dat"},
 	{twodads::diagnostic_t::diag_energy, "cu_energy.dat"},
+	{twodads::diagnostic_t::diag_energy_ns, "cu_energy_ns.dat"},
 	{twodads::diagnostic_t::diag_mem, "cu_memory.day"}
 };
 
 const map <twodads::diagnostic_t, std::string> dfile_header{
 	{twodads::diagnostic_t::diag_blobs,  "#01: time\t\t#02: theta_max\t#03: theta_max_x\t#04: theta_max_y\n#05: strmf_max\t#06: strmf_max_x\t#07: strmf_max_y\n#08: theta_int\t#09: theta_int_x\t#10: theta_int_y\n#11: COMvx\t#12: COMvy\t#13: Wxx\t#14: Wyy\t#15: Dxx\t#16: Dyy\n"},
-	{twodads::diagnostic_t::diag_energy, "#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: W\t#07: D1\t#08: D2\t#09: D3\t:#10: D4\t#11: D5\t#12:D6\t#13: D7\t#14: D8\t#15: D9\t#16: D10\t#17: D11\t#18: D12\t#19: D13\n"},
+	{twodads::diagnostic_t::diag_energy, "#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: CFL\t\n"},
+	{twodads::diagnostic_t::diag_energy_ns, "#01: time\t#02: V\t#03: O\t#04: E\t#05: CFL\n"},
 	{twodads::diagnostic_t::diag_probes, "#01: time\t#02: n_tilde\t#03: n\t#04: phi\t#05: phi_tilde\t#06: Omega\t#07: Omega_tilde\t#08: v_x\t#09: v_y\t#10: v_y_tilde\t#11: Gamma_r\n"},
 	{twodads::diagnostic_t::diag_mem, "none"}
 };
 
-//map <twodads::diagnostic_t, diagnostics_cu::diag_func_ptr> diagnostics_cu :: get_diag_func_by_name = "diagnostics_cu :: create_diag_func_map();
+/****************************************
+ * Update get_dfunc_by_name in the constructor when including another diagnostic routine
+ */
 
 
 diagnostics_cu :: diagnostics_cu(const slab_config& config) :
@@ -41,6 +45,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
     strmf_y(config.get_my(), config.get_nx()),
     theta_rhs(config.get_my(), config.get_nx()),
     omega_rhs(config.get_my(), config.get_nx()),
+    tmp_array(1, config.get_my(), config.get_nx() / 2 + 1),
     x_vec(new twodads::real_t[config.get_nx()]),
     y_vec(new twodads::real_t[config.get_my()]),
     x_arr(config.get_my(), config.get_nx()),
@@ -63,6 +68,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
                 	 {twodads::field_t::f_omega_rhs, &omega_rhs}
                 },
     get_dfunc_by_name{{twodads::diagnostic_t::diag_energy,  &diagnostics_cu::diag_energy},
+                      {twodads::diagnostic_t::diag_energy_ns,  &diagnostics_cu::diag_energy_ns},
                       {twodads::diagnostic_t::diag_blobs,  &diagnostics_cu::diag_blobs},
                       {twodads::diagnostic_t::diag_probes,  &diagnostics_cu::diag_probes},
                       {twodads::diagnostic_t::diag_mem,  &diagnostics_cu::diag_mem}}
@@ -377,11 +383,38 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 	}
 }
 
+
+void diagnostics_cu :: diag_energy_ns(const twodads::real_t time)
+{
+    ofstream output;
+    static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
+
+    const twodads::real_t V{dA * omega.get_sum()};
+    const twodads::real_t O{0.5 * dA * (omega * omega).get_sum()};
+    const twodads::real_t E{0.5 * dA * (strmf_x * strmf_x + strmf_y * strmf_y).get_sum()};
+
+    // Compute CFL last, since we apply abs to strmf_x, strmf_y
+    //strmf_x.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
+    //strmf_y.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
+   
+    const twodads::real_t cfl_x{strmf_x.get_absmax() * slab_layout.delta_t / slab_layout.delta_x};
+    const twodads::real_t cfl_y{strmf_y.get_absmax() * slab_layout.delta_t / slab_layout.delta_y};
+
+    output.open("cu_energy_ns.dat", ios::app);
+    if(output.is_open())
+    {
+         output << time << "\t";
+         output << setw(12) << V << "\t";
+         output << setw(12) << O << "\t";
+         output << setw(12) << E << "\t";
+         output << setw(12) << cfl_x + cfl_y << "\n";
+    } 
+
+}
+
 void diagnostics_cu :: diag_energy(const twodads::real_t time)
 {
 	ofstream output;
-	//static const twodads::real_t Lx{slab_layout.delta_y * twodads::real_t(slab_layout.My)};
-	//static const twodads::real_t Ly{slab_layout.delta_x * twodads::real_t(slab_layout.Nx)};
 	static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
 
 	cuda_darray<twodads::real_t> strmf_tilde(std::move(strmf.tilde()));
@@ -390,16 +423,24 @@ void diagnostics_cu :: diag_energy(const twodads::real_t time)
 	cuda_darray<twodads::real_t> strmf_x_tilde(std::move(strmf_x.tilde()));
 	cuda_darray<twodads::real_t> strmf_y_tilde(std::move(strmf_y.tilde()));
 
+    cuda_darray<twodads::real_t> diag_strmf_x(strmf_x);
+    diag_strmf_x.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
+    cuda_darray<twodads::real_t> diag_strmf_y(strmf_y);
+    diag_strmf_y.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
+
 	// Total energy, thermal and kinetic
 	const twodads::real_t E{0.5 * dA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
 	// Kinetic energy
 	const twodads::real_t K{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
+    // Enstrophy
+    const twodads::real_t U{0.5 * dA * (omega * omega).get_sum()};
 	// Generalized enstrophy
-	const twodads::real_t U{0.5 * dA * ((theta_tilde - omega_tilde) * (theta_tilde - omega_tilde)).get_sum()};
+	//const twodads::real_t U{0.5 * dA * ((theta_tilde - omega_tilde) * (theta_tilde - omega_tilde)).get_sum()};
 	// T
 	const twodads::real_t T{0.5 * dA * (strmf_x_tilde * strmf_y_tilde).get_sum()};
-	// W
-	cout << "diag_energy: " << time << setw(12) << E << "\n";
+	// CFL
+    const twodads::real_t CFL{diag_strmf_x.get_absmax() * slab_layout.delta_t / slab_layout.delta_x + 
+                              diag_strmf_y.get_absmax() * slab_layout.delta_t / slab_layout.delta_y};
 
 	output.open("cu_energy.dat", ios::app);
 	if(output.is_open())
@@ -409,10 +450,24 @@ void diagnostics_cu :: diag_energy(const twodads::real_t time)
 		output << setw(12) << K << "\t";
 		output << setw(12) << T << "\t";
 		output << setw(12) << U << "\t";
+        output << setw(12) << CFL;
 		output << "\n";
 		output.close();
 	}
 }
 
+void diagnostics_cu :: d_dx_dy(cuda::real_t* in, cuda::real_t* dx, cuda::real_t* dy)
+{
+    static cufftResult err;
+    static cufftPlan plan_r2c;
+    static cufftPlan plan_c2r;
+    static bool is_planned{false};
 
+    // Plan only once
+    if(is_planned == false)
+    {
+        err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z);
+        err = cufftPlan2d(&plan_c2r, Nx, My, CUFFT_Z2D);
+    }
+}
 

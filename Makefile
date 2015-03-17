@@ -13,9 +13,7 @@ DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))'
 SOURCES_CPP=shader.cpp slab_config.cpp output.cpp slab_config.cpp
 SOURCES_CU=initialize.cu slab_cuda.cu
 
-#OBJECTS=$(OBJ_DIR)/shader.o $(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
-OBJECTS=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics.o $(OBJ_DIR)/diagnostics_cu.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
-
+OBJECTS=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics_cu.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
 
 shader.o: shader.cpp
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
@@ -26,8 +24,8 @@ slab_config.o: slab_config.cpp include/slab_config.h
 output.o: output.cpp include/output.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(INCLUDES)
 
-diagnostics.o: diagnostics.cpp include/diagnostics.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
+#diagnostics.o: diagnostics.cpp include/diagnostics.h
+#	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
 
 diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
@@ -38,7 +36,7 @@ initialize.o: initialize.cu include/initialize.h
 slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
-2dads: shader.o slab_config.o output.o diagnostics.o diagnostics_cu.o initialize.o slab_cuda.o
+2dads: shader.o slab_config.o output.o diagnostics_cu.o initialize.o slab_cuda.o
 	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 2dads_profile: slab_config.o initialize.o slab_cuda.o

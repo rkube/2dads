@@ -61,6 +61,18 @@ class diagnostics_cu {
         ///@detailed \f$D_{12} = \frac{1}{A} \int \mathrm{d}A\, n_{xxx}^2 + n_{yyy}^2\f$ <br>
         ///@detailed \f$D_{13} = \frac{1}{A} \int \mathrm{d}A\, \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}\f$ <br>
         void diag_energy(const twodads::real_t);
+
+        ///@brief Conservation integrals for Navier-Stokes system
+        ///@param time Time of output
+        ///@detailed Compute and conservation laws for navier-stokes equation
+        ///@ energy_ns.dat: t V O E
+        ///@ \f$V = \int \mathrm{d}A\, \Omega \f$ <br>
+        ///@ \f$O = \frac{1}{2} \int \mathrm{d}A \Omega^2 \f$<br>
+        ///@ \f$E = \frac{1}{2} \int \left(\phi_x^2 + \phi_y^2\right) \f$<br>
+        ///@ \f$\mathrm{CFL} = \max(\frac{\phi_x \triangle_t}{\triangle_x}) + \max(\frac{\phi_x \triangle_t}{\triangle_x}) \f$
+        void diag_energy_ns(const twodads::real_t);
+
+
         /// @brief write output for probes
         /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
         /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
@@ -71,12 +83,19 @@ class diagnostics_cu {
         /// @brief Creates a log file
 		void write_logfile();
 
+
+        /// @brief Compute spatial derivatives
+        void d_dx_dy(cuda::real_t* in, cuda::real_t* dx, cuda::real_t* dy);
+
+        // Private data members
         twodads::diag_data_t slab_layout;
 
         cuda_darray<twodads::real_t> theta, theta_x, theta_y;
         cuda_darray<twodads::real_t> omega, omega_x, omega_y;
         cuda_darray<twodads::real_t> strmf, strmf_x, strmf_y;
         cuda_darray<twodads::real_t> theta_rhs, omega_rhs;
+
+        cuda_array<cuda::cmplx_t> tmp_array;
 
         twodads::real_t* x_vec;
         twodads::real_t* y_vec;

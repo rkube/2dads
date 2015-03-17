@@ -68,6 +68,7 @@ namespace twodads {
         init_theta_mode, ///< Initializes single modes for theta_hat
         init_omega_mode, ///< Initializes single modes for omega_hat
         init_both_mode, ///< Initializes single modes for theta_hat and omega_hat
+        init_lamb,
         init_file, ///< Input from input.h5
     };
 
@@ -93,9 +94,10 @@ namespace twodads {
      * Enumerate diagnostic functions
      */
     enum class diagnostic_t {diag_blobs,  ///< Information on blob dynamics
-        diag_energy, ///< Energetics for turbulence simulations
-        diag_probes, ///< Time series from probes
-        diag_mem     ///< GPU memory usage information
+        diag_energy,    ///< Energetics for turbulence simulations
+        diag_energy_ns, ///< Energetics for turbulence simulations
+        diag_probes,    ///< Time series from probes
+        diag_mem        ///< GPU memory usage information
     };
     
     /*!

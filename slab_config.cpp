@@ -62,6 +62,7 @@ const map<string, twodads::diagnostic_t> slab_config::diagnostic_map
 {
     {"blobs", twodads::diagnostic_t::diag_blobs},
     {"energy", twodads::diagnostic_t::diag_energy},
+    {"energy_ns", twodads::diagnostic_t::diag_energy_ns},
     {"probes", twodads::diagnostic_t::diag_probes},
 	{"memory", twodads::diagnostic_t::diag_mem}
 };
@@ -77,7 +78,8 @@ const map<string, twodads::init_fun_t> slab_config::init_func_map
     {"theta_mode", twodads::init_fun_t::init_theta_mode},
     {"omega_mode", twodads::init_fun_t::init_omega_mode},
     {"both_mode", twodads::init_fun_t::init_both_mode},
-    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath}
+    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
+    {"lamb_dipole", twodads::init_fun_t::init_lamb}
 };
 
 const map<string, twodads::rhs_t> slab_config::rhs_func_map 
@@ -98,7 +100,7 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
 
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
-slab_config :: slab_config(string basedir) :
+slab_config :: slab_config(string cfg_file) :
 	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
 	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
 	tout(0.0), log_theta(false), do_dealiasing(false), particle_tracking(0), 
@@ -107,11 +109,10 @@ slab_config :: slab_config(string basedir) :
 	po::options_description cf_opts("Allowed options");
 	po::variables_map vm;
 
-    cout << "slab_config::slab_config(basedir) \n";
-    cout << "\tbasedir = " << basedir << endl;
-
-    fs::path dir(basedir);
-    fs::path file("input.ini");
+    //fs::path dir(basedir);
+    //fs::path file("input.ini");
+    fs::path dir(string("."));
+    fs::path file(cfg_file);
     fs::path full_path = dir / file;
     cout << "\tfs::path = " << full_path << endl;
 
@@ -122,7 +123,7 @@ slab_config :: slab_config(string basedir) :
 	string output_str;
     string theta_rhs_str;
     string omega_rhs_str;
-    //string init_function_str;
+    string init_function_str;
     string strmf_solver_str;    
 
     // Add recognized options to cf_opts
@@ -161,7 +162,8 @@ slab_config :: slab_config(string basedir) :
     {
 		cout << e.what() << "\n";
 	}
-    
+   
+    cout << "init_function_str = " << init_function_str << endl; 
 	// Parse configuration file
 	ifstream cf_stream(full_path.string());
 	if (!cf_stream )
@@ -213,6 +215,8 @@ slab_config :: slab_config(string basedir) :
 	if (vm.count("output"))
 		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
 
+    // Use .at() for map access. Throws out of range errors, when 
+    // keys are requested that are not initialized
     for(auto str: output_split_vec)
     {
         try
@@ -246,14 +250,17 @@ slab_config :: slab_config(string basedir) :
     }*/
 
     // Assign theta_rhs, omega_rhs, and init_function by parsing the string 
+    // Use .at() for map access. Throws out of range errors, when 
+    // keys are requested that are not initialized
     try 
     {
+        cout << "init_function_str = " << init_function_str << endl;
         init_function = init_func_map.at(init_function_str); 
     }
     catch (const std::out_of_range & oor)
     {
         stringstream err_msg;
-        err_msg << "Invalid initial_function" << init_function_str << endl;
+        err_msg << "Invalid initial_function: " << init_function_str << endl;
         err_msg << "Valid strings are: " << endl;
         for (auto const &it : init_func_map)
             err_msg << it.first << endl;
@@ -262,6 +269,8 @@ slab_config :: slab_config(string basedir) :
 
 
     // Set RHS type of theta equation
+    // Use .at() for map access. Throws out of range errors, when 
+    // keys are requested that are not initialized
     try
     {
         theta_rhs = rhs_func_map.at(theta_rhs_str);
@@ -276,6 +285,8 @@ slab_config :: slab_config(string basedir) :
         throw out_of_range(err_msg.str());
     }
 
+    // Use .at() for map access. Throws out of range errors, when 
+    // keys are requested that are not initialized
     try
     {
         omega_rhs = rhs_func_map.at(omega_rhs_str);
@@ -321,6 +332,19 @@ int slab_config :: consistency()
 }
 
 
+// Helper function for reverse lookup in ..._map members.
+// Used by print_config()
+template <typename T>
+string str_from_map(const T findval, map<string, T> my_map)
+{
+    typedef typename map<string, T>::value_type pair;
+    auto it = find_if(my_map.begin(), my_map.end(), 
+            [findval](const pair & p){ return p.second == findval;}
+            );
+    return (*it).first;
+}
+
+
 void slab_config :: print_config() const 
 {
     cout << "01: runnr = " << get_runnr() << endl;
@@ -344,35 +368,36 @@ void slab_config :: print_config() const
     // maps defined in the top of this file:
     // http://stackoverflow.com/questions/5749073/reverse-map-lookup
     
-    //namespace
-    //{
-        //typedef map<string, twodads::rhs_t> Map;
-        //typedef Map::key_type key;
-        //typedef Map::value_type pair;
-        //typedef Map::mapped_type value;
+    //typedef map<string, twodads::rhs_t> Map;
+    //typedef Map::value_type pair;
+    //twodads::rhs_t findval = get_theta_rhs_type();
+    //auto it = find_if(rhs_func_map.begin(), rhs_func_map.end(), 
+    //        [findval](const pair & p){ return p.second == findval;}
+    //        );
+    cout << "17 theta_rhs = " << str_from_map<twodads::rhs_t>(get_theta_rhs_type(), rhs_func_map) << endl;
+    cout << "18 omega_rhs = " << str_from_map<twodads::rhs_t>(get_omega_rhs_type(), rhs_func_map) << endl;
+    cout << "19 strmf_solver = .... defaults, not parsed" << endl;
+    cout << "20 init_function = " << str_from_map<twodads::init_fun_t>(get_init_function(), init_func_map) << endl;
+    cout << "21 initial_conditions = ";
+    for(auto it : get_initc())
+        cout << it << ", ";
+    cout << endl;
 
-        //twodads::rhs_t findval = get_theta_rhs_type();
-        for (auto const &it : rhs_func_map)
-        {
-            cout << it.first << endl;
-        }
-//        auto it = find_if(rhs_func_map.begin(), rhs_func_map.end(), 
-//                [findval](const pair & p){
-//                    return p.second == findval;
-//                });
-//        if (it == rhs_func_map.end())
-//           cerr << "theta_rhs not found" << endl; 
-//        else 
-//            cout << "17 theta_rhs = " << (*it).first << endl;
-    //}
-//    cout << "18 omega_rhs = "
-//    cout << "19 strmf_solver = "
-//    cout << "20 init_function = "
-//    cout << "21 initial_conditions = "
-//    cout << "22 model_params = "
-//    cout << "23 output = "
-// `  cout << "24 diagnostics = "
-//    cout << "25 nthreads = "
+    cout << "22 model_params = ";
+    for(auto it : get_model_params())
+        cout << it << ", ";
+    cout << endl;
+
+    cout << "23 output = ";
+    for(auto it : get_output())
+        cout << str_from_map<twodads::output_t>(it, output_map) << "\t";
+    cout << endl;
+    
+    cout << "24 diagnostics = ";
+    for(auto it : get_diagnostics())
+        cout << str_from_map<twodads::diagnostic_t>(it, diagnostic_map) << "\t";
+    cout << endl;
+    cout << "25 nthreads = " << get_nthreads() << endl;
 }
 
 

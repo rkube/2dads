@@ -5,13 +5,13 @@
 #ifndef CUDA_OPERATORS_H
 #define CUDA_OPERATORS_H
 
-#ifdef CUDACC
+#ifdef __CUDA_ARCH__
 // Do not use __host__, this would break templating of operator calls!
 // ->cudacc uses host instantiation of template parameter in cuda_array4.h
 #define CUDAMEMBER __device__
 #endif
 
-#ifndef CUDACC
+#ifndef __CUDA_ARCH__
 #define CUDAMEMBER
 #endif
 
@@ -28,13 +28,34 @@
 template <typename T>
 class d_op0_expassign{
 	public:
-		__device__ inline void operator() (T& a) {a = exp(a);};
+		CUDAMEMBER inline void operator() (T& a) {a = exp(a);};
 };
 
 template <typename T>
 class d_op0_logassign{
 	public:
-		__device__ inline void operator() (T& a) {a = log(a);};
+		CUDAMEMBER inline void operator() (T& a) {a = log(a);};
+};
+
+
+template <typename T>
+class d_op0_squareassign{
+    public:
+        CUDAMEMBER inline void operator() (T& a) {a = a * a;};
+};
+
+
+template <typename T>
+class d_op0_sqrtassign{
+    public:
+        CUDAMEMBER inline void operator() (T& a) {a = sqrt(a);};
+};
+
+
+template <typename T>
+class d_op0_absassign{
+    public:
+        CUDAMEMBER inline void operator() (T& a) {a = fabs(a);};
 };
 
 /*****************************************************************************
@@ -47,50 +68,61 @@ class d_op0_logassign{
 template <typename T>
 class d_op1_assign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a = b;};
-	private:
-//		const T val;
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a = b;};
 };
 
 
 template <typename T>
 class d_op1_addassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a += b;};
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a += b;};
 };
 
 
 template <typename T>
 class d_op1_subassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a -= b;};
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a -= b;};
 };
 
 
 template <typename T>
 class d_op1_mulassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a *= b;};
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a *= b;};
 };
 
 
 template <typename T>
 class d_op1_divassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a /= b;};
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a /= b;};
 };
 
 template <typename T>
 class d_op1_maxassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a = max(a, b);};
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a = max(a, b);};
+};
+
+
+template <typename T>
+class d_op1_absmaxassign{
+    public:
+        CUDAMEMBER inline void operator() (T& a, const T& b) {a = max(fabs(a), fabs(b));};
 };
 
 
 template <typename T>
 class d_op1_minassign{
 	public:
-		__device__ inline void operator() (T& a, const T& b) {a = min(a, b);}
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a = min(a, b);}
+};
+
+template <typename T>
+class d_op1_absminassign{
+	public:
+		CUDAMEMBER inline void operator() (T& a, const T& b) {a = min(fabs(a), fabs(b));}
 };
 
 /*****************************************************************************
@@ -101,50 +133,50 @@ class d_op1_minassign{
 template <typename T>
 class d_op2_add{
     public:
-        __device__ inline T operator()(const T& a,const T& b) const {return(a + b);};
-        __device__ inline T operator()(const T& a, const T& b, const T& scale) const {return((a + b) * scale);};
+        CUDAMEMBER inline T operator()(const T& a,const T& b) const {return(a + b);};
+        CUDAMEMBER inline T operator()(const T& a, const T& b, const T& scale) const {return((a + b) * scale);};
 };
 
 
 template <typename T>
 class d_op2_addexp{
 	public:
-		__device__ inline T operator()(const T& a, const T& b) const {return(exp(a) + exp(b));};
+		CUDAMEMBER inline T operator()(const T& a, const T& b) const {return(exp(a) + exp(b));};
 };
 
 
 template <typename T>
 class d_op2_sub{
     public:
-        __device__ inline T operator()(const T& a, const T& b)  {return(a - b);};
+        CUDAMEMBER inline T operator()(const T& a, const T& b)  {return(a - b);};
 };
 
 
 template <typename T>
 class d_op2_mul{
     public:
-        __device__ inline T operator()(const T& a, const T& b) const {return(a * b);};
+        CUDAMEMBER inline T operator()(const T& a, const T& b) const {return(a * b);};
 };
 
 
 template <typename T>
 class d_op2_div{
     public:
-        __device__ inline T operator()(const T& a, const T& b) const {return(a / b);};
+        CUDAMEMBER inline T operator()(const T& a, const T& b) const {return(a / b);};
 };
 
 
 template <typename T>
 class d_op2_max{
     public:
-        __device__ inline T operator()(const T& a, const T& b) const {return(max(a, b));};
+        CUDAMEMBER inline T operator()(const T& a, const T& b) const {return(max(a, b));};
 };
 
 
 template <typename T>
 class d_op2_min{
     public:
-        __device__ inline T operator()(const T& a, const T& b) const {return(min(a, b));};
+        CUDAMEMBER inline T operator()(const T& a, const T& b) const {return(min(a, b));};
 };
 
 

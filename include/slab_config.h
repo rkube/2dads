@@ -29,7 +29,7 @@ public:
      * \brief Standard constructor reads input.ini from pwd,
      * call slab_config('.') as delegating constructor
      */
-    slab_config() : slab_config(string(".")) {};
+    slab_config() : slab_config(string("input.ini")) {};
 
     /*
      * \brief Constructor, reads input.ini in directory, specified by argument

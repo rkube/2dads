@@ -326,13 +326,14 @@ int main(void)
 	of << r_arr_y;
 	of.close();
 
-
+/*
 	for(int t = 0; t < 1000; t++)
 	{
 	    d_dx_dy_map_sh<My, Nx21, elem_per_thread><<<gridsize, blocksize, shmem_size>>>(c_arr.get_array_d(), c_arr_x.get_array_d(), c_arr_y.get_array_d(), kmap.get_array_d());
 		if (t % 50 == 0)
 			cout << t << endl;
 	}
+*/
 }
 
 

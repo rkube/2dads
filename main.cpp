@@ -1,12 +1,12 @@
 #include <iostream>
-#include <GLFW/glfw3.h>
+//#include <GLFW/glfw3.h>
 #include "cuda_runtime_api.h"
 #include "slab_cuda.h"
-#include "diagnostics.h"
+//#include "diagnostics.h"
 #include "diagnostics_cu.h"
 #include "output.h"
 
-extern template class diag_array<double>;
+//extern template class diag_array<double>;
 
 using namespace std;
 
@@ -17,7 +17,6 @@ int main(void)
 
     slab_cuda slab(my_config);
     output_h5 slab_output(my_config);
-    diagnostics slab_diag(my_config);
     diagnostics_cu slab_diag_cu(my_config);
 
     twodads::real_t time(0.0);
@@ -33,9 +32,6 @@ int main(void)
     slab.initialize();
 
     slab_output.write_output(slab, time);
-
-    slab_diag.update_arrays(slab);
-    slab_diag.write_diagnostics(time, my_config);
 
     slab_diag_cu.update_arrays(slab);
     slab_diag_cu.write_diagnostics(time, my_config);
@@ -74,9 +70,6 @@ int main(void)
         }
         if(t % tout_diag == 0)
         {
-            //slab_diag.update_arrays(slab);
-            //slab_diag.write_diagnostics(time, my_config);
-
             slab_diag_cu.update_arrays(slab);
             slab_diag_cu.write_diagnostics(time, my_config);
         }
