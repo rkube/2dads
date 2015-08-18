@@ -104,6 +104,7 @@ output_h5 :: output_h5(slab_config config) :
 
 output_h5 :: ~output_h5()
 {
+    delete dspace_file;
 	delete group_theta;
 	delete group_theta_x;
 	delete group_theta_y;

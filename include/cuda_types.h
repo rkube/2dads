@@ -8,6 +8,25 @@
 #include <ostream>
 #include <assert.h>
 #include <vector>
+#include <map>
+
+#ifdef _CUFFT_H_
+const std::map<cufftResult, std::string> cufftGetErrorString
+{
+    {CUFFT_SUCCESS, std::string("CUFFT_SUCCESS")},
+    {CUFFT_INVALID_PLAN, std::string("CUFFT_INVALID_PLAN")},
+    {CUFFT_ALLOC_FAILED, std::string("CUFFT_ALLOC_FAILED")},
+    {CUFFT_INVALID_TYPE, std::string("CUFFT_INVALID_TYPE")},
+    {CUFFT_INVALID_VALUE, std::string("CUFFT_INVALID_VALUE")},
+    {CUFFT_INTERNAL_ERROR, std::string("CUFFT_INTERNAL_ERROR")},
+    {CUFFT_EXEC_FAILED, std::string("CUFFT_EXEC_FAILED")},
+    {CUFFT_SETUP_FAILED, std::string("CUFFT_SETUP_FAILED")},
+    {CUFFT_INVALID_SIZE, std::string("CUFFT_INVALID_SIZE")},
+    {CUFFT_UNALIGNED_DATA, std::string("CUFFT_UNALIGNED_DATA")}
+};
+
+#endif
+
 
 namespace cuda
 {
@@ -22,10 +41,10 @@ namespace cuda
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
 
-    constexpr real_t PI = 3.141592653589793; ///< $\pi$
-    constexpr real_t TWOPI = 6.283185307179586; ///< $2.0 \pi$
+    constexpr real_t PI = 3.1415926535897932384; ///< $\pi$
+    constexpr real_t TWOPI = 6.2831853071795864769; ///< $2.0 \pi$
     constexpr real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
-    constexpr real_t epsilon{0.000001};
+    constexpr real_t epsilon{1e-10};
     constexpr int max_initc{6}; /// < Maximal number of initial conditions
 
     constexpr int io_w{7}; //width of fields used in cout
@@ -39,12 +58,13 @@ namespace cuda
     {
     public:
         // Provide standard ctor for pre-C++11
-        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, unsigned int my, unsigned int nx) :
-            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), My(my), Nx(nx) {};
+        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, real_t dt, unsigned int my, unsigned int nx) :
+            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), delta_t(dt), My(my), Nx(nx) {};
         const real_t x_left;
         const real_t delta_x;
         const real_t y_lo;
         const real_t delta_y;
+        const real_t delta_t;
         const unsigned int My;
         const unsigned int Nx;
 
@@ -54,6 +74,7 @@ namespace cuda
             os << "delta_x = " << s.delta_x << "\t";
             os << "y_lo = " << s.y_lo << "\t";
             os << "delta_y = " << s.delta_y << "\t";
+            os << "delta_t = " << s.delta_t << "\t";
             os << "My = " << s.My << "\n";
             os << "Nx = " << s.Nx << "\t";
             return os;
@@ -114,12 +135,14 @@ namespace cuda
 
     } __attribute__ ((aligned (8)));
 
-    constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
-    constexpr real_t ss3_beta_r[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}}; ///< Coefficients for explicit part in time integration
+    //constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
+    constexpr real_t ss3_alpha_r[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
+    constexpr real_t ss3_beta_r[3][3] =  {{1., 0., 0.}, {2., -1. , 0.}, {3., -3.,  1.   }}; ///< Coefficients for explicit part in time integration
 
 #ifdef __CUDACC__
-    __constant__ const real_t ss3_alpha_d[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}};
-    __constant__ const real_t ss3_beta_d[3][3] = {{1., 0., 0.}, {2., -1., 0.}, {3., -3., 1.}};
+    //__constant__ const real_t ss3_alpha_d[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}};
+    __constant__ const real_t ss3_alpha_d[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}};
+    __constant__ const real_t ss3_beta_d[3][3]  = {{1., 0., 0.}, {2., -1. , 0.}, {3., -3.,  1.  }};
 #endif //__CUDACC__
 };
 

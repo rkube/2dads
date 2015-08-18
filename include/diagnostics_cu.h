@@ -11,6 +11,7 @@
 #include "2dads_types.h"
 #include "cuda_types.h"
 #include "error.h"
+#include "derivatives.h"
 #include "slab_config.h"
 #include "slab_cuda.h"
 #include "cuda_darray.h"
@@ -72,6 +73,11 @@ class diagnostics_cu {
         ///@ \f$\mathrm{CFL} = \max(\frac{\phi_x \triangle_t}{\triangle_x}) + \max(\frac{\phi_x \triangle_t}{\triangle_x}) \f$
         void diag_energy_ns(const twodads::real_t);
 
+        ///@brief Check consistency of numerics
+        ///@detailed: Reconstruct phi from Omega and compare against strmf
+        ///@detailed: Reconstruct Omega from strmf and compare against Omega
+        void diag_consistency(const twodads::real_t);
+
 
         /// @brief write output for probes
         /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
@@ -84,22 +90,26 @@ class diagnostics_cu {
 		void write_logfile();
 
 
-        /// @brief Compute spatial derivatives
-        void d_dx_dy(cuda::real_t* in, cuda::real_t* dx, cuda::real_t* dy);
-
         // Private data members
-        twodads::diag_data_t slab_layout;
+        slab_config config;
+        cuda::slab_layout_t slab_layout;
 
         cuda_darray<twodads::real_t> theta, theta_x, theta_y;
         cuda_darray<twodads::real_t> omega, omega_x, omega_y;
         cuda_darray<twodads::real_t> strmf, strmf_x, strmf_y;
         cuda_darray<twodads::real_t> theta_rhs, omega_rhs;
 
+        cuda_darray<twodads::real_t> theta_xx, theta_yy;
+        cuda_darray<twodads::real_t> omega_xx, omega_yy;
+
         cuda_array<cuda::cmplx_t> tmp_array;
 
         twodads::real_t* x_vec;
         twodads::real_t* y_vec;
         cuda_darray<twodads::real_t> x_arr, y_arr;
+
+        ///// @brief Compute spatial derivatives
+        derivs<cuda::real_t> der;
 
 		twodads::real_t time; /// Simulation time time
 		twodads::real_t dt_diag; /// Time step between diagnostic output

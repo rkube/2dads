@@ -35,15 +35,17 @@ namespace twodads {
      *
      */
     enum class field_t {f_theta, ///< \f$\theta\f$
-        f_theta_x,  ///< \f$\theta_x \f$, radial derivative of theta
+        f_theta_x,  ///< \f$\theta_x  \f$, radial derivative of theta
         f_theta_y,  ///< \f$ \theta_y \f$, poloidal derivative of theta
-        f_omega,    ///< \f$ \Omega \f$
-        f_omega_x,  ///<  \f$ \Omega_x \f$
-        f_omega_y,  ///< \f$ \Omega_x  \f$ 
-        f_strmf,    ///< \f$ \phi   \f$  
-        f_strmf_x,  ///< \f$ \phi_x \f$ 
-        f_strmf_y,  ///< \f$ \phi_y \f$   
+        f_omega,    ///< \f$ \Omega   \f$
+        f_omega_x,  ///< \f$ \Omega_x \f$
+        f_omega_y,  ///< \f$ \Omega_x \f$ 
+        f_strmf,    ///< \f$ \phi     \f$  
+        f_strmf_x,  ///< \f$ \phi_x   \f$ 
+        f_strmf_y,  ///< \f$ \phi_y   \f$   
         f_tmp,      ///< tmp field
+        f_tmp_x,    ///< tmp field
+        f_tmp_y,    ///< tmp field
         f_theta_rhs,///< rhs for time integration
         f_omega_rhs ///< rhs for time integration
     };
@@ -94,10 +96,11 @@ namespace twodads {
      * Enumerate diagnostic functions
      */
     enum class diagnostic_t {diag_blobs,  ///< Information on blob dynamics
-        diag_energy,    ///< Energetics for turbulence simulations
-        diag_energy_ns, ///< Energetics for turbulence simulations
-        diag_probes,    ///< Time series from probes
-        diag_mem        ///< GPU memory usage information
+        diag_energy,        ///< Energetics for turbulence simulations
+        diag_energy_ns,     ///< Energetics for turbulence simulations
+        diag_probes,        ///< Time series from probes
+        diag_consistency,   ///< Consistency of Laplace solver
+        diag_mem            ///< GPU memory usage information
     };
     
     /*!

@@ -2,6 +2,7 @@
 #include <vector>
 #include <iomanip>
 #include "slab_cuda.h"
+#include "diagnostics_cu.h"
 #include "output.h"
 
 using namespace std;
@@ -22,21 +23,24 @@ int main(void)
 
     slab_cuda slab(my_config);
     output_h5 slab_output(my_config);
+    diagnostics_cu slab_diag_cu(my_config);
+
     // Create and populate list of modes specified in input.ini
-    vector<mode_struct> mode_list;
-    vector<double> initc = my_config.get_initc();
-    const unsigned int num_modes = my_config.get_initc().size() / 2;
-    cout << "Parsing " << num_modes << " modes in main():\n";
-    for(uint n = 0; n < num_modes; n++)
-    {
-        cout << "mode " << n << ": kx=" << initc[2 * n + 1] << ", ky=" << initc[2 * n + 1] << "\n";
-        mode_list.push_back(mode_struct(initc[2 * n], initc[2 * n + 1]));
-    }
+    //vector<mode_struct> mode_list;
+    //vector<double> initc = my_config.get_initc();
+    //const unsigned int num_modes = my_config.get_initc().size() / 2;
+    //cout << "Parsing " << num_modes << " modes in main():\n";
+    //for(uint n = 0; n < num_modes; n++)
+    //{
+    //    cout << "mode " << n << ": kx=" << initc[2 * n + 1] << ", ky=" << initc[2 * n + 1] << "\n";
+    //    mode_list.push_back(mode_struct(initc[2 * n], initc[2 * n + 1]));
+    //}
 
     twodads::real_t time{0.0};
     twodads::real_t delta_t{my_config.get_deltat()};
 
     const unsigned int tout_full(ceil(my_config.get_tout() / my_config.get_deltat()));
+    const unsigned int tout_diag{my_config.get_tdiag() / my_config.get_deltat()};
     const unsigned int num_tsteps(ceil(my_config.get_tend() / my_config.get_deltat()));
     const unsigned int tlevs = my_config.get_tlevs();
     unsigned int t = 1;
@@ -44,6 +48,9 @@ int main(void)
     slab.init_dft();
     slab.initialize();
     slab.rhs_fun(my_config.get_tlevs() - 1);
+
+    slab_diag_cu.update_arrays(slab);
+    slab_diag_cu.write_diagnostics(time, my_config);
 
     cout << "Output every " << tout_full << " steps\n";
 
@@ -90,6 +97,12 @@ int main(void)
 
         if(t % tout_full == 0)
             slab_output.write_output(slab, time);
+
+        if(t % tout_diag == 0)
+        {
+            slab_diag_cu.update_arrays(slab);
+            slab_diag_cu.write_diagnostics(time, my_config);
+        }
     }
     return(0);
 }

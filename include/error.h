@@ -111,4 +111,16 @@ class gpu_error : public exception
         string error;
 };
 
+
+class assert_error : public exception
+{
+    public:
+        assert_error(const string err) : error(err) {};
+        ~assert_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+    private:
+        string error;
+};
+
 #endif //__ERROR_H

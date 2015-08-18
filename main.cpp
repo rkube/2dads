@@ -2,11 +2,8 @@
 //#include <GLFW/glfw3.h>
 #include "cuda_runtime_api.h"
 #include "slab_cuda.h"
-//#include "diagnostics.h"
 #include "diagnostics_cu.h"
 #include "output.h"
-
-//extern template class diag_array<double>;
 
 using namespace std;
 
@@ -61,7 +58,8 @@ int main(void)
         slab.advance();
         // Compute all fields from theta_hat(1,:), omega_hat(1,:) since we called advance
         slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, 1);
-        slab.update_real_fields(1);
+        slab.update_real_fields(1, t);
+       
         slab.rhs_fun(1);
 
         if(t % tout_full == 0)

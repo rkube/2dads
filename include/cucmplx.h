@@ -10,7 +10,8 @@
 
 #include <iostream>
 #include <iomanip>
-#include "cucmplx.h"
+#include <cmath>
+//#include "cucmplx.h"
 
 #ifdef __CUDACC__
 #define CUDA_MEMBER __host__ __device__
@@ -32,8 +33,10 @@ public:
     CUDA_MEMBER CuCmplx(const CuCmplx<T>& rhs) : data{rhs.re(), rhs.im()} {};
     CUDA_MEMBER CuCmplx(const CuCmplx<T>* rhs) : data{rhs -> re(), rhs -> im()} {};
 
-    CUDA_MEMBER inline T abs() const {return (re() * re() + im() * im());};
+    CUDA_MEMBER inline T abs() const {return (sqrt(re() * re() + im() * im()));};
     // (a + ib) + (c + id) = (a + c) + i * (b + d)
+
+    CUDA_MEMBER inline CuCmplx<T> conj() const {return (CuCmplx(re(), -1.0 * im()));};
 
 
     CUDA_MEMBER inline CuCmplx<T> operator+=(const CuCmplx<T> & rhs)

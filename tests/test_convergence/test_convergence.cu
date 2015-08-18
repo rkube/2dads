@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <derivatives.h>
 #include <cuda_array4.h>
 #include <cuda_darray.h>
 
@@ -17,58 +18,6 @@
 #endif
 
 using namespace std;
-
-
-template <int MY, int NX21>
-__global__
-void gen_k_map_dx1_dy1(cuda::cmplx_t* kmap, const cuda::real_t two_pi_Lx, const cuda::real_t two_pi_Ly)
-{
-    const int row = blockIdx.y * blockDim.y + threadIdx.y;
-    const int col = blockIdx.x * blockDim.x + threadIdx.x;
-    const int index = row * NX21 + col;
-
-    cuda::cmplx_t tmp(0.0, 0.0);
-
-    if(row < MY / 2)
-        tmp.set_im(two_pi_Ly * cuda::real_t(row));
-    else if (row == MY / 2)
-        tmp.set_im(0.0);
-    else
-        tmp.set_im(two_pi_Ly * (cuda::real_t(row) - cuda::real_t(MY)));
-
-    if(col < NX21 - 1)
-        tmp.set_re(two_pi_Lx * cuda::real_t(col));
-    else
-        tmp.set_re(0.0);
-
-    if((col < NX21) && (row < MY))
-        kmap[index] = tmp;
-}
-
-template <int MY, int NX21, int T>
-__global__
-void d_dx_dy_map(cuda::cmplx_t*  in, cuda::cmplx_t*  out_x, cuda::cmplx_t*  out_y, cuda::cmplx_t*  kmap)
-{
-	// offset to index for current row.
-	const int row_offset = (blockIdx.y * blockDim.y + threadIdx.y) * NX21;
-	int col = blockIdx.x * blockDim.x + threadIdx.x;
-	int index = row_offset + col;
-	int t;
-
-	for(t = 0; t < T; t++)
-	{
-		if(col < NX21)
-		{
-			index = row_offset + col;
-			out_x[index] = in[index] * cuda::cmplx_t(0.0, kmap[index].re());
-			out_y[index] = in[index] * cuda::cmplx_t(0.0, kmap[index].im());
-		}
-		else
-			break;
-		col++;
-		index++;
-	}
-}
 
 
 #define XNULL 0.1
@@ -93,6 +42,14 @@ class fun1_y {
     // f_y(x, y) = -2 (y - y_0) exp(-(x - x_0)^2 - (y - y_0)^2)
     public:
         CUDAMEMBER T operator() (T x, T y) const { return( -2.0 * (y - YNULL) * exp(-(x - XNULL) * (x - XNULL) - (y - YNULL) * (y - YNULL)) );};
+};
+
+
+template <typename T>
+class fun1_xx_yy {
+    // nabla^2 f(x,y) = 4. * (-1. + (x-x_0)^2 + (y-y_0)^2)  * exp( -(x - x_0)^2 - (y - y_0)^2)
+    public:
+        CUDAMEMBER T operator() (T x, T y) const { return(4. * (-1. + (x - XNULL) * (x - XNULL) + (y - YNULL) * (y - YNULL)) * exp(-(x - XNULL) * (x - XNULL) - (y - YNULL) * (y - YNULL))); };
 };
 
 template <typename T>
@@ -123,195 +80,258 @@ class poisson {
         CUDAMEMBER T operator() (T x, T y) const { return( exp(-2.0 * (x * x + XNULL * XNULL + y * y + YNULL * YNULL)) *(-8. * XNULL * y + 8. * YNULL * x));};
 };
 
-int main(void)
+void do_test()
 {
-    cufftHandle plan_r2c;
-    cufftHandle plan_c2r;
+    int Nx, My;
+    cout << "Enter Nx: " << endl;
+    cin >> Nx;
+    cout << "Enter My: " << endl;
+    cin >> My;
 
-    //int Nx, My;
-    //cout << "Enter Nx: " << endl;
-    //cin >> Nx;
-    //cout << "Enter My: " << endl;
-    //cin >> My;
+    //constexpr int Nx{32};
+    //constexpr int My{32};
+    cuda::real_t Lx{10.0};
+    cuda::real_t Ly{10.0};
+    cuda::real_t dx{Lx / Nx};
+    cuda::real_t dy{Lx / My};
+    const cuda::slab_layout_t sl(-0.5 * Lx, Lx / (cuda::real_t) Nx, -0.5 * Ly, Ly / (cuda::real_t) My, 1e-3, My, Nx);
 
-    constexpr int Nx{512};
-    constexpr int My{512};
-    constexpr int Nx21{Nx / 2 + 1};
-    constexpr cuda::real_t Lx{10.0};
-    constexpr cuda::real_t Ly{10.0};
-    constexpr cuda::real_t dx{Lx / Nx};
-    constexpr cuda::real_t dy{Lx / My};
+    cout << "Nx = " << Nx << ", Lx = " << Lx << ", dx = " << dx << ", dy = " << dy << endl;
 
-    constexpr cuda::real_t two_pi_Lx{cuda::TWOPI / Lx};
-    constexpr cuda::real_t two_pi_Ly{cuda::TWOPI / Ly};
-
-    constexpr int elem_per_thread{1};
-
-    constexpr int blocksize_nx{64};
-    constexpr int blocksize_my{4};
-
-	constexpr int num_block_x{(Nx21 + (elem_per_thread * blocksize_nx - 1)) / (elem_per_thread * blocksize_nx)};
-	constexpr int num_block_y{(My + blocksize_my - 1) / blocksize_my};
-	dim3 blocksize(blocksize_nx, blocksize_my);
-	dim3 gridsize(num_block_x, num_block_y);
-
-    cout << "Lx = " << Lx << ", Nx = " << Nx << ", dx = " << dx << ", dy = " << dy << endl;
-    cout << "blocksize = (" << blocksize.x << ", " << blocksize.y << ")" << endl;
-    cout << "gridsize = (" << gridsize.x << ", " << gridsize.y << ")" << endl;
-
-    const cuda::slab_layout_t sl(-0.5 * Lx, Lx / (cuda::real_t) Nx, -0.5 * Ly, Ly / (cuda::real_t) My, My, Nx);
+    // Derivator
+    derivs<cuda::real_t> der(sl);
 
     ofstream of;
 
-    // Plan DFTs
-    cufftResult err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z);
-    if (err != CUFFT_SUCCESS)
-        throw;
-    err = cufftPlan2d(&plan_c2r, Nx, My, CUFFT_Z2D);
-    if (err != CUFFT_SUCCESS)
-        throw;
+    cout << "f_num" << endl << endl;
+    cuda_array<cuda::real_t> f_num(1, My, Nx);
+    cout << "fx_num" << endl << endl;
+    cuda_array<cuda::real_t> fx_num(1, My, Nx);
+    cout << "fy_num" << endl << endl;
+    cuda_array<cuda::real_t> fy_num(1, My, Nx);
 
-    /* Define f, f_x, f_y, ... in real and fourier space*/
-    cuda_array<cuda::real_t> f_r(1, My, Nx);
-    cuda_array<cuda::real_t> fx_r(1, My, Nx);
-    cuda_array<cuda::real_t> fy_r(1, My, Nx);
-
+    cout << "fy_analytic" << endl << endl;
     cuda_array<cuda::real_t> fx_analytic(1, My, Nx);
+    cout << "fy_analytic" << endl << endl;
     cuda_array<cuda::real_t> fy_analytic(1, My, Nx);
 
-    cuda_array<cuda::cmplx_t> fhat(1, My, Nx21);
-    cuda_array<cuda::cmplx_t> fx_hat(1, My, Nx21);
-    cuda_array<cuda::cmplx_t> fy_hat(1, My, Nx21);
+    cout << "g_num" << endl << endl;
+    cuda_array<cuda::real_t> g_num(1, My, Nx);
+    cout << "gx_num" << endl << endl;
+    cuda_array<cuda::real_t> gx_num(1, My, Nx);
+    cout << "gy_num" << endl << endl;
+    cuda_array<cuda::real_t> gy_num(1, My, Nx);
 
-    cuda_array<cuda::real_t> g_r(1, My, Nx);
-    cuda_array<cuda::real_t> gx_r(1, My, Nx);
-    cuda_array<cuda::real_t> gy_r(1, My, Nx);
-
+    cout << "gy_analytic" << endl << endl;
     cuda_array<cuda::real_t> gx_analytic(1, My, Nx);
+    cout << "gy_analytic" << endl << endl;
     cuda_array<cuda::real_t> gy_analytic(1, My, Nx);
 
-    cuda_array<cuda::cmplx_t> ghat(1, My, Nx21);
-    cuda_array<cuda::cmplx_t> gx_hat(1, My, Nx21);
-    cuda_array<cuda::cmplx_t> gy_hat(1, My, Nx21);
+    /* Numerically computad Laplace of f */
+    cout << "lapl_f_num" << endl << endl;
+    cuda_array<cuda::real_t> lapl_f_num(1, My, Nx);
+    /* Analytic Laplacian of f*/
+    cout << "lapl_f_an" << endl << endl;
+    cuda_array<cuda::real_t> lapl_f_an(1, My, Nx);
 
-    /* Numerical computed poisson bracket */
-    cuda_array<cuda::real_t> sol_num(1, My, Nx);
+    /* Reconstructed f from Laplace */
+    cout << "f_rcr" << endl << endl;
+    cuda_array<cuda::real_t> f_rcr(1, My, Nx);
+
     /* Analytic solution of the poisson bracket */
-    cuda_array<cuda::real_t> sol_an(1, My, Nx);
+    cout << "pb_an" << endl << endl;
+    cuda_array<cuda::real_t> pb_an(1, My, Nx);
+    /* Numerical computed poisson bracket */
+    cout << "pb_num" << endl << endl;
+    cuda_array<cuda::real_t> pb_num1(1, My, Nx);
+    cuda_array<cuda::real_t> pb_num2(1, My, Nx);
+    cuda_array<cuda::real_t> pb_num3(1, My, Nx);
 
-    cuda_array<cuda::cmplx_t> k_map(1, My, Nx21);
-
-    gen_k_map_dx1_dy1<My, Nx21> <<<dim3(1, My), dim3(Nx21, 1)>>>(k_map.get_array_d(), two_pi_Lx, two_pi_Ly);
-	gpuErrchk(cudaPeekAtLastError());
-    gpuStatus();
-
-    //cout << "kmap = " << k_map;
 
     /* Evaluate f and g */
-    f_r.op_scalar_fun<fun1<cuda::real_t> >(sl, 0);
+    f_num.op_scalar_fun<fun1<cuda::real_t> >(sl, 0);
     of.open("f.dat");
-    of << f_r;
+    of << f_num;
     of.close();
 
-    g_r.op_scalar_fun<fun2<cuda::real_t> >(sl, 0);
+    g_num.op_scalar_fun<fun2<cuda::real_t> >(sl, 0);
     of.open("g.dat");
-    of << g_r;
+    of << g_num;
     of.close();
 
-    sol_an.op_scalar_fun<poisson<cuda::real_t> >(sl, 0);
-    of.open("sol_an.dat");
-    of << sol_an;
+    pb_an.op_scalar_fun<poisson<cuda::real_t> >(sl, 0);
+    of.open("pb_an.dat");
+    of << pb_an;
     of.close();
 
-    /* Transform to fourier space */
-    err = cufftExecD2Z(plan_r2c, f_r.get_array_d(), (cufftDoubleComplex*) fhat.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
+    /* Compute spectral derivative of f and g */
+    der.d_dx1_dy1(f_num, fx_num, fy_num);
+    der.d_dx1_dy1(g_num, gx_num, gy_num);
+    der.d_laplace(f_num, lapl_f_num, 0);
 
-    err = cufftExecD2Z(plan_r2c, g_r.get_array_d(), (cufftDoubleComplex*) ghat.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
-
-    /* compute derivatives */
-    d_dx_dy_map<My, Nx21, elem_per_thread><<<blocksize, gridsize>>>(fhat.get_array_d(0), fx_hat.get_array_d(), fy_hat.get_array_d(), k_map.get_array_d());
-	gpuErrchk(cudaPeekAtLastError());
-    gpuStatus();
-
-    d_dx_dy_map<My, Nx21, elem_per_thread><<<blocksize, gridsize>>>(ghat.get_array_d(0), gx_hat.get_array_d(), gy_hat.get_array_d(), k_map.get_array_d());
-	gpuErrchk(cudaPeekAtLastError());
-    gpuStatus();
-
-    ///* Transform to real space */
-    cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) fx_hat.get_array_d(0), fx_r.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
-    fx_r.normalize();
-
-    err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) fy_hat.get_array_d(0), fy_r.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
-    fy_r.normalize();
-
-    err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) gx_hat.get_array_d(0), gx_r.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
-    gx_r.normalize();
-    err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) gy_hat.get_array_d(0), gy_r.get_array_d(0));
-    if (err != CUFFT_SUCCESS)
-        throw;
-    gy_r.normalize();
+    /* Invert Laplace equation */
+    der.inv_laplace(lapl_f_num, f_rcr, 0);
 
     // Compare numerical derivatives to analytic expressions
     fx_analytic.op_scalar_fun<fun1_x<cuda::real_t> >(sl, 0);
+    of.open("fx_an.dat");
+    of << fx_analytic;
+    of.close();
+    
     fy_analytic.op_scalar_fun<fun1_y<cuda::real_t> >(sl, 0);
+    of.open("fy_an.dat");
+    of << fy_analytic;
+    of.close();
 
     gx_analytic.op_scalar_fun<fun2_x<cuda::real_t> >(sl, 0);
+    of.open("gx_an.dat");
+    of << gx_analytic;
+    of.close();
+
     gy_analytic.op_scalar_fun<fun2_y<cuda::real_t> >(sl, 0);
-
-
-    of.open("f_x.dat");
-    of << fx_r;
+    of.open("gy_an.dat");
+    of << gy_analytic;
     of.close();
 
-    of.open("f_y.dat");
-    of << fy_r;
+    lapl_f_an.op_scalar_fun<fun1_xx_yy<cuda::real_t> >(sl, 0);
+    of.open("lapl_f_an.dat");
+    of << lapl_f_an;
     of.close();
 
-    of.open("g_x.dat");
-    of << gx_r;
+
+    of.open("fx_num.dat");
+    of << fx_num;
     of.close();
 
-    of.open("g_y.dat");
-    of << gy_r;
+    of.open("fy_num.dat");
+    of << fy_num;
+    of.close();
+
+    of.open("gx_num.dat");
+    of << gx_num;
+    of.close();
+
+    of.open("gy_num.dat");
+    of << gy_num;
+    of.close();
+
+    of.open("lapl_f_num.dat");
+    of << lapl_f_num;
     of.close();
 
 
     // compute L2 error of derivatives
-    //cout << "fx_r:  blocksize = (" << fx_r.get_block().x << ", " << fx_r.get_block().y << ")" << endl;
-    //cout << "        gridsize = (" << fx_r.get_grid().x  << ", " << fx_r.get_grid().y  << ")" << endl;
+    cout << "diff_deriv" << endl << endl;
     cuda_darray<cuda::real_t> diff_deriv(My, Nx);
-    diff_deriv = (fx_r - fx_analytic) * (fx_r - fx_analytic);
-    //diff_deriv = 0.0;
-    //cout << "diff_deriv:  blocksize = (" << static_cast<cuda_array<cuda::real_t>*>(&diff_deriv) -> get_block().x << ", " << static_cast<cuda_array<cuda::real_t>* >(&diff_deriv) ->  get_block().y << ")" << endl;
-    //cout << "              gridsize = (" << static_cast<cuda_array<cuda::real_t>*>(&diff_deriv) -> get_grid().x  << ", " << static_cast<cuda_array<cuda::real_t>*>(&diff_deriv) -> get_grid().y  << ")" << endl;
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (fx_num - fx_analytic) * (fx_num - fx_analytic);
     cout << "L2 norm of error in f_x is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
-    diff_deriv = (fy_r - fy_analytic) * (fy_r - fy_analytic);
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (fy_num - fy_analytic) * (fy_num - fy_analytic);
     cout << "L2 norm of error in f_y is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl; 
-    diff_deriv = (gx_r - gx_analytic) * (gx_r - gx_analytic);
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (gx_num - gx_analytic) * (gx_num - gx_analytic);
     cout << "L2 norm of error in g_x is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
-    diff_deriv = (gy_r - gy_analytic) * (gy_r - gy_analytic);
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (gy_num - gy_analytic) * (gy_num - gy_analytic);
     cout << "L2 norm of error in g_y is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (lapl_f_num - lapl_f_an) * (lapl_f_num - lapl_f_an);
+    cout << "L2 norm of error in laplace(f) is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
 
-    ///* Compute poisson bracket */
-    sol_num = fx_r * gy_r - fy_r * gx_r;
-    diff_deriv = (sol_num - sol_an) * (sol_num - sol_an);
+    /* Print L2 norm of f reconstruction... */
+    diff_deriv = f_num;
+    cuda::real_t f_mean = diff_deriv.get_mean();
+
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (f_rcr - (f_num - f_mean)) * (f_rcr - (f_num - f_mean));
+    cout << "L2 norm of error in inv_lapla(f) is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
+
+    /* Compute poisson bracket in three different ways:
+     * 1.) {f, g} = f_x g_y - f_y g_x
+     */
+    pb_num1 = fx_num * gy_num - fy_num * gx_num;
+    cout << "diff_deriv, assign" << endl << endl;
+    diff_deriv = (pb_num1 - pb_an) * (pb_num1 - pb_an);
+    cout << "Method 1: {f,g} = f_x g_y - f_y g_x" << endl;
     cout << "L2 norm of error in poisson bracket is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
 
-    of.open("sol_num.dat");   
-    of << sol_num;
+
+    /*
+     * 2.) {f, g} = (f g_y)_x - (f g_x)_y
+     */
+
+    cuda_array<cuda::real_t> tmp(f_num * gy_num);
+    cuda_array<cuda::real_t> tmp_x(1, My, Nx);
+    cuda_array<cuda::real_t> tmp_y(1, My, Nx);
+
+    der.d_dx1_dy1(tmp, tmp_x, tmp_y);
+    // {f, g} = (f g_y)_x + ... 
+    pb_num2 = tmp_x;
+    
+    tmp = f_num * gx_num;
+    
+    der.d_dx1_dy1(tmp, tmp_x, tmp_y);
+
+    // {f, g} = (f g_y)_x - (f g_x)_y 
+    pb_num2 -= tmp_y;
+    diff_deriv = (pb_num1 - pb_an) * (pb_num1 - pb_an);
+    cout << "Method 2: {f,g} = (f g_y)_x - (f g_x)_y" << endl;
+    cout << "L2 norm of error in poisson bracket is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
+
+    /*
+     * 3.) {f, g} = (f_x g)_y - (f_y g)_x
+     */
+
+
+    tmp = fx_num * g_num;
+    der.d_dx1_dy1(tmp, tmp_x, tmp_y);
+
+    // {f, g} = (f_x g)_y - ...
+    pb_num3 = tmp_y;
+
+    tmp = fy_num * g_num;
+    der.d_dx1_dy1(tmp, tmp_x, tmp_y);
+    // {f, g} = (f_x g)_y - (f_y g)_x
+    pb_num3 -= tmp_x;
+    diff_deriv = (pb_num3 - pb_an) * (pb_num3 - pb_an);
+    cout << "Method 3: {f,g} = (f_x g)_y - (f_y g)_x" << endl;
+    cout << "L2 norm of error in poisson bracket is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
+
+
+    tmp = (pb_num1 + pb_num2 + pb_num3) / 3.0;
+    diff_deriv = (tmp - pb_an) * (tmp - pb_an);
+    cout << "Method 4" << endl;
+    cout << "L2 norm of error in poisson bracket is " << sqrt(diff_deriv.get_sum()) / double(Nx * My) << endl;
+
+    of.open("pb_num1.dat");   
+    of << pb_num1;
     of.close();
 
-    cufftDestroy(plan_r2c);
-    cufftDestroy(plan_c2r);
+    of.open("pb_num2.dat");   
+    of << pb_num2;
+    of.close();
+
+    of.open("pb_num3.dat");   
+    of << pb_num3;
+    of.close();
+
+    of.open("pb_num4.dat");   
+    of << tmp;
+    of.close();
+
+    of.open("pb_an.dat");   
+    of << pb_an;
+    of.close();
+
+    return;
+}
+
+int main(void)
+{
+    do_test();
+    cudaDeviceReset();
     return(0);
 }
+
+

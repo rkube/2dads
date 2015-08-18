@@ -17,23 +17,24 @@ int main(void)
 {
     int Nx{0};
     int My{0};
-    constexpr int tlevs{1};
+    constexpr int tlevs{4};
     cout << "Enter Nx:";
     cin >> Nx;
     cout << "Enter My:";
     cin >> My;
     cout << "\n"; 
 
-    //cuda_array<double> r_arr1(tlevs, My, Nx);
-    //cuda_array<double> r_arr2(tlevs, My, Nx);
-    cuda_array<CuCmplx<double> > c_arr1(tlevs, My, Nx);
-    cuda_array<CuCmplx<double> > c_arr2(tlevs, My, Nx);
+    cuda_array<double> r_arr1(tlevs, My, Nx);
+    
+//    cuda_array<double> r_arr2(tlevs, My, Nx);
+//    cuda_array<CuCmplx<double> > c_arr1(tlevs, My, Nx);
+//    cuda_array<CuCmplx<double> > c_arr2(tlevs, My, Nx);
 
-    //const double rval1{1.0};
-    //const double rval2{3.0};
+//    const double rval1{1.0};
+//    const double rval2{3.0};
 
-    const CuCmplx<double> cval1(3.0, 2.0);
-    const CuCmplx<double> cval2(0.0, 1.0);
+//    const CuCmplx<double> cval1(3.0, 2.0);
+//    const CuCmplx<double> cval2(0.0, 1.0);
 
 //    cout << "arr1: Nx = " << r_arr1.get_nx() << ", My = " << r_arr1.get_my() << ", tlevs = " << r_arr1.get_tlevs() << "\n";
 //    cout << "arr2: Nx = " << r_arr2.get_nx() << ", My = " << r_arr2.get_my() << ", tlevs = " << r_arr2.get_tlevs() << "\n";
@@ -42,12 +43,12 @@ int main(void)
 //    cout << "blockDim = (" << r_arr1.get_block().x << ", " << r_arr1.get_block().y << ")" << endl;
 //    cout << "gridDim = (" << r_arr1.get_grid().x << ", " << r_arr1.get_grid().y << ")" << endl;
 //    cout << "================== Enumerating array ==================" << endl;
-    //r_arr1.enumerate_array(0);
+//    r_arr1.enumerate_array(0);
     //cout << r_arr1 << "\n\n";
 
     // Test real value arithmetic
-    //r_arr1 = rval1;
-    //r_arr2 = rval2;
+//    r_arr1 = rval1;
+//    r_arr2 = rval2;
 
 // calling op_scalar_t performs scalar operation on the array data in place
 // calling op_scalar_t creates no new cuda_array, but modifies the data of the array
@@ -100,13 +101,13 @@ int main(void)
 //    cout << "r_arr1 / r_arr2 = " << result << "\n";
 //
 //
-    cout << "================= Testing complex array arithmetic =============" << endl;
+//    cout << "================= Testing complex array arithmetic =============" << endl;
 
-    c_arr1 = cval1;
-    c_arr2 = cval2;
+//    c_arr1 = cval1;
+//    c_arr2 = cval2;
 
-    cout << "c_arr1 = " << c_arr1 << endl;
-    cout << "c_arr2 = " << c_arr2 << endl;
+//    cout << "c_arr1 = " << c_arr1 << endl;
+//    cout << "c_arr2 = " << c_arr2 << endl;
     //cout << "cval = " << cval1 << endl;
 
 //    cout << "=================== Testing in-place arithmetic with scalar RHS======" << endl;
@@ -139,21 +140,21 @@ int main(void)
 //    cout << "c_arr1 = " << c_arr1 << endl;
 
 
-    cuda_array<CuCmplx<double> > result (c_arr1 + c_arr2);
+    //cuda_array<CuCmplx<double> > result (c_arr1 + c_arr2);
 
-    cout << "================= Testing complex array arithmetic ============" << endl;
-    cout << "c_arr1 = " << c_arr1 << "\nc_arr2 = " << c_arr2 << endl;
-    cout << "c_arr1 + c_arr2 = " << result << endl;
-
-    result = c_arr1 - c_arr2;
-    cout << "c_arr1 - c_arr2 = " << result << endl;
-
-    result = c_arr1 * c_arr2;
-    cout << "c_arr1 * c_arr2 = " << result << endl;
-
-    result = c_arr1 / c_arr2;
-    cout << "c_arr1 / c_arr2 = " << result << endl;
-    cout << "exiting" << endl;
+//    cout << "================= Testing complex array arithmetic ============" << endl;
+//    cout << "c_arr1 = " << c_arr1 << "\nc_arr2 = " << c_arr2 << endl;
+//    cout << "c_arr1 + c_arr2 = " << result << endl;
+//
+//    result = c_arr1 - c_arr2;
+//    cout << "c_arr1 - c_arr2 = " << result << endl;
+//
+//    result = c_arr1 * c_arr2;
+//    cout << "c_arr1 * c_arr2 = " << result << endl;
+//
+//    result = c_arr1 / c_arr2;
+//    cout << "c_arr1 / c_arr2 = " << result << endl;
+//    cout << "exiting" << endl;
     return(0);
 }
 

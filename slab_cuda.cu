@@ -1,4 +1,3 @@
-//#include <algorithm>
 #include "error.h"
 #include "slab_cuda.h"
 
@@ -8,114 +7,6 @@ using namespace std;
  * Kernel implementation
  *
  ****************************************************************************/
-
-//    d/dy: Compute spectral y-derivative for frequencies 0 .. My/2 - 1,
-//          stored in the columns 0..My/2-1
-//    Call:  d_d_dy_lo<<<grid_dy_half, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
-//    block_nx21    = dim3(cuda::blockdim_x, 1)
-//    grid_dy_half  = dim3(((Nx / 2 + 1) + cuda::blockdim_nx - 1) / cuda::blockdim_nx, My / 2)
-
-
-// Generate multiplicators to use for x- and y-derivatives
-// kmap[index].re = kx
-// kmap[index].im = ky
-//
-// then: theta_x_hat[index] = theta_hat[index] * complex(0.0, kmap[index].re())
-//       theta_y_hat[index] = theta_hat[index] * complex(0.0, kmap[index].im())
-__global__
-void gen_k_map_dx1_dy1(cuda::cmplx_t* kmap, const cuda::real_t two_pi_Lx, const cuda::real_t two_pi_Ly,
-		const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * Nx21 + col;
-
-    cuda::cmplx_t tmp(0.0, 0.0);
-
-    if(row < My / 2)
-        tmp.set_im(two_pi_Ly * double(row));
-    else if (row == My / 2)
-        tmp.set_im(0.0);
-    else
-        tmp.set_im(two_pi_Ly * (double(row) - double(My)));
-
-    if(col < Nx21 - 1)
-        tmp.set_re(two_pi_Lx * double(col));
-    else
-        tmp.set_re(0.0);
-
-    if((col < Nx21) && (row < My))
-        kmap[index] = tmp;
-}
-
-
-// Generate wave-number coefficients. These can be used for second order-derivatives
-// in diffusion terms, computed in stiffk. See "Notes on FFT-based differentiation
-// S.G. Johnson
-__global__
-void gen_k_map(cuda::cmplx_t* k2map, const cuda::real_t two_pi_Lx, const cuda::real_t two_pi_Ly,
-		const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * Nx21 + col;
-
-    cuda::cmplx_t tmp(0.0, 0.0);
-
-    if(row <= My / 2)
-        tmp.set_im(two_pi_Ly * double(row));
-    else
-        tmp.set_im(-two_pi_Ly * (double(row) - double(My)));
-
-    if(col < Nx21)
-        tmp.set_re(two_pi_Lx * double(col));
-
-    if((col <= Nx21) && (row <= My))
-        k2map[index] = tmp;
-}
-
-
-// Elementwise multiplication of
-// in_arr[index] * kmap[index] for spatial derivatives
-//
-// Load T elements of in_arr and kmap in shared memory,
-// each thread processes T elements.
-// see tests/test_perf/test_perf_derivs_map.cu for benchmarking
-template <int T>
-__global__
-void d_dx_dy_map_sh(cuda::cmplx_t* in_arr, cuda::cmplx_t* out_x_arr, cuda::cmplx_t* out_y_arr,
-		cuda::cmplx_t* kmap, const uint My, const uint Nx21)
-{
-	extern __shared__ cuda::cmplx_t shmem[];
-	const uint row_offset = (blockIdx.y * blockDim.y + threadIdx.y) * Nx21;
-	uint col = blockIdx.x * blockDim.x + threadIdx.x;
-
-	const uint offset_s = 2 * threadIdx.x;
-	uint t;
-
-//#pragma unroll 1
-	for(t = 0; t < T; t++)
-	{
-		if(col < Nx21)
-		{
-			shmem[offset_s + 2 * t    ] = in_arr[row_offset + col];
-			shmem[offset_s + 2 * t + 1] = kmap[row_offset + col];
-		}
-		col++;
-	}
-	col = blockIdx.x * blockDim.x + threadIdx.x;
-
-//#pragma unroll 4
-	for(t = 0; t < T; t++)
-	{
-		if(col < Nx21)
-		{
-			out_x_arr[row_offset + col] = shmem[offset_s + 2 * t] * cuda::cmplx_t(0.0, shmem[offset_s + 2 * t + 1].re());
-			out_y_arr[row_offset + col] = shmem[offset_s + 2 * t] * cuda::cmplx_t(0.0, shmem[offset_s + 2 * t + 1].im());
-		}
-		col++;
-	}
-}
 
 // ky=0 modes are stored in the first row, Nx21 columns
 __global__
@@ -130,107 +21,13 @@ void d_kill_ky0(cuda::cmplx_t* in, const uint My, const uint Nx21)
         in[col] = cuda::cmplx_t(0.0, 0.0);
 }
 
-
-// invert two dimensional laplace equation.
-// In spectral space, 
-//                              / 4 pi^2 ((ky/Ly)^2 + (kx/Lx)^2 )  for ky, kx  <= N/2
-// phi(ky, kx) = omega(ky, kx)  
-//                              \ 4 pi^2 (((ky-My)/Ly)^2 + (kx/Lx)^2) for ky > N/2 and kx <= N/2
-//
-// and phi(0,0) = 0 (to avoid division by zero)
-// Divide into 4 sectors:
-//
-//            Nx/2 + 1
-//         ^<------>|
-//  My/2+1 |        |
-//         |   I    |
-//         |        |
-//         v        |
-//         ==========
-//         ^        |
-//         |        |
-//  My/2-1 |  II    |
-//         |        |
-//         v<------>|
-//           Nx/2 + 1
-//
-// 
-// sector I    : ky <= My/2, kx < Nx/2   BS = (cuda_blockdim_nx, 1), GS = (((Nx / 2 + 1) + cuda_blockdim_nx - 1) / cuda_blockdim_nx, My / 2 + 1)
-// sector II   : ky >  My/2, kx < Nx/2   BS = (cuda_blockdim_nx, 1), GS = (((Nx / 2 - 1) + cuda_blockdim_nx - 1) / cuda_blockdim_nx, My / 2 - 1)
-//
-// Pro: wavenumbers can be computed from index without if-else blocks
-// Con: Diverging memory access
-
-
-__global__
-void d_inv_laplace_sec1(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Ly2, const double inv_Lx2)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-
-    if((col < Nx21) && (row < My / 2 + 1))
-		out[idx] = in[idx] / cuda::cmplx_t(-cuda::FOURPIS * (double(col * col) * inv_Lx2 + double(row * row) * inv_Ly2), 0.0);
-	return;
-}
-
-
-__global__
-void d_inv_laplace_sec1_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-
-    
-    arr[idx] = cuda::cmplx_t(1000 + row, col);
-}
-
-
-__global__
-void d_inv_laplace_sec2(cuda::cmplx_t* in, cuda::cmplx_t* out, const uint My, const uint Nx21, const double inv_Ly2, const double inv_Lx2) 
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-
-    if((col < Nx21) && (row < My))
-    {
-    	cuda::cmplx_t factor(-cuda::FOURPIS * (
-            	((double(row) - double(My)) * (double(row) - double(My))) * inv_Ly2 +
-            	(double(col * col) * inv_Lx2)), 0.0);
-    	out[idx] = in[idx] / factor;
-    }
-    return;
-}
-
-
-__global__
-void d_inv_laplace_sec2_enumerate(cuda::cmplx_t* arr, const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y + My / 2 + 1;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-    if ((col >= Nx21) || (row > My - 1))
-        return;
-
-    arr[idx] = cuda::cmplx_t(2000 + row - My, col);
-}
-
-
-__global__
-void d_inv_laplace_zero(cuda::cmplx_t* out)
-{
-    out[0] = cuda::cmplx_t(0.0, 0.0);
-}
-
-
 /*
  * Stiffly stable time integration
  * temp = sum(k=1..level) alpha[T-2][level-k] * u^{T-k} + delta_t * beta[T-2][level -k - 1] * u_RHS^{T-k-1}
  * u^{n+1}_{i} = temp / (alpha[T-2][0] + delta_t * diff * (kx^2 + ky^2))
  *
- * Use same sector splitting as for inv_laplace
+ * Use wave-numbers for even-ordered derivatives, i.e. don't round down to zero on
+ * wavenumber My/2, Nx/2, as for first derivatives
  */
 
 
@@ -242,18 +39,19 @@ void d_integrate_stiff_map_2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::sti
 	const int idx = row * p.Nx21 + col;
 
 	cuda::real_t kx = cuda::TWOPI * cuda::real_t(col) / p.length_x;
-	cuda::real_t ky = cuda::TWOPI * ((row <= p.My/ 2) ? cuda::real_t(row) : (cuda::real_t(row) - cuda::real_t(p.My))) / p.length_y;
+	cuda::real_t ky = cuda::TWOPI * ((row < p.My / 2 + 1) ? cuda::real_t(row) : (cuda::real_t(row) - cuda::real_t(p.My))) / p.length_y;
 	cuda::real_t k2 = kx * kx + ky * ky;
 	cuda::real_t temp_div{0.0};
 
 	cuda::cmplx_t dummy(0.0, 0.0);
 	if((row < p.My) && (col < p.Nx21))
 	{
-		temp_div = 1.0 / (cuda::ss3_alpha_d[0][0] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
+		temp_div = 1.0 / (1.0 + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
 
 		dummy = A[3][idx];
-		A[2][idx] = (A[3][idx] + (A_rhs[2][idx] * cuda::ss3_beta_d[0][0] * p.delta_t)) * temp_div;
+		A[2][idx] = (A[3][idx] + A_rhs[2][idx] * p.delta_t) * temp_div;
+		//A[2][idx] = (A[3][idx] + (A_rhs[2][idx] * cuda::ss3_beta_d[0][0] * p.delta_t)) * temp_div;
 //		printf("\tcol = %d, threadIdx.x = %d, row = %d, blockIdx.y = %d, idx = %d, kx = %f, ky = %f, temp_div = %f\tupdating (%f, %f)->  (%f, %f)\n",
 //				col, threadIdx.x, row, blockIdx.y, idx, kx, ky, temp_div,
 //				dummy.re(), dummy.im(), A[2][idx].re(), A[2][idx].im());
@@ -279,10 +77,12 @@ void d_integrate_stiff_map_3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::sti
 
 	if((row < p.My) && (col < p.Nx21))
 	{
-		temp_div = 1. / (cuda::ss3_alpha_d[1][0] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
+		temp_div = 1. / (1.5 + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
-		sum_alpha = (A[3][idx] * cuda::ss3_alpha_d[1][2]) + (A[2][idx] * cuda::ss3_alpha_d[1][1]);
-		sum_beta = (A_rhs[2][idx] * cuda::ss3_beta_d[1][1]) + (A_rhs[1][idx] * cuda::ss3_beta_d[1][0]);
+		//sum_alpha = (A[3][idx] * cuda::ss3_alpha_d[1][2]) + (A[2][idx] * cuda::ss3_alpha_d[1][1]);
+		//sum_beta = (A_rhs[2][idx] * cuda::ss3_beta_d[1][1]) + (A_rhs[1][idx] * cuda::ss3_beta_d[1][0]);
+		sum_alpha = A[3][idx] * (-0.5) + A[2][idx] * 2.0; 
+		sum_beta = A_rhs[2][idx] * (-1.0) + A_rhs[1][idx] * (2.0);
 		A[1][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 	}
 	return;
@@ -304,10 +104,10 @@ void d_integrate_stiff_map_4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::sti
 
 	if((row < p.My) && (col < p.Nx21))
 	{
-		temp_div = 1. / (cuda::ss3_alpha_d[2][0] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
+		temp_div = 1. / ((11. / 6.) + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
-		sum_alpha = A[3][idx] * cuda::ss3_alpha_d[2][3] + A[2][idx] * cuda::ss3_alpha_d[2][2] + A[1][idx] * cuda::ss3_alpha_d[2][1];
-		sum_beta = A_rhs[2][idx] * cuda::ss3_beta_d[2][2] + A_rhs[1][idx] * cuda::ss3_beta_d[2][1] + A_rhs[0][idx] * cuda::ss3_beta_d[2][0];
+		sum_alpha = A[3][idx] * (1. / 3.) - A[2][idx] * 1.5 + A[1][idx] * 3.;
+		sum_beta = A_rhs[2][idx] - A_rhs[1][idx] * 3. + A_rhs[0][idx] * 3.; 
 		A[0][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 
 	}
@@ -332,13 +132,13 @@ void d_integrate_stiff_map_4_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cud
 
 	temp_div = 1. / (cuda::ss3_alpha_d[2][0] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
 
-	sum_alpha = A[3][idx] * cuda::ss3_alpha_d[2][3] + A[2][idx] * cuda::ss3_alpha_d[2][2] + A[1][idx] * cuda::ss3_alpha_d[2][1];
+	sum_alpha = A[3][idx] * cuda::ss3_alpha_d[2][2] + A[2][idx] * cuda::ss3_alpha_d[2][1] + A[1][idx] * cuda::ss3_alpha_d[2][0];
 	sum_beta = A_rhs[2][idx] * cuda::ss3_beta_d[2][2] + A_rhs[1][idx] * cuda::ss3_beta_d[2][1] + A_rhs[0][idx] * cuda::ss3_beta_d[2][0];
 
 	printf("\td_integrate_stiff_map_4_debug\n");
-	printf("\tsum_alpha = (%f, %f) * %f\n", A[3][idx].re(), A[3][idx].im(), cuda::ss3_alpha_d[2][3]);
-	printf("\t          + (%f, %f) * %f\n", A[2][idx].re(), A[2][idx].im(), cuda::ss3_alpha_d[2][2]);
-	printf("\t          + (%f, %f) * %f\n", A[1][idx].re(), A[1][idx].im(), cuda::ss3_alpha_d[2][1]);
+	printf("\tsum_alpha = (%f, %f) * %f\n", A[3][idx].re(), A[3][idx].im(), cuda::ss3_alpha_d[2][2]);
+	printf("\t          + (%f, %f) * %f\n", A[2][idx].re(), A[2][idx].im(), cuda::ss3_alpha_d[2][1]);
+	printf("\t          + (%f, %f) * %f\n", A[1][idx].re(), A[1][idx].im(), cuda::ss3_alpha_d[2][0]);
 	printf("\t          = (%f, %f)\n\n", sum_alpha.re(), sum_alpha.im());
 	printf("\tsum_beta = (%f, %f) * %f\n", A_rhs[2][idx].re(), A_rhs[2][idx].im(), cuda::ss3_beta_d[2][2]);
 	printf("\t         + (%f, %f) * %f\n", A_rhs[1][idx].re(), A_rhs[1][idx].im(), cuda::ss3_beta_d[2][1]);
@@ -355,120 +155,38 @@ void d_integrate_stiff_map_4_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cud
 }
 
 
-__global__
-void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::stiff_params_t p, uint tlev)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * p.Nx21 + col;
-
-
-    //unsigned int off_a = (tlev - 2) * p.level + tlev;
-    //unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev- 1;
-    cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
-    cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI / p.length_y;
-    cuda::real_t kx2 = kx * kx + ky * ky;
-    cuda::cmplx_t sum_alpha(0.0, 0.0);
-    cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (cuda::ss3_alpha_d[tlev - 2][0] + p.delta_t * (p.diff * kx2 + p.hv * kx2 * kx2 * kx2));
-
-    if ((col < p.Nx21) || (row < p.My / 2 + 1))
-    {
-    	// Add contribution from explicit and implicit parts
-    	for(uint k = 1; k < tlev; k++)
-    	{
-    		//sum_alpha += A[p.level - k][idx] * cuda::ss3_alpha_d[off_a - k];
-    		//sum_beta += A_rhs[p.level - 1 - k][idx] * cuda::ss3_beta_d[off_b - k];
-    		sum_alpha += A[p.level - k][idx] * cuda::ss3_alpha_d[tlev - 2][tlev - k];
-    		sum_beta += A_rhs[p.level - 1 - k][idx] * cuda::ss3_beta_d[tlev - 2][tlev - k - 1];
-    	}
-    	A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
-    }
-    return;
-}
-
-
-
-__global__
-void d_integrate_stiff_sec2(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::stiff_params_t p, uint tlev)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y + p.My / 2 + 1;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * p.Nx21 + col;
-
-    //unsigned int off_a = (tlev - 2) * p.level + tlev;
-    //unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
-    cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
-    cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
-    cuda::real_t k2 = kx * kx + ky * ky;
-    cuda::cmplx_t sum_alpha(0.0, 0.0);
-    cuda::cmplx_t sum_beta(0.0, 0.0);
-    cuda::real_t temp_div = 1. / (cuda::ss3_alpha_d[tlev - 2][0] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
-
-    if ((col < p.Nx21) || (row < p.My))
-    {
-    	for(uint k = 1; k < tlev; k++)
-    	{
-    		sum_alpha += A[p.level - k][idx] * cuda::ss3_alpha_d[tlev - 2][tlev - k];
-    		sum_beta += A_rhs[p.level - 1 - k][idx] * cuda::ss3_beta_d[tlev - 2][tlev - k - 1];
-    	}
-    	A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
-    }
-    return;
-}
-
-
 //__global__
-//void d_integrate_stiff_sec3(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
+//void d_integrate_stiff_sec1(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::stiff_params_t p, uint tlev)
 //{
 //    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-//    const uint col = p.Nx - 1;
-//    const uint idx = row * p.Nx + col;
-//    if(row > p.My / 2 + 1)
-//        return;
+//    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+//    const uint idx = row * p.Nx21 + col;
 //
-//    uint off_a = (tlev - 2) * p.level + tlev;
-//    uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
+//
+//    //unsigned int off_a = (tlev - 2) * p.level + tlev;
+//    //unsigned int off_b = (tlev - 2) * (p.level - 1) + tlev- 1;
 //    cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
-//    cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI/ p.length_y;
-//    cuda::real_t k2 = kx * kx + ky * ky;
+//    cuda::real_t ky = cuda::real_t(row) * cuda::TWOPI / p.length_y;
+//    cuda::real_t kx2 = kx * kx + ky * ky;
 //    cuda::cmplx_t sum_alpha(0.0, 0.0);
 //    cuda::cmplx_t sum_beta(0.0, 0.0);
-//    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
-//    for(uint k = 1; k < tlev; k++)
+//    cuda::real_t temp_div = 1. / (cuda::ss3_alpha_d[tlev - 2][0] + p.delta_t * (p.diff * kx2 + p.hv * kx2 * kx2 * kx2));
+//
+//    if ((col < p.Nx21) || (row < p.My / 2 + 1))
 //    {
-//        sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
-//        sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
+//    	// Add contribution from explicit and implicit parts
+//    	for(uint k = 1; k < tlev; k++)
+//    	{
+//    		//sum_alpha += A[p.level - k][idx] * cuda::ss3_alpha_d[off_a - k];
+//    		//sum_beta += A_rhs[p.level - 1 - k][idx] * cuda::ss3_beta_d[off_b - k];
+//    		sum_alpha += A[p.level - k][idx] * cuda::ss3_alpha_d[tlev - 2][tlev - k];
+//    		sum_beta += A_rhs[p.level - 1 - k][idx] * cuda::ss3_beta_d[tlev - 2][tlev - k - 1];
+//    	}
+//    	A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
 //    }
-//    A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
+//    return;
 //}
-//
-//
-//__global__
-//void d_integrate_stiff_sec4(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::real_t* alpha, cuda::real_t* beta, cuda::stiff_params_t p, uint tlev)
-//{
-//    const uint row = blockIdx.y * blockDim.y + threadIdx.y + p.My / 2 + 1;
-//    const uint col = p.Nx - 1;
-//    const uint idx = row * p.Nx + col;
-//    if (row >= p.Nx)
-//        return;
-//
-//    uint off_a = (tlev - 2) * p.level + tlev;
-//    uint off_b = (tlev - 2) * (p.level - 1) + tlev - 1;
-//    cuda::real_t kx = cuda::real_t(col) * cuda::TWOPI / p.length_x;
-//    cuda::real_t ky = (cuda::real_t(row) - cuda::real_t(p.My)) * cuda::TWOPI / p.length_y;
-//    cuda::real_t k2 = kx * kx + ky * ky;
-//    cuda::cmplx_t sum_alpha(0.0, 0.0);
-//    cuda::cmplx_t sum_beta(0.0, 0.0);
-//    cuda::real_t temp_div = 1. / (alpha[(tlev - 2) * p.level] + p.delta_t * (p.diff * k2 + p.hv * k2 * k2 * k2));
-//
-//    for(uint k = 1; k < tlev; k++)
-//    {
-//        sum_alpha += A[p.level - k][idx] * alpha[off_a - k];
-//        sum_beta += A_rhs[p.level - 1 - k][idx] * beta[off_b - k];
-//    }
-//    A[p.level - tlev][idx] = (sum_alpha + (sum_beta * p.delta_t)) * temp_div;
-//}
+
 
 
 __global__
@@ -545,11 +263,11 @@ void d_integrate_stiff_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cuda::sti
 }
 
 
-/*
+/********************************************************************************
  *
  * Kernels to compute non-linear operators
  *
- */
+ ********************************************************************************/
 
 
 /// @brief Poisson brackt: {f, phi} = d_dx(f d_dy(g)) - d_dy(f d_dx(g)) = f_x g_y - f_y g_x
@@ -692,20 +410,19 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
     theta(1, My, Nx), theta_x(1, My, Nx), theta_y(1, My, Nx),
     omega(1, My, Nx), omega_x(1, My, Nx), omega_y(1, My, Nx),
     strmf(1, My, Nx), strmf_x(1, My, Nx), strmf_y(1, My, Nx),
-    tmp_array(1, My, Nx), 
+    tmp_array(1, My, Nx), tmp_x_array(1, My, Nx), tmp_y_array(1, My, Nx), 
     theta_rhs(1, My, Nx), omega_rhs(1, My, Nx),
     theta_hat(tlevs, My, Nx / 2 + 1), theta_x_hat(1, My, Nx / 2 + 1), theta_y_hat(1, My, Nx / 2 + 1),
     omega_hat(tlevs, My, Nx / 2 + 1), omega_x_hat(1, My, Nx / 2 + 1), omega_y_hat(1, My, Nx / 2 + 1),
-    strmf_hat(1, My, Nx / 2 + 1), strmf_x_hat(1, My, Nx / 2 + 1), strmf_y_hat(1, My, Nx / 2 + 1),
+    strmf_hat(1,     My, Nx / 2 + 1), strmf_x_hat(1, My, Nx / 2 + 1), strmf_y_hat(1, My, Nx / 2 + 1),
     tmp_array_hat(1, My, Nx / 2 + 1), 
-    k_map(1, My, Nx / 2 + 1),
-    k_map_dx1_dy1(1, My, Nx / 2 + 1),
     theta_rhs_hat(tlevs - 1, My, Nx / 2 + 1),
     omega_rhs_hat(tlevs - 1, My, Nx / 2 + 1),
     dft_is_initialized(init_dft()),
     stiff_params(config.get_deltat(), config.get_lengthx(), config.get_lengthy(), config.get_model_params(0),
             config.get_model_params(1), My, Nx / 2 + 1, tlevs),
-    slab_layout(config.get_xleft(), config.get_deltax(), config.get_ylow(), config.get_deltay(), My, Nx),
+    slab_layout(config.get_xleft(), config.get_deltax(), config.get_ylow(), config.get_deltay(), config.get_deltat(), My, Nx),
+    der(slab_layout),
     block_my_nx(theta.get_block()),
     grid_my_nx(theta.get_grid()),
     block_my_nx21(theta_hat.get_block()),
@@ -760,24 +477,15 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
     theta_rhs_func = rhs_func_map[config.get_theta_rhs_type()];
     omega_rhs_func = rhs_func_map[config.get_omega_rhs_type()];
 
-//    //* Copy coefficients alpha and beta for time integration scheme to device */
-//    gpuErrchk(cudaMalloc((void**) &d_ss3_alpha, sizeof(cuda::ss3_alpha_r)));
-//    gpuErrchk(cudaMemcpy(d_ss3_alpha, &cuda::ss3_alpha_r[0], sizeof(cuda::ss3_alpha_r), cudaMemcpyHostToDevice));
-//
-//    gpuErrchk(cudaMalloc((void**) &d_ss3_beta, sizeof(cuda::ss3_beta_r)));
-//    gpuErrchk(cudaMemcpy(d_ss3_beta, &cuda::ss3_beta_r[0], sizeof(cuda::ss3_beta_r), cudaMemcpyHostToDevice));
-
-    // Generate coefficients for spatial derivatives
-    gen_k_map_dx1_dy1<<<grid_my_nx21, block_my_nx21>>>(k_map_dx1_dy1.get_array_d(), cuda::TWOPI / config.get_lengthx(),
-    		cuda::TWOPI / config.get_lengthy(), My, Nx / 2 + 1);
+#ifdef DEBUG
+    print_address();
+#endif // DEBUG
     gpuStatus();
 }
 
 
 slab_cuda :: ~slab_cuda()
 {
-    //gpuErrchk(cudaFree(d_ss3_alpha));
-    //gpuErrchk(cudaFree(d_ss3_beta));
     finish_dft();
 }
 
@@ -1015,7 +723,7 @@ void slab_cuda :: rhs_fun(const uint t_src)
 
 
 // Update real fields theta, theta_x, theta_y, etc.
-void slab_cuda::update_real_fields(const uint tlev)
+void slab_cuda::update_real_fields(const uint tlev, const uint t)
 {
     //Compute theta, omega, strmf and respective spatial derivatives
 
@@ -1029,7 +737,8 @@ void slab_cuda::update_real_fields(const uint tlev)
     dft_c2r(twodads::field_k_t::f_omega_x_hat, twodads::field_t::f_omega_x, 0);
     dft_c2r(twodads::field_k_t::f_omega_y_hat, twodads::field_t::f_omega_y, 0);
     
-
+    //inv_laplace(omega_hat, strmf_hat, tlev);
+    //inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, tlev);
     d_dx_dy(twodads::field_k_t::f_strmf_hat, twodads::field_k_t::f_strmf_x_hat, twodads::field_k_t::f_strmf_y_hat, 0);
     dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
     dft_c2r(twodads::field_k_t::f_strmf_x_hat, twodads::field_t::f_strmf_x, 0);
@@ -1047,28 +756,194 @@ void slab_cuda::copy_device_to_host(const twodads::output_t f_name)
 }
 
 // execute r2c DFT
-void slab_cuda :: dft_r2c(const twodads::field_t fname_r, const twodads::field_k_t fname_c, const uint t_src)
+void slab_cuda :: dft_r2c(const twodads::field_t fname_r, const twodads::field_k_t fname_c, const uint t_dst)
 {
-    cufftResult err;
     cuda_arr_real* arr_r = get_field_by_name.at(fname_r);
     cuda_arr_cmplx* arr_c = get_field_k_by_name.at(fname_c);
-    err = cufftExecD2Z(plan_r2c, arr_r -> get_array_d(), (cufftDoubleComplex*) arr_c -> get_array_d(t_src));
-    if (err != CUFFT_SUCCESS)
-        throw;
+#ifdef DEBUG
+    bool terminate_after_check = false;
+    cerr << "slab_cuda :: dft_r2c" << endl;
+    cerr << "\rreal data at " << arr_r -> get_array_d() << "\tcomplex data at " << arr_c -> get_array_d(t_dst) << "\tt_dst = " << t_dst << endl;
+
+    try
+    {
+#endif
+
+    der.dft_r2c(arr_r -> get_array_d(), arr_c -> get_array_d(t_dst));
+
+#ifdef DEBUG
+    }
+    catch(assert_error err)
+    {
+        // Parseval's theorem was not fulfilled in derivatives. Check it again here ->
+        // Write out fields and exit
+        terminate_after_check = true;
+    }
+    cerr << "slab_cuda :: dft_r2c" << endl;
+    arr_r -> copy_device_to_host();
+    arr_c -> copy_device_to_host();
+
+    cuda::real_t sum_r2 = 0.0;
+    cuda::real_t sum_c2 = 0.0;
+
+    ofstream of_r;
+    ofstream of_c;
+    if(terminate_after_check)
+    {   
+        of_r.open("slabcuda_arr_r.dat", ios::trunc);
+        of_c.open("slabcuda_arr_c.dat", ios::trunc);
+    }
+
+    for(uint m = 0; m < My; m++)
+    {
+        for(uint n = 0; n < Nx; n++)
+        {
+            sum_r2 += (*arr_r)(0, m, n) * (*arr_r)(0, m, n);
+            // Take hermitian symmetry into consideration
+            if(n < Nx / 2 + 1)
+                sum_c2 += (*arr_c)(t_dst, m, n).abs() * (*arr_c)(t_dst, m, n).abs();
+            else
+                sum_c2 += (*arr_c)(t_dst, (My - m) % My, Nx - n).abs() * (*arr_c)(t_dst, (My - m) % My, Nx - n).abs();
+
+
+            if(terminate_after_check)
+            {
+                of_r << (*arr_r)(0, m, n) << "\t";
+                if(n < Nx / 2 + 1)
+                    of_c << (*arr_c)(t_dst, m, n) << "\t";
+            }
+        }
+        if(terminate_after_check)
+        {
+            of_r << "\n";
+            of_c << "\n";
+        }
+    }
+    sum_c2 = sum_c2 / cuda::real_t(My * Nx);
+
+    if(terminate_after_check)
+    {
+        of_r.close();
+        of_c.close();
+    }
+
+    if(abs(sum_r2) > 1e-10 && abs(sum_c2) > 1e-10)
+    {
+        cuda::real_t rel_err = (abs(sum_r2 - sum_c2) / abs(sum_r2));
+        cerr << "   slab_cuda :: dft_r2c: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
+        if(rel_err > 1e-8)
+        {
+            ofstream of;
+            of.open("arr_r.dat", ios::trunc);
+            of << (*arr_r);
+            of.close();
+            of.open("arr_c.dat", ios::trunc);
+            of << (*arr_c);
+            of.close();
+        }
+        assert(rel_err < 1e-8);
+    }
+    if(terminate_after_check)
+        throw assert_error("Parseval;s theorem differis in dft_r2c in derivs and slab_cuda!");
+    cerr << "============================================================================================================\n\n\n\n";
+#endif
+
 }
 
 
 // execute iDFT and normalize the resulting real field
-void slab_cuda :: dft_c2r(const twodads::field_k_t fname_c, const twodads::field_t fname_r, const uint t)
+void slab_cuda :: dft_c2r(const twodads::field_k_t fname_c, const twodads::field_t fname_r, const uint t_src)
 {
-    cufftResult err;
     cuda_arr_cmplx* arr_c = get_field_k_by_name.at(fname_c);
     cuda_arr_real* arr_r = get_field_by_name.at(fname_r);
-    err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) arr_c -> get_array_d(t), arr_r -> get_array_d());
-    if (err != CUFFT_SUCCESS)
-        throw;
-    // Normalize
-    arr_r -> normalize();
+#ifdef DEBUG
+    bool terminate_after_check = false;
+    cerr << "slab_cuda :: dft_c2r" << endl;
+    cerr << "\tcomplex data at " << arr_c -> get_array_d(t_src) << "\treal data at " << arr_r -> get_array_d() << "\tt_src = " << t_src << endl;
+
+    try
+    {
+#endif // DEBUG
+        der.dft_c2r(arr_c -> get_array_d(t_src), arr_r -> get_array_d());
+        arr_r -> normalize();
+#ifdef DEBUG
+    }
+    catch(assert_error err)
+    {
+        // If Parseval's theorem was not fulfilled in derivatives, check it again here ->
+        // Write out fields and exit
+        terminate_after_check = true;   
+    }
+
+    cerr << "slab_cuda :: dft_c2r" << endl;
+    arr_r -> copy_device_to_host();
+    arr_c -> copy_device_to_host();
+    cuda::real_t sum_r2 = 0.0;
+    cuda::real_t sum_c2 = 0.0;
+
+    ofstream of_r;
+    ofstream of_c;
+    if (terminate_after_check)
+    {
+        of_r.open("slabcuda_arr_r.dat", ios::trunc);
+        of_c.open("slabcuda_arr_c.dat", ios::trunc);
+    }
+
+    for(uint m = 0; m < My; m++)
+    {
+        for(uint n = 0; n < Nx; n++)
+        {
+            sum_r2 += (*arr_r)(0, m, n) * (*arr_r)(0, m, n);
+
+            if(n < Nx / 2 + 1)
+                sum_c2 += (*arr_c)(t_src, m, n).abs() * (*arr_c)(t_src, m, n).abs();
+            else
+                sum_c2 += (*arr_c)(t_src, (My - m) % My, Nx - n).abs() * (*arr_c)(t_src, (My - m) % My, Nx - n).abs();
+
+            if(terminate_after_check)
+            {
+                of_r << (*arr_r)(0, m, n) << "\t";
+                if( n < Nx / 2 + 1)
+                    of_c << (*arr_c)(t_src, m, n) << "\t";
+            }
+        }
+        if (terminate_after_check)
+        {
+            of_r << "\n";
+            of_c << "\n";
+        }
+    }
+    sum_c2 = sum_c2 / cuda::real_t(My * Nx);
+   
+    if(terminate_after_check)
+    {
+        of_r.close();
+        of_c.close();
+    }
+
+    if(abs(sum_r2) > 1e-10 && abs(sum_c2) > 1e-10)
+    {
+        cuda::real_t rel_err = (abs(sum_r2 - sum_c2) / abs(sum_r2));
+
+        cerr << "   slab_cuda :: dft_c2r: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
+        if(rel_err > 1e-8)
+        {
+            ofstream of;
+            of.open("arr_r.dat", ios::trunc);
+            of << (*arr_r);
+            of.close();
+            of.open("arr_c.dat", ios::trunc);
+            of << (*arr_c);
+            of.close();
+        }
+        assert(rel_err < 1e-8);
+    }
+
+
+    if(terminate_after_check)
+        throw assert_error("Parseval's theorem differs in dft_c2r in slab_cuda and derivs!");
+    cerr << "============================================================================================================\n\n\n\n";
+#endif
 }
 
 
@@ -1152,36 +1027,34 @@ cuda_arr_real* slab_cuda :: get_array_ptr(const twodads::field_t fname)
 void slab_cuda :: print_address() const
 {
     // Use this to test of memory is aligned between g++ and NVCC
-    cout << "slab_cuda::dump_stiff_params()\n";
-    cout << "config at " << (void*) &config << "\n";
-    cout << "Nx at " << (void*) &Nx << "\n";
-    cout << "My at " << (void*) &My << "\n";
-    cout << "tlevs at " << (void*) &tlevs << "\n";
-    cout << "plan_r2c at " << (void*) &plan_r2c << "\n";
-    cout << "plan_c2r at " << (void*) &plan_c2r << "\n";
-    cout << "theta at " << (void*) &theta << "\t";
-    cout << "theta_x at " << (void*) &theta_x << "\t";
-    cout << "theta_y at " << (void*) &theta_y << "\n";
+    cout << "slab_cuda::print_address()\n";
 
-    cout << "omega at " << (void*) &omega << "\t";
-    cout << "omega_x at " << (void*) &omega_x << "\t";
-    cout << "omega_y at " << (void*) &omega_y << "\n";
+    cout << "theta_hat at " << (void*) &theta_hat;
+    for(uint t = 0; t < 4; t++)
+        cout << "\tt=" << t << " at " << theta_hat.get_array_d(t) << "\t";
+    cout << endl;
+    cout << "theta_x_hat at " << (void*) &theta_x_hat << "\t, data at " << theta_x_hat.get_array_d() << endl;
+    cout << "theta_y_hat at " << (void*) &theta_y_hat << "\t, data at " << theta_y_hat.get_array_d() << endl;
 
-    cout << "strmf at " << (void*) &strmf << "\t";
-    cout << "strmf_x at " << (void*) &strmf_x << "\t";
-    cout << "strmf_y at " << (void*) &strmf_y << "\n";
+    cout << "omega_hat at " << (void*) &omega_hat;
+    for(uint t = 0; t < 4; t++)
+        cout << "\tt=" << t << " at " << omega_hat.get_array_d(t) << "\t";
+    cout << endl;
+    cout << "omega_x_hat at " << (void*) &omega_x_hat << "\t, data at " << omega_x_hat.get_array_d() << endl;
+    cout << "omega_y_hat at " << (void*) &omega_y_hat << "\t, data at " << omega_y_hat.get_array_d() << endl;
 
-    cout << "stiff_params at " << stiff_params << "\n";
 
-    cout << "slab_cuda::slab_cuda()\n";
-    cout << "\nsizeof(cuda::stiff_params_t) = " << sizeof(cuda::stiff_params_t); 
-    cout << "\t at " << (void*) &stiff_params;
-    cout << ": " << stiff_params;
+    cout << "theta at " << (void*) &theta << "\t, data at " << theta.get_array_d() << endl;
+    cout << "theta_x at " << (void*) &theta_x << "\t, data at " << theta_x.get_array_d() << endl;
+    cout << "theta_y at " << (void*) &theta_y << "\t, data at " << theta_y.get_array_d() << endl;
 
-    cout << "sizeof(cuda::slab_layuot_t) = " << sizeof(cuda::slab_layout_t);
-    cout << "\t at " << (void*) &slab_layout;
-    cout << ": " << slab_layout;
-    cout << "\n\n";
+    cout << "omega at " << (void*) &omega << "\t, data at " << omega.get_array_d() << endl;
+    cout << "omega_x at " << (void*) &omega_x << "\t, data at " << omega_x.get_array_d() << endl;
+    cout << "omega_y at " << (void*) &omega_y << "\t, data at " << omega_y.get_array_d() << endl;
+
+    cout << "strmf at " << (void*) &strmf << "\t, data at " << strmf.get_array_d() << endl;
+    cout << "strmf_x at " << (void*) &strmf_x << "\t, data at " << strmf_x.get_array_d() << endl;
+    cout << "strmf_y at " << (void*) &strmf_y << "\t, data at " << strmf_y.get_array_d() << endl;
 }
 
 
@@ -1229,18 +1102,13 @@ void slab_cuda :: d_dx_dy(const twodads::field_k_t src_name, const twodads::fiel
 		const twodads::field_k_t dst_y_name, const uint t_src)
 {
 	cuda_arr_cmplx* arr_in = get_field_k_by_name.at(src_name);
-	cuda_arr_cmplx* arr_x = get_field_k_by_name.at(dst_x_name);
+    cuda_arr_cmplx* arr_x = get_field_k_by_name.at(dst_x_name);
 	cuda_arr_cmplx* arr_y = get_field_k_by_name.at(dst_y_name);
 
-	static const int elem_per_thread{4};
-	static const size_t shmem_size = 2 * elem_per_thread * block_my_nx21.x * sizeof(cuda::cmplx_t);
-
-	d_dx_dy_map_sh<elem_per_thread><<<grid_my_nx21, block_my_nx21, shmem_size>>>(arr_in -> get_array_d(t_src),
-			arr_x -> get_array_d(),
-			arr_y -> get_array_d(),
-			k_map_dx1_dy1.get_array_d(), My, Nx / 2 + 1);
-    gpuStatus();
+    der.d_dx1_dy1(arr_in, arr_x, arr_y, t_src);
 }
+
+
 
 
 // Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
@@ -1249,28 +1117,7 @@ void slab_cuda :: inv_laplace(const twodads::field_k_t src_name, const twodads::
     cuda_arr_cmplx* arr_in = get_field_k_by_name.at(src_name);
     cuda_arr_cmplx* arr_out = get_field_k_by_name.at(dst_name);
 
-    static const uint Nx21 = Nx / 2 + 1;
-    static const double inv_Lx2 = 1. / (config.get_lengthx() * config.get_lengthx());
-    static const double inv_Ly2 = 1. / (config.get_lengthy() * config.get_lengthy());
-
-    d_inv_laplace_sec1<<<grid_nx21_sec1, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_sec2<<<grid_nx21_sec2, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, inv_Lx2, inv_Ly2);
-    d_inv_laplace_zero<<<1, 1>>>(arr_out -> get_array_d(0));
-
-    gpuStatus();
-}
-
-// Invert laplace operator in fourier space, using src field at time index t_src, store result in dst_name, time index 0
-void slab_cuda :: inv_laplace_enumerate(const twodads::field_k_t f_name, const uint t_src)
-{
-    cuda_arr_cmplx* arr = get_field_k_by_name.at(f_name);
-
-    static const uint Nx21 = Nx / 2 + 1;
-
-    d_inv_laplace_sec1_enumerate<<<grid_nx21_sec1, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
-    d_inv_laplace_sec2_enumerate<<<grid_nx21_sec2, block_nx21>>>(arr -> get_array_d(t_src), My, Nx21);
-    d_inv_laplace_zero<<<1, 1>>>(arr -> get_array_d(0));
-    gpuStatus();
+    der.inv_laplace(arr_in, arr_out, t_src);
 }
 
 
@@ -1408,10 +1255,51 @@ void slab_cuda :: omega_rhs_null(const uint t)
 void slab_cuda :: omega_rhs_ns(const uint t_src)
 {
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    //d_pbracket<<<grid_my_nx, block_my_nx>>>(strmf_x.get_array_d(), strmf_y.get_array_d(), omega_x.get_array_d(), omega_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    
-    gpuStatus();
+    //gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
+
+    //static cuda_array<cuda::real_t> pb1(1, My, Nx);
+    //static cuda_array<cuda::real_t> pb2(1, My, Nx);
+    //static cuda_array<cuda::real_t> pb3(1, My, Nx);
+
+    /*
+     * Method 1:
+     * {f, g} = f_x g_y - f_y g_x
+     */
+    // pb1 = omega_x * strmf_y - omega_y * strmf_x;
+
+    /*
+     * Method 2:
+     * {f, g} = (f g_y)_x - (f g_x)_y
+     */ 
+    //tmp_array = omega * strmf_y;
+
+    //der.d_dx1_dy1(tmp_array, pb2, tmp_y_array);
+   
+    //tmp_array = omega * strmf_x;
+    //der.d_dx1_dy1(tmp_array, tmp_x_array, tmp_y_array);
+    //pb2 -= tmp_y_array;
+    //der.dft_r2c(pb2.get_array_d(), omega_rhs_hat.get_array_d(0));
+
+    /*
+     * Method 3:
+     * {f, g} = (f_x g)_y - (f_y g)_x
+     */
+
+    //tmp_array = omega_x * strmf;
+    //der.d_dx1_dy1(tmp_array, tmp_x_array, pb3);
+
+    //tmp_array = omega_y * strmf;
+    //der.d_dx1_dy1(tmp_array, tmp_x_array, tmp_y_array);
+    //pb3 -= tmp_x_array;
+    //der.dft_r2c(pb2.get_array_d(), omega_rhs_hat.get_array_d(0));
+
+
+    //pb1 += pb2;
+    //pb1 += pb3;
+    //pb1 /= 0.3;
+
+    //der.dft_r2c(pb3.get_array_d(), omega_rhs_hat.get_array_d(0));
 }
 
 /// RHS for the Hasegawa-Wakatani model
@@ -1476,7 +1364,6 @@ void slab_cuda::omega_rhs_ic(const uint t_src)
 //    cout << "ic = " << ic << ", sdiss = " << sdiss << ", cfric = " << cfric << "\n";
 //    cout << "grid = (" << omega_hat.get_grid().x << ", " << omega_hat.get_grid().y << "), block = (" << omega_hat.get_block().x << ", " << omega_hat.get_block().y << ")\n";
 //#endif //DEBUG
-    //d_omega_ic_dummy<<<grid_my21_sec1, block_my21_sec1>>>(theta_y_hat.get_array_d(), strmf_hat.get_array_d(), omega_hat.get_array_d(0), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), Nx, My / 2 + 1);
     d_omega_ic<<<grid_my_nx21, block_my_nx21>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(t_src), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), My, Nx / 2 + 1);
     gpuStatus();
 }

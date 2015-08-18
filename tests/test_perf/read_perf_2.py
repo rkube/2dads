@@ -23,7 +23,7 @@ dx = 10. / float(Nx)
 dy = 10. / float(My)
 
 rarr_x_fd = d_dx(rarr, dx=dx, axis=1)
-rarr_x2_fd = d2_dx2(rarr, dx=1.0, axis=1)
+rarr_x2_fd = d2_dx2(rarr, dx=dx, axis=1)
 
 rarr_y_fd = d_dx(rarr, dx=dy, axis=0)
 rarr_y2_fd = d2_dx2(rarr, dx=dy, axis=0)

@@ -4,7 +4,7 @@ SOURCE_CPP = test_diff.cpp test_stiff.cpp test_stiff_transient.cpp
 
 all: test_diff test_stiff test_stiff_transient
 
-DEP_OBJ = $(PROJ_OBJDIR)/initialize.o $(PROJ_OBJDIR)/slab_config.o $(PROJ_OBJDIR)/slab_cuda.o $(PROJ_OBJDIR)/output.o
+DEP_OBJ = $(PROJ_OBJDIR)/initialize.o $(PROJ_OBJDIR)/slab_config.o $(PROJ_OBJDIR)/slab_cuda.o $(PROJ_OBJDIR)/output.o $(PROJ_OBJDIR)/diagnostics_cu.o
 
 .PHONY: clean
 

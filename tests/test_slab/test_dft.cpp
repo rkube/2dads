@@ -13,11 +13,10 @@ int main(void)
     slab_cuda slab(my_config);
     slab.initialize();
 
-    slab.print_field(twodads::field_t::f_theta);
+    slab.print_field(twodads::field_t::f_theta, "theta.dat");
     slab.dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, 0);
     slab.print_field(twodads::field_k_t::f_theta_hat);
 
 
     return(0);
 }
-

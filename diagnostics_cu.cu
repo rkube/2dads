@@ -14,14 +14,17 @@ const map <twodads::diagnostic_t, std::string> dfile_fname{
 	{twodads::diagnostic_t::diag_probes, "cu_probes.dat"},
 	{twodads::diagnostic_t::diag_energy, "cu_energy.dat"},
 	{twodads::diagnostic_t::diag_energy_ns, "cu_energy_ns.dat"},
-	{twodads::diagnostic_t::diag_mem, "cu_memory.day"}
+    {twodads::diagnostic_t::diag_consistency, "cu_consistency.dat"},
+	{twodads::diagnostic_t::diag_mem, "cu_memory.dat"}
 };
 
+// Use fields with width 18
 const map <twodads::diagnostic_t, std::string> dfile_header{
-	{twodads::diagnostic_t::diag_blobs,  "#01: time\t\t#02: theta_max\t#03: theta_max_x\t#04: theta_max_y\n#05: strmf_max\t#06: strmf_max_x\t#07: strmf_max_y\n#08: theta_int\t#09: theta_int_x\t#10: theta_int_y\n#11: COMvx\t#12: COMvy\t#13: Wxx\t#14: Wyy\t#15: Dxx\t#16: Dyy\n"},
-	{twodads::diagnostic_t::diag_energy, "#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: CFL\t\n"},
-	{twodads::diagnostic_t::diag_energy_ns, "#01: time\t#02: V\t#03: O\t#04: E\t#05: CFL\n"},
-	{twodads::diagnostic_t::diag_probes, "#01: time\t#02: n_tilde\t#03: n\t#04: phi\t#05: phi_tilde\t#06: Omega\t#07: Omega_tilde\t#08: v_x\t#09: v_y\t#10: v_y_tilde\t#11: Gamma_r\n"},
+	{twodads::diagnostic_t::diag_blobs,     "#01: time         #02: theta_max   #03: theta_max_x #04: theta_max_y  #05: strmf_max    #06: strmf_max_x  #07: strmf_max_y  #08: theta_int   #09: theta_int_x   #10: theta_int_y  #11: COMvx        #12: COMvy       #13: Wxx          #14: Wyy          #15: Dxx          #16: Dyy\n"},
+    {twodads::diagnostic_t::diag_energy,    "#01: time         #02: E           #03: K           #04: U            #05: T            #06: D            #07: A            #08: D_omega     #09: D_theta       #10: Gamma_tilde  #11: J_tilde      #12: CFL           \n"},
+	{twodads::diagnostic_t::diag_energy_ns, "#01: time         #02: V           #03: O           #04: E            #05: D1           #06: D2           #07: D4           #08CFL\n"},
+	{twodads::diagnostic_t::diag_probes,    "#01: time         #02: n_tilde     #03: n           #04: phi          #05: phi_tilde    #06: Omega        #07: Omega_tilde  #08: v_x         #09: v_y           #10: v_y_tilde    #11: Gamma_r\n"},
+    {twodads::diagnostic_t::diag_consistency, "none"},
 	{twodads::diagnostic_t::diag_mem, "none"}
 };
 
@@ -30,10 +33,10 @@ const map <twodads::diagnostic_t, std::string> dfile_header{
  */
 
 
-diagnostics_cu :: diagnostics_cu(const slab_config& config) :
-    slab_layout{config.get_nx(), config.get_my(), config.get_runnr(), config.get_xleft(),
-                config.get_deltax(), config.get_ylow(), config.get_deltay(),
-                config.get_deltat()},
+diagnostics_cu :: diagnostics_cu(const slab_config& cfg) :
+    config(cfg), 
+    slab_layout{config.get_xleft(), config.get_deltax(), config.get_ylow(), config.get_deltay(),
+                config.get_deltat(), config.get_my(), config.get_nx()},
     theta(config.get_my(), config.get_nx()),
     theta_x(config.get_my(), config.get_nx()),
     theta_y(config.get_my(), config.get_nx()),
@@ -43,6 +46,10 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
     strmf(config.get_my(), config.get_nx()),
     strmf_x(config.get_my(), config.get_nx()),
     strmf_y(config.get_my(), config.get_nx()),
+    theta_xx(config.get_my(), config.get_nx()),
+    theta_yy(config.get_my(), config.get_nx()),
+    omega_xx(config.get_my(), config.get_nx()),
+    omega_yy(config.get_my(), config.get_nx()),
     theta_rhs(config.get_my(), config.get_nx()),
     omega_rhs(config.get_my(), config.get_nx()),
     tmp_array(1, config.get_my(), config.get_nx() / 2 + 1),
@@ -50,6 +57,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
     y_vec(new twodads::real_t[config.get_my()]),
     x_arr(config.get_my(), config.get_nx()),
     y_arr(config.get_my(), config.get_nx()),
+    der(slab_layout),
     time(0.0),
     dt_diag(config.get_tdiag()),
     n_probes(config.get_nprobe()),
@@ -71,6 +79,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& config) :
                       {twodads::diagnostic_t::diag_energy_ns,  &diagnostics_cu::diag_energy_ns},
                       {twodads::diagnostic_t::diag_blobs,  &diagnostics_cu::diag_blobs},
                       {twodads::diagnostic_t::diag_probes,  &diagnostics_cu::diag_probes},
+                      {twodads::diagnostic_t::diag_consistency,  &diagnostics_cu::diag_consistency},
                       {twodads::diagnostic_t::diag_mem,  &diagnostics_cu::diag_mem}}
 {
     stringstream filename;
@@ -119,9 +128,7 @@ void diagnostics_cu :: write_diagnostics(const twodads::real_t time, const slab_
 void diagnostics_cu::write_logfile()
 {
 	ofstream logfile;
-	stringstream filename;
-	filename << "cu_log." << setw(3) << setfill('0') << slab_layout.runnr;
-	logfile.open((filename.str()).data(), ios::trunc);
+	logfile.open("run.log", ios::trunc);
 
 	logfile << "Slab type: spectral\n";
 	logfile << "Resolution: " << slab_layout.My << "x" << slab_layout.Nx  << "\n";
@@ -203,15 +210,15 @@ void diagnostics_cu :: diag_probes(const twodads::real_t time)
             output.open(filename.str().data(), ofstream::app );
             if ( output.is_open() ){
                 output << time << "\t";                                  // time
-                output << setw(12) << theta_tilde  (np, mp) << "\t";     // n_tilde
-                output << setw(12) << theta        (np, mp) << "\t";     // n
-                output << setw(12) << strmf        (np, mp) << "\t";     // phi
-                output << setw(12) << strmf_tilde  (np, mp) << "\t";     // phi_tilde
-                output << setw(12) << omega        (np, mp) << "\t";     // Omega
-                output << setw(12) << omega_tilde  (np, mp) << "\t";     // Omega_tilde
-                output << setw(12) << strmf_y_tilde(np, mp) << "\t";     // -v_x
-                output << setw(12) << strmf_x      (np, mp) << "\t";     // v_y
-                output << setw(12) << strmf_x_tilde(np, mp) << "\t";     // v_y_tilde
+                output << setw(20) << std::fixed << std::setprecision(16) <<  theta_tilde  (np, mp) << "\t";     // n_tilde
+                output << setw(20) << std::fixed << std::setprecision(16) <<  theta        (np, mp) << "\t";     // n
+                output << setw(20) << std::fixed << std::setprecision(16) <<  strmf        (np, mp) << "\t";     // phi
+                output << setw(20) << std::fixed << std::setprecision(16) <<  strmf_tilde  (np, mp) << "\t";     // phi_tilde
+                output << setw(20) << std::fixed << std::setprecision(16) << omega        (np, mp) << "\t";     // Omega
+                output << setw(20) << std::fixed << std::setprecision(16) << omega_tilde  (np, mp) << "\t";     // Omega_tilde
+                output << setw(20) << std::fixed << std::setprecision(16) << strmf_y_tilde(np, mp) << "\t";     // -v_x
+                output << setw(20) << std::fixed << std::setprecision(16) << strmf_x      (np, mp) << "\t";     // v_y
+                output << setw(20) << std::fixed << std::setprecision(16) << strmf_x_tilde(np, mp) << "\t";     // v_y_tilde
                 output << "\n";
                 output.close();
             }
@@ -219,6 +226,48 @@ void diagnostics_cu :: diag_probes(const twodads::real_t time)
         }
     }
 }
+
+void diagnostics_cu :: diag_consistency(const twodads::real_t time)
+{
+    cuda::real_t l2norm;
+    static cuda_darray<cuda::real_t> invdel2_omega(config.get_my(), config.get_nx());
+    static cuda_darray<cuda::real_t> del2phi(config.get_my(), config.get_nx());
+    static cuda_darray<CuCmplx<cuda::real_t> >tmp_hat(config.get_my(), config.get_nx() / 2 + 1);
+    // By construction, phi should not have a mean
+    assert(strmf.get_mean() < 1e-10);
+
+    ///////////////////////////////////////////// Reconstruct phi from current omega in real space
+    /* Test of phi = del^-2 omega */
+    der.inv_laplace(omega, invdel2_omega, 0);
+    l2norm = sqrt(((invdel2_omega - strmf) *(invdel2_omega - strmf)).get_mean());
+    cout << "|del^{-2}(omega) - phi|_2 = " << l2norm << "\t";
+    assert(l2norm < 1e-8);
+
+    /////////////////////////////////////////////// Reconstruct omega from current phi in real space
+    der.d_laplace(strmf, del2phi, 0);
+    del2phi += omega.get_mean();
+    l2norm = sqrt(((del2phi - omega) * (del2phi - omega)).get_mean());
+    cout << "|del^2(phi) - omega|_2 = " << l2norm << "\t";
+    assert(l2norm < 1e-8);
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////
+    // Test accuracy of DFT with omega
+    der.dft_r2c(omega.get_array_d(), tmp_hat.get_array_d());
+    der.dft_c2r(tmp_hat.get_array_d(), del2phi.get_array_d());
+    del2phi.normalize();
+    l2norm = sqrt(((del2phi - omega) * (del2phi - omega)).get_mean());
+    cout << "|iFFT(FFT(omega)) - omega|_2 = " << l2norm << "\t";
+    assert(l2norm < 1e-10);
+
+    der.dft_r2c(strmf.get_array_d(), tmp_hat.get_array_d());
+    der.dft_c2r(tmp_hat.get_array_d(), invdel2_omega.get_array_d());
+    invdel2_omega.normalize();
+    l2norm = sqrt(((invdel2_omega- strmf) * (invdel2_omega - strmf)).get_mean());
+    cout << "|iFFT(FFT(strmf)) - strmf|_2 = " << l2norm << endl;
+    assert(l2norm < 1e-10);
+
+}
+
 
 void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 {
@@ -254,58 +303,6 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 	if(use_log_theta)
 		theta.remove_bg(theta_bg);
 
-//	double m_ts = 0.0;
-//	double m_tmax = -1000.0;
-//	double m_tmin = 1000.0;
-//	double m_x = 0.0;
-//	double m_y = 0.0;
-//	double m_tx = 0.0;
-//	double m_ty = 0.0;
-//	double m_wxx = 0.0;
-//	double m_wyy = 0.0;
-//	for(uint m = 0; m < slab_layout.My; m++)
-//	{
-//		m_y = slab_layout.y_lo + (double) m * slab_layout.delta_y;
-//		for(uint n = 0; n < slab_layout.Nx; n++)
-//		{
-//			m_x = slab_layout.x_left + (double) n * slab_layout.delta_x;
-//			m_ts += theta(m, n);
-//			m_tx += theta(m, n) * m_x;
-//			m_ty += theta(m, n) * m_y;
-//			m_tmax = max(m_tmax, theta(m, n));
-//			m_tmin = min(m_tmin, theta(m, n));
-//		}
-//	}
-//
-//
-//	m_tx /= m_ts;
-//	m_ty /= m_ts;
-//
-//	m_wxx = 0.0;
-//	m_wyy = 0.0;
-//	for(uint m = 0; m < slab_layout.My; m++)
-//	{
-//		m_y = slab_layout.y_lo + (double) m * slab_layout.delta_y;
-//		for(uint n = 0; n < slab_layout.Nx; n++)
-//		{
-//			m_x = slab_layout.x_left + (double) n * slab_layout.delta_x;
-//			m_wxx = theta(m, n) * (m_x - m_tx) * (m_x - m_tx);
-//			m_wyy = theta(m, n) * (m_y - m_ty) * (m_y - m_ty);
-//		}
-//	}
-//	m_wxx /= m_ts;
-//	m_wyy /= m_ts;
-//
-//	cout << "manually: sum(theta) = " << m_ts << endl;
-//	cout << "          max(theta) = " << m_tmax << endl;
-//	cout << "          min(theta) = " << m_tmin << endl;
-//	cout << "          int(theta) = " << m_ts * dA << endl;
-//	cout << "          COM_X      = " << m_tx << endl;
-//	cout << "          COM_Y      = " << m_ty << endl;
-//	cout << "          W_XX       = " << m_wxx << endl;
-//	cout << "          W_YY       = " << m_wyy << endl;
-
-
 	theta_max = theta.get_max();
 	strmf_max = strmf.get_max();
 
@@ -317,16 +314,7 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 	theta_com_y /= theta_int;
 	theta_int *= dA;
 
-//	cout << "theta.get_sum() = " << theta.get_sum() << endl;
-//	cout << "theta.get_max() = " << theta.get_max() << endl;
-//	cout << "theta.get_min() = " << theta.get_min() << endl;
-//	cout << "theta_int       = " << theta_int << endl;
-//	cout << "theta_com_x     = " << theta_com_x << endl;
-//	cout << "theta_com_y     = " << theta_com_y << endl;
-
-
-
-//	// Compute dispersion
+	// Compute dispersion
 	for(unsigned int n = 0; n < slab_layout.Nx; n++)
 		x_vec[n] = (x_vec[n] - theta_com_x) * (x_vec[n] - theta_com_x);
 	for(unsigned int m = 0; m < slab_layout.My; m++)
@@ -336,9 +324,6 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 
 	wxx = (theta * x_arr).get_sum() / (theta_int / dA);
 	wyy = (theta * y_arr).get_sum() / (theta_int / dA);
-
-//	cout << "wxx            = " << wxx << endl;
-//	cout << "wyy            = " << wyy << endl;
 
 	for(unsigned int n = 0; n < slab_layout.Nx; n++)
 		x_vec[n] = slab_layout.x_left + (double) n * slab_layout.delta_x;
@@ -364,21 +349,21 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 	if(output.is_open())
 	{
 		output << time << "\t";
-		output << setw(12) << theta_max << "\t";
-		output << setw(12) << theta_max_x << "\t";
-		output << setw(12) << theta_max_y << "\t";
-		output << setw(12) << strmf_max << "\t";
-		output << setw(12) << strmf_max_x << "\t";
-		output << setw(12) << strmf_max_y << "\t";
-		output << setw(12) << theta_int << "\t";
-		output << setw(12) << theta_com_x << "\t";
-		output << setw(12) << theta_com_y << "\t";
-		output << setw(12) << com_vx << "\t";
-		output << setw(12) << com_vy << "\t";
-		output << setw(12) << wxx << "\t";
-		output << setw(12) << wyy << "\t";
-		output << setw(12) << dxx << "\t";
-		output << setw(12) << dyy << "\n";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_max << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_max_x << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_max_y << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max_x << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max_y << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_int << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_com_x << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << theta_com_y << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << com_vx << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << com_vy << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << wxx << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << wyy << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << dxx << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << dyy << "\n";
 		output.close();
 	}
 }
@@ -389,25 +374,41 @@ void diagnostics_cu :: diag_energy_ns(const twodads::real_t time)
     ofstream output;
     static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
 
+    // Integrated vorticity
     const twodads::real_t V{dA * omega.get_sum()};
+    // Total Enstrophy
     const twodads::real_t O{0.5 * dA * (omega * omega).get_sum()};
+    // Kinetic energy
     const twodads::real_t E{0.5 * dA * (strmf_x * strmf_x + strmf_y * strmf_y).get_sum()};
 
-    // Compute CFL last, since we apply abs to strmf_x, strmf_y
-    //strmf_x.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
-    //strmf_y.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
-   
     const twodads::real_t cfl_x{strmf_x.get_absmax() * slab_layout.delta_t / slab_layout.delta_x};
     const twodads::real_t cfl_y{strmf_y.get_absmax() * slab_layout.delta_t / slab_layout.delta_y};
+
+    
+    // Loss due to diffusion
+    //cuda_darray<cuda::real_t> omega_x2(config.get_my(), config.get_nx());
+    //cuda_darray<cuda::real_t> omega_y2(config.get_my(), config.get_nx());
+    //der.d_dx2_dy2(omega, omega_x2, omega_y2);
+
+    // \int (grad Omega)^2 dA
+    const twodads::real_t D1{dA * (omega_x * omega_x + omega_y * omega_y).get_sum()};
+
+    // Energy conservation, poisson bracket
+    const twodads::real_t D2{dA * (strmf * (strmf_x * omega_y - strmf_y * omega_x)).get_sum()};
+    // Enstrophy conservation, poisson bracket
+    const twodads::real_t D3{dA * (omega * (strmf_x * omega_y - strmf_y * omega_x)).get_sum()};
 
     output.open("cu_energy_ns.dat", ios::app);
     if(output.is_open())
     {
          output << time << "\t";
-         output << setw(12) << V << "\t";
-         output << setw(12) << O << "\t";
-         output << setw(12) << E << "\t";
-         output << setw(12) << cfl_x + cfl_y << "\n";
+         output << setw(20) << std::fixed << std::setprecision(16) << V << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << O << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << E << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << D1 << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << D2 << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << D3 << "\t";
+         output << setw(20) << std::fixed << std::setprecision(16) << cfl_x + cfl_y << "\n";
     } 
 
 }
@@ -428,16 +429,32 @@ void diagnostics_cu :: diag_energy(const twodads::real_t time)
     cuda_darray<twodads::real_t> diag_strmf_y(strmf_y);
     diag_strmf_y.op_apply_t<d_op0_absassign<cuda::real_t> >(0);
 
+
+    der.d_dx2_dy2(omega, omega_xx, omega_yy);
+    der.d_dx2_dy2(theta, theta_xx, theta_yy);
+
+
 	// Total energy, thermal and kinetic
-	const twodads::real_t E{0.5 * dA * ((theta_tilde * theta_tilde) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
+	const twodads::real_t E{0.5 * dA * ((theta * theta) + (strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
 	// Kinetic energy
 	const twodads::real_t K{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
     // Enstrophy
     const twodads::real_t U{0.5 * dA * (omega * omega).get_sum()};
-	// Generalized enstrophy
-	//const twodads::real_t U{0.5 * dA * ((theta_tilde - omega_tilde) * (theta_tilde - omega_tilde)).get_sum()};
-	// T
-	const twodads::real_t T{0.5 * dA * (strmf_x_tilde * strmf_y_tilde).get_sum()};
+	// Densities
+	const twodads::real_t T{dA * ((theta_x * theta_x) + (theta_y * theta_y)).get_sum()};
+    // Density
+    const twodads::real_t D{0.5 * dA * (theta * theta).get_sum()};
+    // A = phi(phi - n)
+    const twodads::real_t A{dA * (strmf * (strmf - theta)).get_sum()};
+    // B = n(phi - n)
+    // D_omega = \int dA phi (omega_xx + omega_yy)
+    const twodads::real_t D_omega{dA * (strmf * (omega_xx + omega_yy)).get_sum()};
+    // D_n = \int dA theta (theta_xx + theta_yy)
+    const twodads::real_t D_theta {dA * (theta * (theta_xx + theta_yy)).get_sum()};
+    // Gamma_tilde = - \int dA theta_tilde * strmf_y
+    const twodads::real_t Gamma_tilde {-1.0 * dA * (theta_tilde * strmf_y).get_sum()};
+    // J_tilde = alpha * \int dA (theta_tilde - strmf_tilde) * (theta_tilde - strmf_tilde)
+    const twodads::real_t J_tilde{dA * ((theta_tilde - strmf_tilde) * (theta_tilde - strmf_tilde)).get_sum()};
 	// CFL
     const twodads::real_t CFL{diag_strmf_x.get_absmax() * slab_layout.delta_t / slab_layout.delta_x + 
                               diag_strmf_y.get_absmax() * slab_layout.delta_t / slab_layout.delta_y};
@@ -446,28 +463,20 @@ void diagnostics_cu :: diag_energy(const twodads::real_t time)
 	if(output.is_open())
 	{
 		output << time << "\t";
-		output << setw(12) << E << "\t";
-		output << setw(12) << K << "\t";
-		output << setw(12) << T << "\t";
-		output << setw(12) << U << "\t";
-        output << setw(12) << CFL;
+		output << setw(20) << std::fixed << std::setprecision(16) << E << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << K << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << U << "\t";
+		output << setw(20) << std::fixed << std::setprecision(16) << T << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << D << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << A << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << D_omega << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << D_theta << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << Gamma_tilde << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << J_tilde << "\t";
+
+        output << setw(20) << std::fixed << std::setprecision(16) << CFL;
 		output << "\n";
 		output.close();
 	}
-}
-
-void diagnostics_cu :: d_dx_dy(cuda::real_t* in, cuda::real_t* dx, cuda::real_t* dy)
-{
-    static cufftResult err;
-    static cufftPlan plan_r2c;
-    static cufftPlan plan_c2r;
-    static bool is_planned{false};
-
-    // Plan only once
-    if(is_planned == false)
-    {
-        err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z);
-        err = cufftPlan2d(&plan_c2r, Nx, My, CUFFT_Z2D);
-    }
 }
 

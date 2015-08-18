@@ -15,8 +15,8 @@ using namespace std;
 
 int main(void)
 {
-	const unsigned int Nx{8};
-	const unsigned int My{8};
+	constexpr unsigned int Nx{8};
+	constexpr unsigned int My{8};
 
 	cuda_darray<double> a1(My, Nx);
 	cuda_darray<double> a2(My, Nx);
@@ -26,15 +26,16 @@ int main(void)
 	cout << "a1:\n" << a1 << endl;
 	cout << "a2:\n" << a2 << endl;
 
-	cout << "assigning a1 += a2" << endl;
-	a1 += a2;
+	cout << "assigning a1 *= a2" << endl;
+	a1 *= a2;
+
 
 	cout << "a1 = " << a1 << endl;
 	cout << "a2 = " << a2 << endl;
 	//cuda_darray<double> a3(a1+a2);
 	cout << "===================================================" << endl;
-	cout << "(a1 + a2).sum() = " << (a1 + a2).get_sum() << endl;
-	cout << "(a1 + a2).mean() = " << (a1 + a2).get_mean() << endl;
-	cout << "(a1 + a2).min() = " << (a1 + a2).get_min() << endl;
+	cout << "(a1 * a2).sum() = " << (a1 * a2).get_sum() << endl;
+	cout << "(a1 * a2).mean() = " << (a1 * a2).get_mean() << endl;
+	cout << "(a1 * a2).min() = " << (a1 * a2).get_min() << endl;
  	return(0);
 }

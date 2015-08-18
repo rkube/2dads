@@ -1,0 +1,9 @@
+Solve diffusion equation on rectangular grid,
+Vary diffusion coefficient and time resolution to get an overview of the
+accuracy of the used solver
+
+run_diff -> Diffusion equation
+
+run_hv -> Hyperviscosity (dn / dt = mu nabla^6 n)
+
+

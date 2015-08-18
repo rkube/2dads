@@ -14,9 +14,10 @@
 #include "cuda_types.h"
 #include "2dads_types.h"
 #include "cuda_array4.h"
+#include "cuda_darray.h"
 #include "slab_config.h"
 #include "initialize.h"
-#include "cufft.h"
+#include "derivatives.h"
 
 
 
@@ -78,10 +79,10 @@ class slab_cuda
         ///         real : (1000*col + row)
         void enumerate(const twodads::field_k_t f_name);
         void enumerate(const twodads::field_t f_name);
-        void d_dx_enumerate(const twodads::field_k_t, uint); ///< Compute x derivative
-        void d_dy_enumerate(const twodads::field_k_t, uint); ///< Compute y derivative
+        //void d_dx_enumerate(const twodads::field_k_t, uint); ///< Compute x derivative
+        //void d_dy_enumerate(const twodads::field_k_t, uint); ///< Compute y derivative
         // Solve laplace equation in k-space
-        void inv_laplace_enumerate(const twodads::field_k_t, uint); ///< Invert Laplace operators
+        //void inv_laplace_enumerate(const twodads::field_k_t, uint); ///< Invert Laplace operators
         
         /// @brief Advance all member fields with multiple time levels: theta_hat, omega_hat, theta_rhs_hat and omega_rhs_hat
         void advance(); 
@@ -90,7 +91,7 @@ class slab_cuda
         void rhs_fun(const uint);
         /// @brief Update real fields theta, theta_x, theta_y, etc.
         /// @param tlev: The time level used from theta_hat, omega_hat as input for inverse DFT
-        void update_real_fields(const uint);
+        void update_real_fields(const uint, const uint=0);
 
 
         /// @brief calls copy_device_to_host for the specified field
@@ -153,17 +154,13 @@ class slab_cuda
         cuda_array<cuda::real_t> theta, theta_x, theta_y; ///< Real fields assoc. with theta
         cuda_array<cuda::real_t> omega, omega_x, omega_y; ///< Real fields assoc. with omega
         cuda_array<cuda::real_t> strmf, strmf_x, strmf_y; ///< Real fields assoc.with stream function
-        cuda_array<cuda::real_t> tmp_array; ///< temporary data
+        cuda_array<cuda::real_t> tmp_array, tmp_x_array, tmp_y_array; ///< temporary data
         cuda_array<cuda::real_t> theta_rhs, omega_rhs; ///< Real fields for RHS, for debugging
 
         cuda_array<cuda::cmplx_t> theta_hat, theta_x_hat, theta_y_hat; ///< Fourier fields assoc. with theta
         cuda_array<cuda::cmplx_t> omega_hat, omega_x_hat, omega_y_hat; ///< Fourier fields assoc. with omega
         cuda_array<cuda::cmplx_t> strmf_hat, strmf_x_hat, strmf_y_hat; ///< Fourier fields assoc. with strmf
         cuda_array<cuda::cmplx_t> tmp_array_hat; ///< Temporary data, Fourier field
-
-        cuda_array<cuda::cmplx_t> k_map;         ///< Wave-number coefficients
-        cuda_array<cuda::cmplx_t> k_map_dx1_dy1; ///< Coefficients for first order spatial derivatives
-
 
         cuda_array<cuda::cmplx_t> theta_rhs_hat; ///< non-linear RHS for time integration of theta
         cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
@@ -177,12 +174,13 @@ class slab_cuda
         cufftHandle plan_c2r; ///< Plan used for all Z2D iDFTs used by cuFFT
 
         bool dft_is_initialized; ///< True if cuFFT is initialized
-        //output_h5 slab_output; ///< Handels internals of output to hdf5
-        //diagnostics slab_diagnostic; ///< Handles internals of diagnostic output
 
         // Parameters for stiff time integration
         const cuda::stiff_params_t stiff_params; ///< Coefficients for time integration routine
         const cuda::slab_layout_t slab_layout; ///< Slab layout passed to cuda kernels and initialization routines
+
+        /// Spectral derivation
+        derivs<cuda::real_t> der;
 
         ///@brief Block and grid dimensions for kernels operating on My*Nx arrays.
         ///@brief For kernels where every element is treated alike

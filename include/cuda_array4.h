@@ -21,6 +21,7 @@
 
 
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <cmath>
 #include <cuda.h>
@@ -62,7 +63,30 @@ inline void gpuVerifyLaunch(const char* file, int line)
      }
 }
 
+
 #ifdef __CUDACC__
+
+
+//void mycudaMalloc(void** devPtr, size_t size)
+//{
+//    std::ofstream of;
+//    static int counter{0};
+//
+//    gpuErrchk(cudaMalloc(devPtr, size));
+//
+//    of.open("cuda_malloc.log", ios::app);
+//    of << counter << ": " << *devPtr << endl;
+//    of.close();
+//
+//    //if (counter == 12)
+//    //    throw;
+//
+//    counter++;
+//
+//    return;
+//}
+
+
 /// Device function to compute column and row
 __device__ inline int d_get_col() {
     return (blockIdx.x * blockDim.x + threadIdx.x);
@@ -103,10 +127,18 @@ __global__ void d_enumerate_t(T** array_t, const uint t, const uint My, const ui
 // T** array_d_t : array of pointers to device data. array_d_t[tlev] points to data at time level tlve
 // T* array      : array data, in consecutive memory.
 template <typename T>
-__global__ void d_alloc_array_d_t(T** array_d_t, T* array,  const uint tlevs, const uint My, const uint Nx)
+__global__ void d_alloc_array_d_t(T** array_d_t, T* array, const uint tlevs, const uint My, const uint Nx)
 {
-	if (threadIdx.x < tlevs)
-		array_d_t[threadIdx.x] = &array[threadIdx.x * Nx * My];
+#ifdef DEBUG
+    printf("T **array_d_t at %p\n", array_d_t);
+#endif
+    for(uint t = 0; t < tlevs; t++)
+    {
+        array_d_t[t] = &array[t * Nx * My];
+#ifdef DEBUG
+        printf("array_d_t[%d] (at %p) -> %p\n", t, &array_d_t[t], &array[t * Nx * My]);
+#endif
+    }
 }
 
 
@@ -114,12 +146,19 @@ __global__ void d_alloc_array_d_t(T** array_d_t, T* array,  const uint tlevs, co
 template <typename T>
 __global__ void d_advance(T** array_d_t, const uint tlevs)
 {
-	T* tmp = array_d_t[tlevs - 1];
 	int t = 0;
+    //printf("\tadvance\n\tbefore: \n");
+	//for(t = tlevs - 1; t >= 0; t--)
+    //    printf("\t\tarray_d_t[%d] = %p\n", t, array_d_t[t]);
 
+	T* tmp = array_d_t[tlevs - 1];
 	for(t = tlevs - 1; t > 0; t--)
 		array_d_t[t] = array_d_t[t - 1];
 	array_d_t[0] = tmp;
+
+    //printf("\tafter:\n");
+	//for(t = tlevs - 1; t >= 0; t--)
+    //    printf("\t\tarray_d_t[%d] = %p\n", t, array_d_t[t]);
 }
 
 
@@ -135,7 +174,7 @@ __global__ void d_swap(T**array_d_t, const uint t1, const uint t2)
 
 // Print address of time level in device memory
 template <typename T>
-__global__ void test_alloc(const T** array_d_t,  const uint tlevs)
+__global__ void test_alloc(T** array_d_t,  const uint tlevs)
 {
     for(int t = 0; t < tlevs; t++)
         printf("array_d_t[%d] at %p\n", t, array_d_t[t]);
@@ -453,21 +492,34 @@ class cuda_array{
 #ifdef __CUDACC__
 // Default constructor
 // Template parameters: T is the type parameter
-// T is usually double. But why not char or short int? :D
+// T is usually doublem or CuCmplx<double>. Test for float not done
 template <typename T>
 cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
-	tlevs(t), My(my), Nx(nx), array_bounds(tlevs, My, Nx),
+	tlevs(t), 
+    My(my),
+    Nx(nx), 
+    array_bounds(tlevs, My, Nx),
 	block(dim3(cuda::blockdim_nx, cuda::blockdim_my)),
 	// Round integer division for grid.y, see: http://stackoverflow.com/questions/2422712/c-rounding-integer-division-instead-of-truncating
 	// a la int a = (59 + (4 - 1)) / 4;
 	grid(dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My)),
-	array_d(nullptr), array_d_t(nullptr), array_d_t_host(new T*[tlevs]),
-	array_h(nullptr), array_h_t(new T*[tlevs])
+	array_d(nullptr), 
+    array_d_t(nullptr), 
+    array_d_t_host(new T*[tlevs]),
+	array_h(nullptr), 
+    array_h_t(new T*[tlevs])
 {
     // Allocate device memory
     size_t nelem = tlevs * My * Nx;
-    gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
+//#ifdef DEBUG
+//    mycudaMalloc( (void**) &array_d, nelem * sizeof(T));
+//#endif // DEBUG
+
     gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(T*)));
+
+//#ifndef DEBUG
+    gpuErrchk(cudaMalloc( (void**) &array_d, nelem * sizeof(T)));
+//#endif
 
 #ifdef PINNED_HOST_MEMORY
     // Allocate pinned host memory for faster memory transfers
@@ -483,7 +535,7 @@ cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
     // array_[hd]_t is an array of pointers allocated on the host/device respectively
     // array_t[i] points to the i-th time level
     // Set pointers on device
-    d_alloc_array_d_t<<<1, tlevs>>>(array_d_t, array_d, tlevs, Nx, My);
+    d_alloc_array_d_t<<<1, 1>>>(array_d_t, array_d, tlevs, Nx, My);
     // Update host copy
     gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
 
@@ -492,27 +544,29 @@ cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
         array_h_t[t] = &array_h[t * Nx * My];
         op_scalar_t<d_op1_assign<T> >(T(0.0), t);
     }
-//    cout << "!!!!! FULL CONSTRUCTOR! YOU JUST HAVE ALLOCATED MEMORY !!!!!" << endl;
-//
-//    #ifdef DEBUG
+
+#ifdef DEBUG
+    cout << "!!!!! FULL CONSTRUCTOR! YOU JUST HAVE ALLOCATED MEMORY !!!!!" << endl;
 //    cout << "cuda_array<T> :: cuda_array<T>(uint, uint, uint)" << endl;
 //    cout << "Array size: Nx=" << Nx << ", My=" << My << ", tlevs=" << tlevs << endl;
 //    cout << "cuda::blockdim_x = " << cuda::blockdim_nx;
 //    cout << ", cuda::blockdim_y = " << cuda::blockdim_my <<endl;
 //    cout << "blockDim=(" << block.x << ", " << block.y << ")" << endl;
 //    cout << "gridDim=(" << grid.x << ", " << grid.y << ")" << endl;
-//    cout << "Device data at " << array_d << "\t";
-//    cout << "Host data at " << array_h << "\t";
-//    cout << nelem << " bytes of data\n";
-//    for (uint tl = 0; tl < tlevs; tl++)
-//    {
-//        cout << "time level " << tl << " at ";
-//        cout << array_h_t[tl] << "(host)\t";
-//        cout << array_d_t_host[tl] << "(device)\n";
-//    }
+    cout << "Device data: array_d at " << array_d << "\t";
+    cout << "Host data: array_h at " << array_h << "\t";
+    cout << nelem << " bytes of data\n";
+    cout << "array_d_t_host at " << array_d_t_host << endl;
+    cout << "array_h_t at " << array_h_t << endl;
+    for (uint tl = 0; tl < tlevs; tl++)
+    {
+        cout << "time level " << tl << " at ";
+        cout << "array_h_t[" << tl << "] at " << array_h_t[tl] << "\t";
+        cout << "array_d_t_host[" << tl << "] at " << array_d_t_host[tl] << "\n";
+    }
 //    cout << "Testing allocation of array_d_t:\n";
 //    test_alloc<<<1, 1>>>(array_d_t, tlevs);
-//#endif // DEBUG
+#endif // DEBUG
 }
 
 
@@ -576,8 +630,9 @@ cuda_array<T> :: cuda_array(cuda_array<T>&& rhs) :
 }
 
 template <typename T>
-cuda_array<T> :: ~cuda_array(){
-	if(array_d_t_host != nullptr)
+cuda_array<T> :: ~cuda_array()
+{
+    if(array_d_t_host != nullptr)
 		delete [] array_d_t_host;
 	if(array_h_t != nullptr)
 		delete [] array_h_t;
@@ -592,7 +647,7 @@ cuda_array<T> :: ~cuda_array(){
 #endif
 
     if(array_d != nullptr)
-    gpuErrchk(cudaFree(array_d));
+        gpuErrchk(cudaFree(array_d));
     //cudaDeviceSynchronize();
 }
 
@@ -665,24 +720,6 @@ inline void cuda_array<T> :: op_array_t(const cuda_array<T>& rhs, const uint tle
 }
 
 
-// Apply a function on the array
-
-
-//template <typename T>
-//template <typename O>
-//inline void cuda_array<T> :: op_array_t(const uint t_dst, const cuda_array<T>& rhs, const uint t_src)
-//{
-//	if((void*) this == (void*) &rhs)
-//		throw operator_err(string("cuda_array<T>& cuda_array<T> :: operator+= (const cuda_array<T>&): RHS and LHS cannot be the same\n"));
-//
-//	check_bounds(rhs.get_my(), rhs.get_nx());
-//
-//		d_op1_arr<T, O><<<grid, block>>>(get_array_d(t_dst), rhs.get_array_d(t_src), My, Nx);
-//	#ifdef DEBUG
-//		gpuStatus();
-//	#endif
-//}
-
 // Operators
 
 // Copy data from array_d_t[0] from rhs to lhs
@@ -707,19 +744,33 @@ cuda_array<T>& cuda_array<T> :: operator= (cuda_array<T>&& rhs)
 		return *this;
 	check_bounds(rhs.get_tlevs(), rhs.get_my(), rhs.get_nx());
 
-
-	array_d = rhs.array_d;
+    if(array_d != nullptr)
+        gpuErrchk(cudaFree(array_d));
+    array_d = rhs.array_d;
 	rhs.array_d = nullptr;
 
+    if(array_d_t != nullptr)
+        gpuErrchk(cudaFree(array_d_t));
 	array_d_t = rhs.array_d_t;
 	rhs.array_d_t = nullptr;
 
+    if(array_d_t_host != nullptr)
+        delete [] array_d_t_host;
 	array_d_t_host = rhs.array_d_t_host;
 	rhs.array_d_t_host = nullptr;
 
+    if(array_h != nullptr)
+#ifdef PINNED_HOST_MEMORY
+        cudaFreeHost(array_h);
+#endif
+#ifndef PINNED_HOST_MEMORY
+        delete [] array_h;
+#endif
 	array_h = rhs.array_h;
 	rhs.array_h = nullptr;
 
+    if(array_h_t != nullptr)
+        delete [] array_h_t;
 	array_h_t = rhs.array_h_t;
 	rhs.array_h_t = nullptr;
 
@@ -895,6 +946,7 @@ template <typename T>
 void cuda_array<T> :: advance()
 {
 	//Advance array_d_t pointer on device
+    //cout << "=============================================================================";
     //cout << "advance\n";
     //cout << "before advancing\n";
     //for(int t = tlevs - 1; t >= 0; t--)
@@ -914,6 +966,7 @@ void cuda_array<T> :: advance()
     //cout << "after advancing\n";
     //for(int t = tlevs - 1; t >= 0; t--)
     //     cout << "array_d_t_host["<<t<<"] = " << array_d_t_host[t] << "\n";
+    //cout << "=============================================================================";
 
     // Zero out last time level
 }
