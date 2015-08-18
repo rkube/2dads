@@ -4,8 +4,10 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <stdio.h>
+#include <cmath>
 #include "initialize.h"
 
 #define EPSILON 0.000001
@@ -184,8 +186,8 @@ void d_init_random_modes(cuda::cmplx_t* array, curandState* state, const cuda::s
 	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
 	const uint idx = row * (layout.Nx / 2 + 1) + col;
 
-	double phase{0.0};
-	double amplitude = 100.0 / sqrt(double(layout.Nx * layout.My));
+    cuda::real_t phase{0.0};
+    cuda::real_t amplitude = 1000.0;// / sqrt(cuda::real_t(layout.Nx * layout.My));
     if((col < layout.Nx / 2 + 1) && (row < layout.My))
 	{
 		phase = curand_uniform_double(&state[idx]) * cuda::TWOPI;
@@ -199,6 +201,12 @@ void d_init_random_modes(cuda::cmplx_t* array, curandState* state, const cuda::s
     		array[idx].set_im(amplitude * sin(phase));
 	}
 	return;
+}
+
+__global__
+void d_zero_mode(cuda::cmplx_t* array)
+{
+    array[0] = cuda::cmplx_t(0.0, 0.0);
 }
 
 /// Initialize sinusoidal profile
@@ -259,27 +267,46 @@ void init_invlapl(cuda_arr_real* arr,
 // Initialize all modes with random values
 void init_turbulent_bath(cuda_arr_cmplx* arr, const cuda::slab_layout_t layout, const uint tlev)
 {
-	curandState* state_d{nullptr};
-	gpuErrchk(cudaMalloc((void**) &state_d, layout.Nx * layout.My * sizeof(curandState)));
+    cuda::cmplx_t* tmp_field = new cuda::cmplx_t[layout.My * (layout.Nx / 2 + 1)];
+    cuda::real_t amplitude{0.0};
+    cuda::real_t phase{0.0};
+    srand(time(NULL));
 
-	static time_t seed{time(NULL)};
-	static bool is_initialized{false};
+    // Maximum mode to initialize. Do not initialize high frequency modes
+    constexpr unsigned int nmax{16};
+    constexpr unsigned int mmax{16}; 
 
-	// Do curand initialization only once
-	if(!is_initialized)
-	{
-		gpuErrchk(cudaMalloc((void**) &state_d, layout.Nx * layout.My * sizeof(curandState)));
-		d_setup_rand<<< arr -> get_grid(), arr -> get_block()>>>(state_d, seed, layout);
-		is_initialized = true;
-	}
+    // Loop works for My >= 32
+    for(uint m = 1; m < mmax; m++)
+    {
+        for(uint n = 1; n < nmax; n++)
+        {
+            amplitude = 100. / sqrt(1. + (double(n * n + m * m) / double(nmax * mmax) * 
+                                          double(n * n + m * m) / double(nmax * mmax) *
+                                          double(n * n + m * m) / double(nmax * mmax) *
+                                          double(n * n + m * m) / double(nmax * mmax)));
+            phase = double(rand()) / double(RAND_MAX);
+            //if(m == 0 || m == layout.My || n == 0 || n == layout.Nx / 2)
+            //    tmp_field[m * (layout.Nx / 2 + 1) + n] = cuda::cmplx_t(0.0, 0.0);
+            //else
+            tmp_field[m * (layout.Nx / 2 + 1) + n] = cuda::cmplx_t(amplitude * cos(phase * 2.0 * cuda::PI), 
+                                                                   amplitude * sin(phase * 2.0 * cuda::PI));
+        }
+    }
+    tmp_field[0].set_re(0.0);
+    tmp_field[0].set_im(0.0);
 
-	d_init_random_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), state_d, layout);
+
+    gpuErrchk(cudaMemcpy(arr -> get_array_d(tlev), tmp_field, layout.My * (layout.Nx / 2 + 1) * sizeof(cuda::cmplx_t), cudaMemcpyHostToDevice));
     gpuStatus();
-//	if(state_d != nullptr)
-//		gpuErrchk(cudaFree(state_d));
-	//cout << "Init_random_modes: arr = " << arr;
 
-    //d_init_all_modes<<<arr -> get_grid(), arr -> get_block()>>>(arr -> get_array_d(tlev), layout, real, imag);
+    ofstream of;
+    of.open("tbath.dat", ios::trunc);
+    of << (*arr);
+    of.close();
+
+    if(tmp_field != nullptr)
+        delete [] tmp_field;
 }
 
 
