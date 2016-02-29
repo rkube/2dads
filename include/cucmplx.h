@@ -195,9 +195,11 @@ public:
 
     //CUDA_MEMBER inline void set(T re, T im) {real = re; imag = im;};
     CUDA_MEMBER inline T re() const {return(data[0]);}
+    CUDA_MEMBER inline T& re() {return(data[0]);}
     CUDA_MEMBER inline void set_re(const T& re) {data[0] = re;}
 
     CUDA_MEMBER inline T im() const {return(data[1]);}
+    CUDA_MEMBER inline T& im() {return(data[1]);}
     CUDA_MEMBER inline void set_im(const T& im) {data[1] = im;}
 
 private:
