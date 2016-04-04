@@ -2,7 +2,7 @@
 include Makefile.inc
 # Subdirectories
 TEST_DIR = tests
-OBJ_DIR = /home/rku000/cuda-workspace/cuda_array2/obj/
+OBJ_DIR = /home/rku000/source/2dads/obj/
 
 .PHONY: clean dist
 
@@ -37,7 +37,7 @@ slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
 	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
 
 2dads: slab_config.o output.o diagnostics_cu.o initialize.o slab_cuda.o
-	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
+	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main3.cpp $(INCLUDES) $(LFLAGS) 
 
 2dads_profile: slab_config.o initialize.o slab_cuda.o
 	$(CC) $(CFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 

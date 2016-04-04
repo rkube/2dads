@@ -42,7 +42,6 @@ class slab_cuda
         /// @detailed omega_rhs_hat, theta_rhs_hat: computed as specified by omega/theta_rhs
         /// @detailed non-zero value at last time index, tlev-2
         void initialize(); 
-
         
         /// @brief Move data from time level t_src to t_dst
         /// @param fname field name 
@@ -152,21 +151,25 @@ class slab_cuda
         const uint tlevs; ///< Number of time levels stored, order of time integration + 1
 
         cuda_array<cuda::real_t> theta, theta_x, theta_y; ///< Real fields assoc. with theta
+        cuda_array<cuda::real_t> tau, tau_x, tau_y;       ///< Real fields assoc. with tau
         cuda_array<cuda::real_t> omega, omega_x, omega_y; ///< Real fields assoc. with omega
         cuda_array<cuda::real_t> strmf, strmf_x, strmf_y; ///< Real fields assoc.with stream function
         cuda_array<cuda::real_t> tmp_array, tmp_x_array, tmp_y_array; ///< temporary data
-        cuda_array<cuda::real_t> theta_rhs, omega_rhs; ///< Real fields for RHS, for debugging
+        cuda_array<cuda::real_t> theta_rhs, tau_rhs, omega_rhs; ///< Real fields for RHS, for debugging
 
         cuda_array<cuda::cmplx_t> theta_hat, theta_x_hat, theta_y_hat; ///< Fourier fields assoc. with theta
+        cuda_array<cuda::cmplx_t> tau_hat, tau_x_hat, tau_y_hat;       ///< Fourier fields assoc. with tau
         cuda_array<cuda::cmplx_t> omega_hat, omega_x_hat, omega_y_hat; ///< Fourier fields assoc. with omega
         cuda_array<cuda::cmplx_t> strmf_hat, strmf_x_hat, strmf_y_hat; ///< Fourier fields assoc. with strmf
         cuda_array<cuda::cmplx_t> tmp_array_hat; ///< Temporary data, Fourier field
 
         cuda_array<cuda::cmplx_t> theta_rhs_hat; ///< non-linear RHS for time integration of theta
+        cuda_array<cuda::cmplx_t> tau_rhs_hat;   ///< non-linear RHS for time integration of tau
         cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
 
         // Arrays that store data on CPU for diagnostic functions
         rhs_fun_ptr theta_rhs_func; ///< Evaluate explicit part for time integrator
+        rhs_fun_ptr tau_rhs_func;   ///< Evaluate explicit part for time integrator
         rhs_fun_ptr omega_rhs_func; ///< Evaluate explicit part for time integrator
 
         // DFT plans
@@ -209,7 +212,6 @@ class slab_cuda
         dim3 grid_dy_half; ///< My/2 rows, all columns
         dim3 grid_dy_single; ///< 1 row, all columns
 
-
         /// @brief Grid dimensions for access on all {kx, 0} modes, stored in the first Nx/2+1 elements of an array
         dim3 grid_ky0;
         
@@ -240,6 +242,16 @@ class slab_cuda
         ///@param uint t_src: Use data stored in theta_hat[t_src][%]
         void theta_rhs_hwmod(uint);
 
+        ///@brief Non-linear sheath losses
+        ///@detailed $\mathcal{N}^t = \left{\log n, \phi\right} + \alpha \sqrt{T} \exp\left( \Sigma - \delta \triangle \phi / T \right) + \kappa_n \left(n_x^2 + n_y^2\right)$ 
+        ///@param uint t_src: Use data stored in theta_hat[t_src][%]
+        void theta_rhs_sheath_nlin(uint);
+
+        ///@brief Non-linear sheath losses
+        ///@detailed $\tau^t = \left{\log n, \phi\right} + \alpha \sqrt{T} \exp\left( \Sigma - \delta \triangle \phi / T \right) + \kappa_n \left(n_x^2 + n_y^2\right)$ 
+        ///@param uint t_src: Use data stored in tau_hat[t_src][%]
+        void tau_rhs_sheath_nlin(uint);
+
         ///@brief Dummy function, set explicit part to zero
         ///@param uint t_src: Dummy parameter
         void theta_rhs_null(uint);
@@ -258,6 +270,7 @@ class slab_cuda
         /// @detailed: RHS = \tilde{\Omega, phi} - C(phi, n)
         void omega_rhs_hwzf(uint);
         void omega_rhs_ic(uint); ///< Interchange turbulence
+        void omega_rhs_sheath_nlin(uint); ///< Non-linear sheath losses
         void omega_rhs_null(uint); ///< Zero explicit term
 
         static map<twodads::rhs_t, rhs_fun_ptr> create_rhs_func_map()
@@ -269,12 +282,15 @@ class slab_cuda
             my_map[twodads::rhs_t::theta_rhs_null] = &slab_cuda::theta_rhs_null;
             my_map[twodads::rhs_t::theta_rhs_hw] =  &slab_cuda::theta_rhs_hw;
             my_map[twodads::rhs_t::theta_rhs_hwmod] = &slab_cuda::theta_rhs_hwmod;
+            my_map[twodads::rhs_t::theta_rhs_sheath_nlin] = &slab_cuda::theta_rhs_sheath_nlin;
+            my_map[twodads::rhs_t::tau_rhs_sheath_nlin] = &slab_cuda::tau_rhs_sheath_nlin;
             my_map[twodads::rhs_t::omega_rhs_ns] = &slab_cuda::omega_rhs_ns;
             my_map[twodads::rhs_t::omega_rhs_hw] = &slab_cuda::omega_rhs_hw;
             my_map[twodads::rhs_t::omega_rhs_hwmod] = &slab_cuda::omega_rhs_hwmod;
             my_map[twodads::rhs_t::omega_rhs_hwzf] = &slab_cuda::omega_rhs_hwzf;
             my_map[twodads::rhs_t::omega_rhs_null] = &slab_cuda::omega_rhs_null;
             my_map[twodads::rhs_t::omega_rhs_ic] = &slab_cuda::omega_rhs_ic;
+            my_map[twodads::rhs_t::omega_rhs_sheath_nlin] = &slab_cuda::omega_rhs_sheath_nlin;
             return (my_map);
         }
 };

@@ -37,6 +37,8 @@ int main(void)
     {
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, t + 1);
         slab.integrate_stiff(twodads::field_k_t::f_omega_hat, t + 1);
+        slab.integrate_stiff(twodads::field_k_t::f_tau_hat, t + 1);
+
         time += delta_t;
         slab.inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, my_config.get_tlevs() - t - 1);
         slab.update_real_fields(my_config.get_tlevs() - t - 1);
@@ -45,6 +47,7 @@ int main(void)
         {
             slab.move_t(twodads::field_k_t::f_theta_rhs_hat, my_config.get_tlevs() - t - 2, 0);
             slab.move_t(twodads::field_k_t::f_omega_rhs_hat, my_config.get_tlevs() - t - 2, 0);
+            slab.move_t(twodads::field_k_t::f_tau_rhs_hat, my_config.get_tlevs() - t - 2, 0);
         }
     }
 
@@ -53,6 +56,7 @@ int main(void)
         //cout << "========================================t = " << t << "========================================\n";
         slab.integrate_stiff(twodads::field_k_t::f_theta_hat, tlevs);
         slab.integrate_stiff(twodads::field_k_t::f_omega_hat, tlevs);
+        slab.integrate_stiff(twodads::field_k_t::f_tau_hat, tlevs);
         time += delta_t;
         slab.advance();
         // Compute all fields from theta_hat(1,:), omega_hat(1,:) since we called advance
@@ -77,5 +81,4 @@ int main(void)
     }
     return(0);
 }
-
 

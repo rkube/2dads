@@ -103,6 +103,9 @@ public:
     /// Number of radial probes
     inline unsigned int get_nprobe() const { return nprobes; };
 
+    /// Number of threads for diagnostic_arrays
+    inline unsigned int get_nthreads() const {return nthreads; };
+
 	// Number of particles tracked.
     //int get_particle_tracking() const;	
 	/// List of diagnostic functions to run.
@@ -124,12 +127,6 @@ public:
      */
 	inline double get_initc(int i) const { return initc[i]; };
 	//string get_initial_conditions_str() const;
-
-	/*!
-     * \brief Number of threads used in instances of array_base (diag_array)
-     * \returns number of threads
-     */
-	inline int get_nthreads() const { return nthr; };
 	
 	/// Return the initialization routine.
 	inline string get_init_function_str() const {return init_function_str;};
@@ -152,6 +149,11 @@ public:
      * \returns twodads::rhs_t
      */
 	inline twodads::rhs_t get_omega_rhs_type() const { return omega_rhs; };
+	/*! 
+     * \brief Return type of RHS for tau equation.
+     * \returns twodads::rhs_t
+     */
+	inline twodads::rhs_t get_tau_rhs_type() const { return tau_rhs; };
 	
 	/// Check configuration consistency.
 	int consistency();
@@ -190,7 +192,6 @@ private:
 	unsigned int My;
 	unsigned int Nx;
 	unsigned int tlevs;
-    unsigned int nthr;
 	string scheme;
 	double deltat;
 	double tend;
@@ -201,9 +202,11 @@ private:
     bool do_randomize_modes;
     int particle_tracking;
     unsigned int nprobes;
+    unsigned int nthreads;
 
     twodads::rhs_t theta_rhs;
     twodads::rhs_t omega_rhs;
+    twodads::rhs_t tau_rhs;
     twodads::init_fun_t init_function;
     string init_function_str;
 
@@ -214,11 +217,8 @@ private:
 	vector<double> model_params;
 	string initial_conditions_str;
     string shift_modes_str;
-	int nthreads;
 	int chunksize;
     double diff;
-
-    //vector<twodads::mode> mode_list;
 	
     // helper functions
 	void split_at_whitespace(const string, vector<double>*);

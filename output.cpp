@@ -30,9 +30,12 @@ output_h5 :: output_h5(slab_config config) :
     output(config),
     filename("output.h5"),
     output_file(new H5File(H5std_string(filename.data()), H5F_ACC_TRUNC)),
-	group_theta(new Group(output_file -> createGroup("/T"))),
-    group_theta_x(new Group(output_file -> createGroup("/Tx"))),
-    group_theta_y(new Group(output_file -> createGroup("/Ty"))),
+	group_theta(new Group(output_file -> createGroup("/N"))),
+    group_theta_x(new Group(output_file -> createGroup("/Nx"))),
+    group_theta_y(new Group(output_file -> createGroup("/Ny"))),
+	group_tau(new Group(output_file -> createGroup("/T"))),
+    group_tau_x(new Group(output_file -> createGroup("/Tx"))),
+    group_tau_y(new Group(output_file -> createGroup("/Ty"))),
 	group_omega(new Group(output_file -> createGroup("/O"))),
     group_omega_x(new Group(output_file -> createGroup("/Ox"))),
     group_omega_y(new Group(output_file -> createGroup("/Oy"))),
@@ -58,6 +61,9 @@ output_h5 :: output_h5(slab_config config) :
     dspace_map[twodads::output_t::o_theta] = &dspace_theta;
     dspace_map[twodads::output_t::o_theta_x] = &dspace_theta_x;
     dspace_map[twodads::output_t::o_theta_y] = &dspace_theta_y;
+    dspace_map[twodads::output_t::o_tau] = &dspace_tau;
+    dspace_map[twodads::output_t::o_tau_x] = &dspace_tau_x;
+    dspace_map[twodads::output_t::o_tau_y] = &dspace_tau_y;
     dspace_map[twodads::output_t::o_omega] = &dspace_omega;
     dspace_map[twodads::output_t::o_omega_x] = &dspace_omega_x;
     dspace_map[twodads::output_t::o_omega_y] = &dspace_omega_y;
@@ -68,6 +74,9 @@ output_h5 :: output_h5(slab_config config) :
     dspace_map[twodads::output_t::o_omega_rhs] = &dspace_omega_rhs;
     // populate field name map
 
+    fname_map[twodads::output_t::o_theta] = "N/";
+    fname_map[twodads::output_t::o_theta_x] = "Nx/";
+    fname_map[twodads::output_t::o_theta_y] = "Ny/";
     fname_map[twodads::output_t::o_theta] = "T/";
     fname_map[twodads::output_t::o_theta_x] = "Tx/";
     fname_map[twodads::output_t::o_theta_y] = "Ty/";
@@ -96,8 +105,6 @@ output_h5 :: output_h5(slab_config config) :
     output_file -> flush(H5F_SCOPE_LOCAL);
     output_file -> close();
     delete output_file; 
-
-
 }
 
 
@@ -108,6 +115,9 @@ output_h5 :: ~output_h5()
 	delete group_theta;
 	delete group_theta_x;
 	delete group_theta_y;
+	delete group_tau;
+	delete group_tau_x;
+	delete group_tau_y;
 	delete group_omega;
     delete group_omega_x;
     delete group_omega_y;
@@ -139,7 +149,7 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>
 {
     // update host data on src
     //src -> copy_device_to_host();
-    // Dataset name is /[OST]/[0-9]*
+    // Dataset name is /[NOST]/[0-9]*
     stringstream foo;
     foo << fname_map[field_name] << "/" << to_string(get_output_counter());
     string dataset_name(foo.str());

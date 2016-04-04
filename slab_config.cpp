@@ -51,6 +51,9 @@ const map<string, twodads::output_t> slab_config::output_map
     {"omega", twodads::output_t::o_omega},
     {"omega_x", twodads::output_t::o_omega_x},
     {"omega_y", twodads::output_t::o_omega_y},
+    {"tau", twodads::output_t::o_tau},
+    {"tau_x", twodads::output_t::o_tau_x},
+    {"tau_y", twodads::output_t::o_tau_y},
     {"strmf", twodads::output_t::o_strmf},
     {"strmf_x", twodads::output_t::o_strmf_x},
     {"strmf_y", twodads::output_t::o_strmf_y},
@@ -71,6 +74,7 @@ const map<string, twodads::diagnostic_t> slab_config::diagnostic_map
 const map<string, twodads::init_fun_t> slab_config::init_func_map 
 {
     {"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
+    {"tau_gaussian", twodads::init_fun_t::init_tau_gaussian},
     {"both_gaussian", twodads::init_fun_t::init_both_gaussian},
     {"theta_sine", twodads::init_fun_t::init_theta_sine},
     {"omega_sine", twodads::init_fun_t::init_omega_sine},
@@ -90,12 +94,15 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
     {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
     {"theta_rhs_hw", twodads::rhs_t::theta_rhs_hw},
     {"theta_rhs_hwmod", twodads::rhs_t::theta_rhs_hwmod},
+    {"theta_rhs_sheath", twodads::rhs_t::theta_rhs_sheath_nlin},
     {"theta_rhs_null", twodads::rhs_t::theta_rhs_null},
+    {"tau_rhs_sheath", twodads::rhs_t::tau_rhs_sheath_nlin},
     {"omega_rhs_ns", twodads::rhs_t::omega_rhs_ns},
     {"omega_rhs_hw", twodads::rhs_t::omega_rhs_hw},
     {"omega_rhs_hwmod", twodads::rhs_t::omega_rhs_hwmod},
     {"omega_rhs_hwzf", twodads::rhs_t::omega_rhs_hwzf},
     {"omega_rhs_ic", twodads::rhs_t::omega_rhs_ic},
+    {"omega_rhs_sheath_nlin", twodads::rhs_t::omega_rhs_sheath_nlin}, 
     {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}
 };
 
@@ -105,7 +112,7 @@ slab_config :: slab_config(string cfg_file) :
 	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
 	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
 	tout(0.0), log_theta(false), do_dealiasing(false), particle_tracking(0), 
-	nprobes(0), nthreads(0), chunksize(0)
+	nprobes(0), chunksize(0)
 {
 	po::options_description cf_opts("Allowed options");
 	po::variables_map vm;
@@ -143,6 +150,7 @@ slab_config :: slab_config(string cfg_file) :
 		("tend", po::value<double>(&tend), "End of simulation")
 		("tdiag", po::value<double>(&tdiag), "Distance between diagnostic output")
 		("tout", po::value<double>(&tout), "Distance between full output")
+        ("nthreads", po::value<unsigned int>(&nthreads), "Number of threads for diagnostic arrays")
 		("model_params", po::value<string> (&model_params_str) , "Model parameters")
 		("theta_rhs", po::value<string> (&theta_rhs_str), "Right hand side function of theta")
 		("omega_rhs", po::value<string> (&omega_rhs_str), "Right hand side function of omega")
@@ -150,7 +158,6 @@ slab_config :: slab_config(string cfg_file) :
 		("output", po::value<string> (&output_str), "List of variables for output")
 		("init_function", po::value<string> (&init_function_str), "Initialization function")
 		("initial_conditions", po::value<string> (&initc_str) , "Initial conditions")
-		("nthreads", po::value<int> (&nthreads), "Number of threads")
 		("chunksize", po::value<int> (&chunksize), "Chunksize")
 		("log_theta", po::value<bool> (&log_theta), "Use logarithmic particle density")
         ("strmf_solver", po::value<string> (&strmf_solver_str), "Stream function solver")
@@ -177,9 +184,6 @@ slab_config :: slab_config(string cfg_file) :
         po::store( parse_config_file(cf_stream, cf_opts ), vm);
 		po::notify(vm);
 	}
-	
-    if(vm.count("nthreads"))
-        nthr = nthreads;    
 	
 	// Split model_params and initial_condition strings at whitespaces, 
 	// convert substrings into floats and store in approproate vectors
@@ -326,8 +330,6 @@ int slab_config :: consistency()
 	// If radial probe diagnostics is specified we need the number of radial probes
 	if (nprobes == 0 ) 
 		throw config_error("Radial probe diagnostics requested but no number of radial probes specified\n");
-    if(Nx % nthreads != 0)
-        throw config_error("Nx must be a multiple of nthreads\n");
             
 	return (0);
 }
@@ -364,6 +366,7 @@ void slab_config :: print_config() const
     cout << "14 log_theta = " << get_log_theta() << endl;
     cout << "15 do_particle_tracking = " << do_particle_tracking() << endl;
     cout << "16 nprobes = " << get_nprobe() << endl;
+    cout << "17 nthreads = " << get_nthreads() << endl;
 
     // Use reverse map lookup technique to map twodads::... types to their keys in
     // maps defined in the top of this file:
@@ -375,30 +378,29 @@ void slab_config :: print_config() const
     //auto it = find_if(rhs_func_map.begin(), rhs_func_map.end(), 
     //        [findval](const pair & p){ return p.second == findval;}
     //        );
-    cout << "17 theta_rhs = " << str_from_map<twodads::rhs_t>(get_theta_rhs_type(), rhs_func_map) << endl;
-    cout << "18 omega_rhs = " << str_from_map<twodads::rhs_t>(get_omega_rhs_type(), rhs_func_map) << endl;
-    cout << "19 strmf_solver = .... defaults, not parsed" << endl;
-    cout << "20 init_function = " << str_from_map<twodads::init_fun_t>(get_init_function(), init_func_map) << endl;
-    cout << "21 initial_conditions = ";
+    cout << "18 theta_rhs = " << str_from_map<twodads::rhs_t>(get_theta_rhs_type(), rhs_func_map) << endl;
+    cout << "19 omega_rhs = " << str_from_map<twodads::rhs_t>(get_omega_rhs_type(), rhs_func_map) << endl;
+    cout << "20 strmf_solver = .... defaults, not parsed" << endl;
+    cout << "21 init_function = " << str_from_map<twodads::init_fun_t>(get_init_function(), init_func_map) << endl;
+    cout << "22 initial_conditions = ";
     for(auto it : get_initc())
         cout << it << ", ";
     cout << endl;
 
-    cout << "22 model_params = ";
+    cout << "23 model_params = ";
     for(auto it : get_model_params())
         cout << it << ", ";
     cout << endl;
 
-    cout << "23 output = ";
+    cout << "24 output = ";
     for(auto it : get_output())
         cout << str_from_map<twodads::output_t>(it, output_map) << "\t";
     cout << endl;
     
-    cout << "24 diagnostics = ";
+    cout << "25 diagnostics = ";
     for(auto it : get_diagnostics())
         cout << str_from_map<twodads::diagnostic_t>(it, diagnostic_map) << "\t";
     cout << endl;
-    cout << "25 nthreads = " << get_nthreads() << endl;
 }
 
 

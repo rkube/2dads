@@ -12,9 +12,11 @@ namespace twodads {
     //typedef std::complex<twodads::real_t> cmplx_t;
 
     // Use PI from math.h
-    constexpr real_t PI = 3.141592653589793;
-    constexpr real_t epsilon{0.000001};
+    constexpr real_t PI{3.141592653589793};
+    constexpr real_t epsilon{0.000001}; //10^-6
 
+    constexpr real_t Sigma{3.185349};
+    
     constexpr int io_w{8}; //width of fields used in cout
     constexpr int io_p{4}; //precision when printing with cout
 
@@ -27,6 +29,7 @@ namespace twodads {
     // in c++98 (used by nvcc) just use f_theta
     // Make sure, all members of enums have a different name
     enum class dyn_field_t {f_theta, ///< theta, thermodynamic variable
+                            f_tau, ///<tau, electron temperature
     		                f_omega  ///< oemga, vorticity
                             };
 
@@ -40,6 +43,9 @@ namespace twodads {
         f_omega,    ///< \f$ \Omega   \f$
         f_omega_x,  ///< \f$ \Omega_x \f$
         f_omega_y,  ///< \f$ \Omega_x \f$ 
+        f_tau,      ///< \f$ \tau \f$
+        f_tau_x,    ///< \f$ \tau_x \f$
+        f_tau_y,    ///< \f$ \tau_x \f$ 
         f_strmf,    ///< \f$ \phi     \f$  
         f_strmf_x,  ///< \f$ \phi_x   \f$ 
         f_strmf_y,  ///< \f$ \phi_y   \f$   
@@ -47,6 +53,7 @@ namespace twodads {
         f_tmp_x,    ///< tmp field
         f_tmp_y,    ///< tmp field
         f_theta_rhs,///< rhs for time integration
+        f_tau_rhs,///< rhs for time integration
         f_omega_rhs ///< rhs for time integration
     };
 
@@ -54,14 +61,16 @@ namespace twodads {
     enum class field_k_t {f_theta_hat,  ///< Fourier coefficients of theta, tlevs time levels
         f_theta_x_hat,  ///< Fourier coefficients of radial derivative of theta, only current time level
         f_theta_y_hat, ///<  Fourier coefficients of poloidal derivative of theta, only current time level
+        f_tau_hat, f_tau_x_hat, f_tau_y_hat,
         f_omega_hat, f_omega_x_hat, f_omega_y_hat,
         f_strmf_hat, f_strmf_x_hat, f_strmf_y_hat,
-        f_theta_rhs_hat, f_omega_rhs_hat, f_tmp_hat};
+        f_theta_rhs_hat, f_tau_rhs_hat, f_omega_rhs_hat, f_tmp_hat};
                
     /// Initialization function
     enum class init_fun_t {init_NA, ///< Not available, throws an error
         init_theta_gaussian,  ///< Initializes gaussian profile for theta, init_function = theta_gaussian
-        init_both_gaussian, ///< Initializes gaussian profile for both, theta and omega
+        init_tau_gaussian,  ///< Initializes gaussian profile for tau, init_function = theta_gaussian
+        init_both_gaussian, ///< Initializes gaussian profile for both, theta and tau
         init_theta_sine,  ///< Initializes sinusoidal profile for theta
         init_omega_sine,  ///< Initializes sinusoidal profile for omega
         init_both_sine,  ///< Initializes sinusoidal profile for theta and omega
@@ -78,18 +87,21 @@ namespace twodads {
      * Defines the right hand side to use
      */
     enum class rhs_t {
-        theta_rhs_ns, ///< Navier-Stokes equation
-        theta_rhs_lin,  ///< interchange model, linear
-        theta_rhs_log, ///< Logarithmic interchange model
-        theta_rhs_hw, ///< Hasegawa-Wakatani model
-        theta_rhs_hwmod, ///< Modified Hasegawa-Wakatani model
-        theta_rhs_null, ///< No explicit terms
-        omega_rhs_ns, ///< Navier-Stokes equation
-        omega_rhs_hw, ///< Hasegawa-Wakatani model
-        omega_rhs_hwmod,  ///< Modified Hasegawa-Wakatani model
-        omega_rhs_hwzf, ///< Modified Hasegawa-Wakatani model, supressed zonal flow
-        omega_rhs_ic, ///< Interchange turbulence
-        omega_rhs_null ///< No explicit terms
+        theta_rhs_ns,          ///< Navier-Stokes equation
+        theta_rhs_lin,         ///< interchange model, linear
+        theta_rhs_log,         ///< Logarithmic interchange model
+        theta_rhs_hw,          ///< Hasegawa-Wakatani model
+        theta_rhs_hwmod,       ///< Modified Hasegawa-Wakatani model
+        theta_rhs_null,        ///< No explicit terms
+        theta_rhs_sheath_nlin, ///< Non-linear sheath losses
+        omega_rhs_ns,          ///< Navier-Stokes equation
+        omega_rhs_hw,          ///< Hasegawa-Wakatani model
+        omega_rhs_hwmod,       ///< Modified Hasegawa-Wakatani model
+        omega_rhs_hwzf,        ///< Modified Hasegawa-Wakatani model, supressed zonal flow
+        omega_rhs_ic,          ///< Interchange turbulence
+        omega_rhs_sheath_nlin, ///< Non-linear sheath losses
+        omega_rhs_null,        ///< No explicit terms (passive advection)
+        tau_rhs_sheath_nlin    ///< Non-linear sheath losses
     };
 
     /*!
@@ -109,7 +121,10 @@ namespace twodads {
     enum class output_t {o_theta,  ///< Theta, thermodynamic variable
         o_theta_x, ///< Radial derivative of theta
         o_theta_y, ///< Poloidal derivative of theta
-        o_omega, o_omega_x, o_omega_y, o_strmf, o_strmf_x, o_strmf_y, o_theta_rhs, o_omega_rhs};
+        o_omega, o_omega_x, o_omega_y, 
+        o_tau, o_tau_x, o_tau_y,
+        o_strmf, o_strmf_x, o_strmf_y, 
+        o_theta_rhs, o_omega_rhs};
 
     /*!
      * Domain layout passed to diagnostic functions
@@ -125,8 +140,6 @@ namespace twodads {
         real_t delta_y;
         real_t delta_t;
     } __attribute__ ((aligned (8)));
-
-
 };
 
 
