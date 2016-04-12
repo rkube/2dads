@@ -15,7 +15,7 @@ namespace twodads {
     constexpr real_t PI{3.141592653589793};
     constexpr real_t epsilon{0.000001}; //10^-6
 
-    constexpr real_t Sigma{3.185349};
+    constexpr real_t Sigma{-3.185349};
     
     constexpr int io_w{8}; //width of fields used in cout
     constexpr int io_p{4}; //precision when printing with cout
@@ -68,7 +68,14 @@ namespace twodads {
                
     /// Initialization function
     enum class init_fun_t {init_NA, ///< Not available, throws an error
-        init_theta_gaussian,  ///< Initializes gaussian profile for theta, init_function = theta_gaussian
+        init_gaussian,  ///< Initializes gaussian profile 
+        init_constant, ///< Initialize field with constant value
+        init_sine, ///< Initializes sinusoidal profile for theta
+        init_mode, ///< Initializes single modes for theta_hat
+        init_turbulent_bath, ///< Initialize all modes randomly
+        init_lamb_dipole ///<Lamb Dipole
+    };
+    /*
         init_tau_gaussian,  ///< Initializes gaussian profile for tau, init_function = theta_gaussian
         init_both_gaussian, ///< Initializes gaussian profile for both, theta and tau
         init_theta_sine,  ///< Initializes sinusoidal profile for theta
@@ -81,7 +88,7 @@ namespace twodads {
         init_both_mode, ///< Initializes single modes for theta_hat and omega_hat
         init_lamb,
         init_file, ///< Input from input.h5
-    };
+    };*/
 
     /*!
      * Defines the right hand side to use
@@ -101,7 +108,8 @@ namespace twodads {
         omega_rhs_ic,          ///< Interchange turbulence
         omega_rhs_sheath_nlin, ///< Non-linear sheath losses
         omega_rhs_null,        ///< No explicit terms (passive advection)
-        tau_rhs_sheath_nlin    ///< Non-linear sheath losses
+        tau_rhs_sheath_nlin,   ///< Non-linear sheath losses
+        tau_rhs_null           ///< No explicit terms
     };
 
     /*!
@@ -124,7 +132,7 @@ namespace twodads {
         o_omega, o_omega_x, o_omega_y, 
         o_tau, o_tau_x, o_tau_y,
         o_strmf, o_strmf_x, o_strmf_y, 
-        o_theta_rhs, o_omega_rhs};
+        o_theta_rhs, o_tau_rhs, o_omega_rhs};
 
     /*!
      * Domain layout passed to diagnostic functions

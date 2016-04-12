@@ -96,8 +96,12 @@ public:
      */
 	inline double get_tout() const { return tout; };
 	
-	/// Use logarithmic formulation of thermodynamic variable?.
+	/// Use logarithmic formulation of density variable.
 	inline bool get_log_theta() const { return log_theta; };
+	/// Use logarithmic formulation of temperature variable.
+	inline bool get_log_tau() const { return log_tau; };
+
+    inline static bool get_log_omega() { return false; };
 	/// Use particle tracking?.
     inline int do_particle_tracking() const { return particle_tracking; };
     /// Number of radial probes
@@ -119,18 +123,45 @@ public:
 	/// Value of a specific model parameter.
 	inline double get_model_params(int i) const { return model_params[i]; };
 
-	/// Vector of all initial conditions.
-	inline vector<double> get_initc() const { return initc; };
+	/// Vector of initial conditions for theta
+	inline vector<double> get_initc_theta() const { return initc_theta; };
+
+	/// Vector of initial conditions for tau
+	inline vector<double> get_initc_tau() const { return initc_tau; };
+
+	/// Vector of initial conditions for omega
+	inline vector<double> get_initc_omega() const { return initc_omega; };
+
 	/*!
      * \brief Value of a specific initial condition.
-     * \returns array of initial conditions: \f$ \{i_0, \ldots, i_n\} \f$
+     * \returns Value of initial parameter i 
      */
-	inline double get_initc(int i) const { return initc[i]; };
-	//string get_initial_conditions_str() const;
+	inline double get_initc_theta(int i) const { return initc_theta[i]; };
+	
+	/*!
+     * \brief Value of a specific initial condition.
+     * \returns Value of initial parameter i 
+     */
+	inline double get_initc_tau(int i) const { return initc_tau[i]; };
+	
+	/*!
+     * \brief Value of a specific initial condition.
+     * \returns Value of initial parameter i 
+     */
+	inline double get_initc_omega(int i) const { return initc_omega[i]; };
 	
 	/// Return the initialization routine.
-	inline string get_init_function_str() const {return init_function_str;};
-	inline twodads::init_fun_t get_init_function() const { return init_function; };
+	inline string get_init_function_theta_str() const {return init_function_theta_str;};
+	inline twodads::init_fun_t get_init_function_theta() const { return init_function_theta; };
+
+	/// Return the initialization routine.
+	inline string get_init_function_tau_str() const {return init_function_tau_str;};
+	inline twodads::init_fun_t get_init_function_tau() const { return init_function_tau; };
+
+	/// Return the initialization routine.
+	inline string get_init_function_omega_str() const {return init_function_omega_str;};
+	inline twodads::init_fun_t get_init_function_omega() const { return init_function_omega; };
+
     /*!
 	 \brief Return type of RHS for theta equation. <br>
      \detailed theta_gaussian: \f$\theta(x,y) = i_0 + i_1 \exp( -(x - i_3)^2 / (2 i_4)^2 - (y - i_4)^2 / (2 i_5^2))\f$, \f$ \Omega(x,y) = 0 \f$ <br>
@@ -198,6 +229,7 @@ private:
 	double tdiag;
 	double tout;
 	bool log_theta;
+    bool log_tau;
 	bool do_dealiasing;
     bool do_randomize_modes;
     int particle_tracking;
@@ -207,13 +239,20 @@ private:
     twodads::rhs_t theta_rhs;
     twodads::rhs_t omega_rhs;
     twodads::rhs_t tau_rhs;
-    twodads::init_fun_t init_function;
-    string init_function_str;
+    twodads::init_fun_t init_function_theta;
+    twodads::init_fun_t init_function_tau;
+    twodads::init_fun_t init_function_omega;
+    string init_function_theta_str;
+    string init_function_tau_str;
+    string init_function_omega_str;
 
     vector<twodads::diagnostic_t> diagnostics;
     vector<twodads::output_t> output;
 
-	vector<double> initc;
+	vector<double> initc_theta;
+	vector<double> initc_tau;
+	vector<double> initc_omega;
+
 	vector<double> model_params;
 	string initial_conditions_str;
     string shift_modes_str;
@@ -228,5 +267,28 @@ private:
     static const map<std::string, twodads::init_fun_t> init_func_map;
     static const map<std::string, twodads::rhs_t> rhs_func_map;
 };
+
+/*
+ * Safely return a value from a map. Catch errors and throw a nice error message
+ * Use .at() for map access. Throws out of range errors, when keys are requested that are not initialized
+ */
+
+template<typename R>
+R map_safe_select(string varname, map<std::string, R> mymap)
+{
+    R ret_val;
+    try{
+        ret_val = mymap.at(varname);
+    } catch (const std::out_of_range& oor)
+    {
+        stringstream err_msg;
+        err_msg << "Invalid selection" << varname << endl;
+        err_msg << "Valid strings are: " << endl;
+        for(auto const &it : mymap)
+            err_msg << it.first << endl;
+        throw out_of_range(err_msg.str());
+    }
+    return (ret_val);
+}
 
 #endif //CONFIG_H

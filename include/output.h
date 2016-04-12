@@ -74,6 +74,9 @@ private:
     Group* group_theta;
     Group* group_theta_x;
     Group* group_theta_y;
+    Group* group_tau;
+    Group* group_tau_x;
+    Group* group_tau_y;
     Group* group_omega;
     Group* group_omega_x;
     Group* group_omega_y;
@@ -90,6 +93,9 @@ private:
     DataSpace dspace_theta;
     DataSpace dspace_theta_x;
     DataSpace dspace_theta_y;
+    DataSpace dspace_tau;
+    DataSpace dspace_tau_x;
+    DataSpace dspace_tau_y;
     DataSpace dspace_omega;
     DataSpace dspace_omega_x;
     DataSpace dspace_omega_y;

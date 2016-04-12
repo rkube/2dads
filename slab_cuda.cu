@@ -14,9 +14,6 @@ void d_kill_ky0(cuda::cmplx_t* in, const uint My, const uint Nx21)
 {
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
 
-//    if (col >= Nx21)
-//        return;
-//
     if(col < Nx21)    
         in[col] = cuda::cmplx_t(0.0, 0.0);
 }
@@ -263,16 +260,16 @@ void d_pbracket(cuda::real_t* f_x, cuda::real_t* f_y, cuda::real_t* g_x, cuda::r
 
 
 // RHS for logarithmic density field:
-// theta_x * strmf_x - theta_y * strmf_x + diff * (theta_x^2 + theta_y^2)
+// theta_x * strmf_y - theta_y * strmf_x + diff * (theta_x^2 + theta_y^2)
 __global__
-void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t diff, cuda::real_t* tmp_arr, const uint My, const uint Nx)
+void d_theta_rhs_log(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t diff, cuda::real_t* res, const uint My, const uint Nx)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * Nx + col;
 
     if((row < My) && (col < Nx))
-    	tmp_arr[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
+    	res[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
     return;
 }
 
@@ -288,6 +285,25 @@ void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
     return;
 }
 
+
+__global__
+void d_theta_sheath_nlin(cuda::real_t* res, cuda::real_t* theta_x, cuda::real_t* theta_y,
+                         cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* tau,
+                         const cuda::real_t alpha, const cuda::real_t delta, const cuda::real_t diff, 
+                         const uint My, const uint Nx)
+{
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * Nx + col;
+
+    const double expT = exp(tau[idx]);
+    if ((row < My) && (col < Nx))
+        res[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx]
+                   - alpha * sqrt(expT) * exp(twodads::Sigma - delta * strmf[idx] / expT)
+                   + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
+    return;
+}
+   
 
 __global__
 void d_theta_rhs_hw_debug(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, cuda::cmplx_t* strmf_y_hat, const cuda::real_t C, const uint My, const uint Nx21)
@@ -307,32 +323,37 @@ void d_theta_rhs_hw_debug(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat
 // RHS for vorticity eq, interchange turbulence
 // RHS = RHS - int * theta_y - sdiss * strmf - collfric * omega
 __global__
-void d_omega_ic(cuda::cmplx_t* theta_y_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* omega_hat, const cuda::real_t ic, const cuda::real_t sdiss, const cuda::real_t cfric, cuda::cmplx_t* out, const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-
-    if((row < My) && (col < Nx21))
-    	out[idx] = out[idx] - theta_y_hat[idx] * ic + strmf_hat[idx] * sdiss + omega_hat[idx] * cfric;
-    return;
-}
-
-
-__global__
-void d_omega_sheath_nlin(cuda::real_t* result, cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y, 
-                         cuda::real_t* omega_x, cuda::real_t* omega_y, cuda::real_t* tau, 
-                         cuda::real_t* theta_y, cuda::real_t* tau_y, 
-                         const cuda::real_t alpha, const cuda::real_t beta, const cuda::real_t delta, const uint My, const uint Nx)
+void d_omega_ic(cuda::real_t* res, cuda::real_t* omega, cuda::real_t* omega_x, cuda::real_t* omega_y,
+                cuda::real_t* strmf, 
+                cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* theta_y,
+                const cuda::real_t ic, const cuda::real_t sdiss, const cuda::real_t cfric, 
+                const uint My, const uint Nx)
 {
     const uint row = blockIdx.y * blockDim.y + threadIdx.y;
     const uint col = blockIdx.x * blockDim.x + threadIdx.x;
     const uint idx = row * Nx + col;
 
     if((row < My) && (col < Nx))
-    	result[idx] = strmf_y[idx] * omega_x[idx] - strmf_x[idx] * omega_y[idx] 
-                      + alpha * beta * (1.0 - exp(twodads::Sigma - delta * strmf[idx] / tau[idx]))
-                      - exp(tau[idx]) * (theta_y[idx] + tau_y[idx]);
+        res[idx] = omega_x[idx] * strmf_y[idx] - omega_y[idx] * strmf_x[idx] - theta_y[idx] * ic + strmf[idx] * sdiss + omega[idx] * cfric;
+    return;
+}
+
+
+__global__
+void d_omega_sheath_nlin(cuda::real_t* result, cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y, 
+                         cuda::real_t* omega_x, cuda::real_t* omega_y, cuda::real_t* tau, cuda::real_t* tau_y,
+                         cuda::real_t* theta_y, 
+                         const cuda::real_t beta, const cuda::real_t delta, const uint My, const uint Nx)
+{
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * Nx + col;
+
+    const double expT = exp(tau[idx]);
+    if((row < My) && (col < Nx))
+    	result[idx] = omega_x[idx] * strmf_y[idx] - omega_y[idx] * strmf_x[idx] 
+                      + beta * (1.0 - exp(twodads::Sigma - delta * strmf[idx] / expT))
+                      - expT * (theta_y[idx] + tau_y[idx]);
     return;
 }
 
@@ -363,6 +384,25 @@ void d_omega_rhs_hw(cuda::cmplx_t* omega_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
 
 
 __global__
+void d_tau_sheath_nlin(cuda::real_t* rhs, cuda::real_t* tau_x, cuda::real_t* tau_y,
+                       cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* tau,
+                       const cuda::real_t alpha, const cuda::real_t delta, const cuda::real_t diff, 
+                       const uint My, const uint Nx)
+{
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * Nx + col;
+
+    const double expT = exp(tau[idx]);
+    if ((row < My) && (col < Nx))
+        rhs[idx] = tau_x[idx] * strmf_y[idx] - tau_y[idx] * strmf_x[idx]
+                   - 4.0 * alpha * sqrt(expT) * exp(twodads::Sigma - delta * strmf[idx] / expT)
+                   + diff * (tau_x[idx] * tau_x[idx] + tau_y[idx] * tau_y[idx]);
+    return;
+}
+ 
+
+__global__
 void d_coupling_hwmod(cuda::cmplx_t* rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cmplx_t* theta_hat, const cuda::real_t C, const uint My, const uint Nx21)
 {
     // Start row with offset 1, this skips all ky=0 modes
@@ -376,28 +416,11 @@ void d_coupling_hwmod(cuda::cmplx_t* rhs_hat, cuda::cmplx_t* strmf_hat, cuda::cm
 }
 
 
-__global__
-void d_sheath_nlin(cuda::real_t* rhs, cuda::real_t* tau, cuda::real_t* tau_x, cuda::real_t* tau_y,
-                   cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y,
-                   const cuda::real_t alpha, const cuda::real_t delta, const cuda::real_t diff, 
-                   const uint My, const uint Nx)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx + col;
-
-    if ((row < My) && (col < Nx))
-        rhs[idx] = tau_x[idx] * strmf_y[idx] - tau_y[idx] * strmf_y[idx] 
-                   + alpha * sqrt(tau[idx]) * exp(twodads::Sigma - delta * strmf[idx] / tau[idx]) 
-                   + diff * (tau_x[idx] * tau_x[idx] + tau_y[idx] * tau_y[idx]);
-    return;
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // 
 //
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 map<twodads::rhs_t, slab_cuda::rhs_fun_ptr> slab_cuda :: rhs_func_map = slab_cuda::create_rhs_func_map();
 
@@ -409,18 +432,18 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
     Nx(my_config.get_nx()),
     tlevs(my_config.get_tlevs()),
     theta(1, My, Nx), theta_x(1, My, Nx), theta_y(1, My, Nx),
+    tau  (1, My, Nx), tau_x  (1, My, Nx), tau_y  (1, My, Nx),
     omega(1, My, Nx), omega_x(1, My, Nx), omega_y(1, My, Nx),
-    tau(1, My, Nx), tau_x(1, My, Nx), tau_y(1, My, Nx),
     strmf(1, My, Nx), strmf_x(1, My, Nx), strmf_y(1, My, Nx),
     tmp_array(1, My, Nx), tmp_x_array(1, My, Nx), tmp_y_array(1, My, Nx), 
     theta_rhs(1, My, Nx), tau_rhs(1, My, Nx), omega_rhs(1, My, Nx),
     theta_hat(tlevs, My, Nx / 2 + 1), theta_x_hat(1, My, Nx / 2 + 1), theta_y_hat(1, My, Nx / 2 + 1),
-    tau_hat(tlevs, My, Nx / 2 + 1), tau_x_hat(1, My, Nx / 2 + 1), tau_y_hat(1, My, Nx / 2 + 1),
+    tau_hat  (tlevs, My, Nx / 2 + 1), tau_x_hat  (1, My, Nx / 2 + 1), tau_y_hat  (1, My, Nx / 2 + 1),
     omega_hat(tlevs, My, Nx / 2 + 1), omega_x_hat(1, My, Nx / 2 + 1), omega_y_hat(1, My, Nx / 2 + 1),
     strmf_hat(1,     My, Nx / 2 + 1), strmf_x_hat(1, My, Nx / 2 + 1), strmf_y_hat(1, My, Nx / 2 + 1),
     tmp_array_hat(1, My, Nx / 2 + 1), 
     theta_rhs_hat(tlevs - 1, My, Nx / 2 + 1),
-    tau_rhs_hat(tlevs - 1, My, Nx / 2 + 1),
+    tau_rhs_hat  (tlevs - 1, My, Nx / 2 + 1),
     omega_rhs_hat(tlevs - 1, My, Nx / 2 + 1),
     dft_is_initialized(init_dft()),
     stiff_params(config.get_deltat(), config.get_lengthx(), config.get_lengthy(), config.get_model_params(0),
@@ -469,6 +492,7 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
 		                 {twodads::field_k_t::f_strmf_x_hat,    &strmf_x_hat},
 		                 {twodads::field_k_t::f_strmf_y_hat,    &strmf_y_hat},
 		                 {twodads::field_k_t::f_theta_rhs_hat,  &theta_rhs_hat},
+		                 {twodads::field_k_t::f_tau_rhs_hat,    &tau_rhs_hat},
 		                 {twodads::field_k_t::f_omega_rhs_hat,  &omega_rhs_hat},
 		                 {twodads::field_k_t::f_tmp_hat,        &tmp_array_hat}},
     get_output_by_name{ {twodads::output_t::o_theta,     &theta},
@@ -484,6 +508,7 @@ slab_cuda :: slab_cuda(const slab_config& my_config) :
 		                {twodads::output_t::o_strmf_x,   &strmf_x},
 		                {twodads::output_t::o_strmf_y,   &strmf_y},
 		                {twodads::output_t::o_theta_rhs, &theta_rhs},
+		                {twodads::output_t::o_tau_rhs, &tau_rhs},
 		                {twodads::output_t::o_omega_rhs, &omega_rhs}},
     rhs_array_map{ {twodads::field_k_t::f_theta_hat, &theta_rhs_hat},
                    {twodads::field_k_t::f_tau_hat, &tau_rhs_hat},
@@ -543,110 +568,118 @@ void slab_cuda :: test_slab_config()
 
 void slab_cuda :: initialize()
 {
-    switch(config.get_init_function())
+    // In this switch block we compute all initial fields (theta, omega and/or strmf)
+    // After this block the slab is in the following state:
+    // * theta, tau, omega and/or strmf are in the desired initial state
+    // * theta_hat, tau_hat, omega_hat are initialized for tlev - 1
+    // * strmf_hat is initialized at tlev=0 (since it is not a dynamic field)
+    // * spatial derivatives have not been computed 
+    // * RHS has not been evaluated
+    switch(config.get_init_function_theta())
     {
-        // In this switch block we compute all initial fields (theta, omega and/or strmf)
-        // After this block the slab is in the following state:
-        // * theta, tau, omega and/or strmf are in the desired initial state
-        // * theta_hat, tau_hat, omega_hat are initialized for tlev - 1
-        // * strmf_hat is initialized at tlev=0 (since it is not a dynamic field)
-        // * spatial derivatives have not been computed 
-        // * RHS has not been evaluated
-        case twodads::init_fun_t::init_theta_gaussian:
-            init_gaussian(&theta, config.get_initc(), slab_layout, config.get_log_theta());
+        case twodads::init_fun_t::init_gaussian:
+            init_gaussian(&theta, config.get_initc_theta(), slab_layout, config.get_log_theta());
+            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
+            break;
+    
+        case twodads::init_fun_t::init_constant:
+            if(config.get_log_theta())
+                theta = log(config.get_initc_theta(0));
+            else
+                theta = config.get_initc_theta(0);
+
             dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
             break;
 
-        case twodads::init_fun_t::init_both_gaussian:
-            init_gaussian(&theta, config.get_initc(), slab_layout, config.get_log_theta());
+        case twodads::init_fun_t::init_sine:
+            init_simple_sine(&theta, config.get_initc_theta(), slab_layout);
             dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
-
-            init_gaussian(&tau, config.get_initc(), slab_layout, config.get_log_theta());
-            dft_r2c(twodads::field_t::f_tau, twodads::field_k_t::f_tau_hat, config.get_tlevs() - 1);
-
-            //inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
             break;
 
-        case twodads::init_fun_t::init_theta_mode:
-            init_mode(&theta_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_theta_hat, twodads::field_t::f_theta, config.get_tlevs() - 1);
-
-            break;
-
-        case twodads::init_fun_t::init_omega_mode:
-            init_mode(&omega_hat, config.get_initc(), slab_layout, config.get_tlevs()  - 1);
-
-            // Compute stream function and spatial derivatives for omega, and phi
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
-            break;
-
-        case twodads::init_fun_t::init_both_mode:
-            init_mode(&theta_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
-            init_mode(&omega_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
-
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
-
+        case twodads::init_fun_t::init_mode:
+            init_mode(&theta_hat, config.get_initc_theta(), slab_layout, config.get_tlevs() - 1);
             break;
 
         case twodads::init_fun_t::init_turbulent_bath:
         	init_turbulent_bath(&theta_hat, slab_layout, config.get_tlevs() - 1);
-        	init_turbulent_bath(&omega_hat, slab_layout, config.get_tlevs() - 1);
-        	inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-
-        	break;
-
-        case twodads::init_fun_t::init_theta_sine:
-            init_simple_sine(&theta, config.get_initc(), slab_layout);
-            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
             break;
 
-        case twodads::init_fun_t::init_omega_sine:
-            init_simple_sine(&omega, config.get_initc(), slab_layout);
-            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
-
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
-            break;
-
-        case twodads::init_fun_t::init_both_sine:
-            init_simple_sine(&theta, config.get_initc(), slab_layout);
-            dft_r2c(twodads::field_t::f_theta, twodads::field_k_t::f_theta_hat, config.get_tlevs() - 1);
-            init_simple_sine(&omega, config.get_initc(), slab_layout);
-            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
-
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
-            break;
-
-        case twodads::init_fun_t::init_test:
-            init_invlapl(&theta, config.get_initc(), slab_layout);
-            //dft_r2c(twodads::f_theta, twodads::f_theta_hat, config.get_tlevs() - 1);
-            //move_t(twodads::f_theta_hat, config.get_tlevs() - 1, 0);
-            //init_all_modes(&omega_hat, config.get_initc(), slab_layout, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_omega_hat, twodads::field_t::f_omega, config.get_tlevs() - 1);
-
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-            //dft_c2r(twodads::field_k_t::f_strmf_hat, twodads::field_t::f_strmf, 0);
-            break;
-
-        // Initialize Lamb Dipole in Omega
-        case twodads::init_fun_t::init_lamb:
-            init_lamb(&omega, config.get_initc(), slab_layout);
-            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
-            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
-
+        case twodads::init_fun_t::init_lamb_dipole:
             theta_hat = cuda::cmplx_t(0.0, 0.0);
-
-            break;
-
-        case twodads::init_fun_t::init_file:
             break;
         default:
-        	throw config_error(string("init function: ") + config.get_init_function_str() + string(" is mapped to init_NA\n"));
+        	throw config_error(string("init function: ") + config.get_init_function_theta_str() + string(" is mapped to init_NA\n"));
+    }
 
+    switch(config.get_init_function_omega())
+    {
+        case twodads::init_fun_t::init_gaussian:
+            init_gaussian(&omega, config.get_initc_omega(), slab_layout, config.get_log_omega());
+            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+            break;
+    
+        case twodads::init_fun_t::init_constant:
+            omega = config.get_initc_omega(0);
+            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_sine:
+            init_simple_sine(&omega, config.get_initc_omega(), slab_layout);
+            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_mode:
+            init_mode(&omega_hat, config.get_initc_omega(), slab_layout, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_turbulent_bath:
+        	init_turbulent_bath(&omega_hat, slab_layout, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_lamb_dipole:
+            init_lamb(&omega, config.get_initc_omega(), slab_layout);
+            dft_r2c(twodads::field_t::f_omega, twodads::field_k_t::f_omega_hat, config.get_tlevs() - 1);
+            inv_laplace(twodads::field_k_t::f_omega_hat, twodads::field_k_t::f_strmf_hat, config.get_tlevs() - 1);
+            break;
+        default:
+        	throw config_error(string("init function: ") + config.get_init_function_omega_str() + string(" is mapped to init_NA\n"));
+
+    }
+
+    switch(config.get_init_function_tau())
+    {
+        case twodads::init_fun_t::init_gaussian:
+            init_gaussian(&tau, config.get_initc_tau(), slab_layout, config.get_log_tau());
+            dft_r2c(twodads::field_t::f_tau, twodads::field_k_t::f_tau_hat, config.get_tlevs() - 1);
+            break;
+    
+        case twodads::init_fun_t::init_constant:
+            if(config.get_log_tau())
+                tau = log(config.get_initc_tau(0));
+            else
+                tau = config.get_initc_tau(0);
+            dft_r2c(twodads::field_t::f_tau, twodads::field_k_t::f_tau_hat, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_sine:
+            init_simple_sine(&tau, config.get_initc_tau(), slab_layout);
+            dft_r2c(twodads::field_t::f_tau, twodads::field_k_t::f_tau_hat, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_mode:
+            init_mode(&tau_hat, config.get_initc_tau(), slab_layout, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_turbulent_bath:
+        	init_turbulent_bath(&tau_hat, slab_layout, config.get_tlevs() - 1);
+            break;
+
+        case twodads::init_fun_t::init_lamb_dipole:
+            tau_hat = cuda::cmplx_t(0.0, 0.0);
+            break;
+
+        default:
+        	throw config_error(string("init function: ") + config.get_init_function_tau_str() + string(" is mapped to init_NA\n"));
     }
 
     // Compute spatial derivatives and RHS
@@ -728,6 +761,8 @@ void slab_cuda :: advance()
 {
     theta_hat.advance();
     theta_rhs_hat.advance();
+    tau_hat.advance();
+    tau_rhs_hat.advance();
     omega_hat.advance();
     omega_rhs_hat.advance();
 }
@@ -989,7 +1024,6 @@ void slab_cuda :: print_field(const twodads::field_t field_name, const string fi
 }
 
 
-
 // print complex field on terminal, all time levels
 void slab_cuda :: print_field(const twodads::field_k_t field_name) const
 {
@@ -1159,7 +1193,6 @@ void slab_cuda :: integrate_stiff(const twodads::field_k_t fname, const uint tle
     cuda_arr_cmplx* A_rhs = rhs_array_map.at(fname);
 
     //d_integrate_stiff_debug<<<1, 1>>>(A -> get_array_d_t(), A_rhs -> get_array_d_t(), d_ss3_alpha, d_ss3_beta, stiff_params, tlev, 4, 4);
-
     switch(tlev)
     {
      case 2:
@@ -1203,7 +1236,6 @@ void slab_cuda :: theta_rhs_null(const uint t)
 }
 
 
-
 // Compute RHS for Navier stokes model, store result in time index 0 of theta_rhs_hat
 void slab_cuda :: theta_rhs_ns(const uint t_src)
 {
@@ -1231,19 +1263,13 @@ void slab_cuda :: theta_rhs_hw(const uint t_src)
     // Zero out RHS
     tmp_array.op_scalar_t<d_op1_assign<cuda::real_t> >(0.0, 0);
 
-    //cout << "theta_rhs_hw: tmp_array = " << tmp_array; 
     // Comupute poisson bracket
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
     gpuStatus();
-    //cout << "Poisson bracket (real space) = " << tmp_array;
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_tmp_hat, 0);
-    //cout << "Poisson bracket (fourier space) = " << tmp_array_hat << endl;
     //Copy poisson bracket to new RHS
-
     d_theta_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(tmp_array_hat.get_array_d(), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), strmf_y_hat.get_array_d(), C, My, Nx / 2 + 1);
     gpuStatus();
-
-    //cout << "After theta rhs hw" << tmp_array_hat << endl;
 
     theta_rhs_hat.op_array_t<d_op1_assign<cuda::cmplx_t> >(tmp_array_hat, 0);
 }
@@ -1267,8 +1293,6 @@ void slab_cuda :: theta_rhs_hwmod(const uint t_src)
 
 void slab_cuda :: theta_rhs_log(const uint t_src)
 {
-    //d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
-    //d_theta_rhs_log<<<grid_my_nx21, block_my_nx21>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
     d_theta_rhs_log<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
     gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
@@ -1281,11 +1305,12 @@ void slab_cuda :: theta_rhs_sheath_nlin(const uint t_src)
     static const cuda::real_t delta = config.get_model_params(4);
     static const cuda::real_t diff = config.get_model_params(0);
 
-    d_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), theta.get_array_d(0), theta_x.get_array_d(0), theta_y.get_array_d(0),
-                                               strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0),
-                                               alpha, delta, diff, My, Nx);
+    d_theta_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), theta_x.get_array_d(0), theta_y.get_array_d(0),
+                                                     strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0), tau.get_array_d(0),
+                                                     alpha, delta, diff, My, Nx);
+    gpuStatus();
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
-
 
 
 //Set explicit part for omega equation to zero
@@ -1293,7 +1318,6 @@ void slab_cuda :: omega_rhs_null(const uint t)
 {
     omega_rhs_hat.op_scalar_t<d_op1_assign<cuda::cmplx_t> >(cuda::cmplx_t(0.0, 0.0), 0);
 }
-
 
 
 /// Explicit part for Navier-Stokes model
@@ -1356,8 +1380,6 @@ void slab_cuda :: omega_rhs_hw(const uint t_src)
     gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_tmp_hat, 0);
 
-    //omega_rhs_hat.op_scalar_t<d_op1_assign<cuda::cmplx_t> >(cuda::cmplx_t(0.0, 0.0), 0);
-    //d_omega_rhs_hw_debug<<<1, 1>>>(omega_rhs_hat.get_array_d(0), strmf_hat.get_array_d(0), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
     d_omega_rhs_hw<<<grid_my_nx21, block_my_nx21>>>(tmp_array_hat.get_array_d(), strmf_hat.get_array_d(), theta_hat.get_array_d(t_src), C, My, Nx / 2 + 1);
     gpuStatus();
 
@@ -1368,8 +1390,6 @@ void slab_cuda :: omega_rhs_hw(const uint t_src)
 void slab_cuda :: omega_rhs_hwmod(const uint t_src)
 {
     static const cuda::real_t C = config.get_model_params(2);
-    //cout << "omega_rhs_hw, grid_my_nx = (" << grid_my_nx.x << ", " << grid_my_nx.y << ")" << endl;
-    //cout << "             block_my_nx = (" << block_my_nx.x << ", " << block_my_nx.y << ") " << endl;
     d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
     gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
@@ -1391,7 +1411,6 @@ void slab_cuda :: omega_rhs_hwzf(const uint t_src)
     gpuStatus();
 }
 
-
 void slab_cuda::omega_rhs_ic(const uint t_src)
 {
     // Convert model parameters to complex numbers
@@ -1399,30 +1418,33 @@ void slab_cuda::omega_rhs_ic(const uint t_src)
     static const cuda::real_t sdiss = config.get_model_params(3);
     static const cuda::real_t cfric = config.get_model_params(4);
 
-    // Compute Poisson bracket in real space, use full grid/block
-    d_pbracket<<<grid_my_nx, block_my_nx>>>(omega_x.get_array_d(), omega_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), Nx, My);
-    gpuStatus();
-    //dft_r2c(twodads::f_tmp, twodads::f_tmp_hat, 0);
+#ifdef DEBUG
+    cout << "omega_rhs_ic" << endl;
+    cout << "ic = " << ic << ", sdiss = " << sdiss << ", cfric = " << cfric << endl;
+    cout << "grid = (" << omega_hat.get_grid().x << ", " << omega_hat.get_grid().y << "), block = (" << omega_hat.get_block().x << ", " << omega_hat.get_block().y << ")" << endl;
+#endif //DEBUG
+    d_omega_ic<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(), omega.get_array_d(), omega_x.get_array_d(), 
+                                            omega_y.get_array_d(), strmf.get_array_d(), strmf_x.get_array_d(), 
+                                            strmf_y.get_array_d(), theta_y.get_array_d(),
+                                            ic, sdiss, cfric, My, Nx);
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
-//#ifdef DEBUG
-//    cout << "omega_rhs\n";
-//    cout << "ic = " << ic << ", sdiss = " << sdiss << ", cfric = " << cfric << "\n";
-//    cout << "grid = (" << omega_hat.get_grid().x << ", " << omega_hat.get_grid().y << "), block = (" << omega_hat.get_block().x << ", " << omega_hat.get_block().y << ")\n";
-//#endif //DEBUG
-    d_omega_ic<<<grid_my_nx21, block_my_nx21>>>(theta_y_hat.get_array_d(0), strmf_hat.get_array_d(0), omega_hat.get_array_d(t_src), ic, sdiss, cfric, omega_rhs_hat.get_array_d(0), My, Nx / 2 + 1);
     gpuStatus();
 }
 
 
 void slab_cuda :: omega_rhs_sheath_nlin(const uint t_src)
 {
-    static const cuda::real_t alpha = config.get_model_params(2);
     static const cuda::real_t beta = config.get_model_params(3);
     static const cuda::real_t delta = config.get_model_params(4);
 
+#ifdef DEBUG
+    cout << "omega_rhs_sheath_nlin " << endl;
+    cout << "alpha = " << alpha << ", beta = " << beta << ", delta = " << delta << endl;
+#endif //DEBUG
     d_omega_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0),
-                                                     omega_x.get_array_d(0), omega_y.get_array_d(0), tau.get_array_d(0), theta.get_array_d(0), theta_y.get_array_d(0),
-                                                     alpha, beta, delta, My, Nx);
+                                                     omega_x.get_array_d(0), omega_y.get_array_d(0), tau.get_array_d(0), 
+                                                     tau_y.get_array_d(0), theta_y.get_array_d(0),
+                                                     beta, delta, My, Nx);
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_omega_rhs_hat, 0);
 }
 
@@ -1433,11 +1455,20 @@ void slab_cuda :: tau_rhs_sheath_nlin(const uint t_src)
     static const cuda::real_t delta = config.get_model_params(4);
     static const cuda::real_t diff = config.get_model_params(0);
 
-    d_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), tau.get_array_d(0), tau_x.get_array_d(0), tau_y.get_array_d(0),
-                                               strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0),
-                                               alpha, delta, diff, My, Nx);
+#ifdef DEBUG
+    cout << "tau_rhs_sheath_nlin " << endl;
+    cout << "alpha = " << alpha << ", delta = " << delta << ", diff = " << diff << endl;
+#endif //DEBUG
+    d_tau_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), tau_x.get_array_d(0), tau_y.get_array_d(0),
+                                                     strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0), tau.get_array_d(0), 
+                                                     alpha, delta, diff, My, Nx);
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_tau_rhs_hat, 0);
 }
 
+
+void slab_cuda :: tau_rhs_null(const uint t_src)
+{
+    tau_rhs_hat.op_scalar_t<d_op1_assign<cuda::cmplx_t> >(cuda::cmplx_t(0.0, 0.0), 0);
+}
 
 // End of file slab_cuda.cu

@@ -8,7 +8,6 @@
 #include <fstream>
 #include "diagnostics_cu.h"
 
-
 const map <twodads::diagnostic_t, std::string> dfile_fname{
 	{twodads::diagnostic_t::diag_blobs, "cu_blobs.dat"},
 	{twodads::diagnostic_t::diag_probes, "cu_probes.dat"},
@@ -62,7 +61,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& cfg) :
     dt_diag(config.get_tdiag()),
     n_probes(config.get_nprobe()),
     use_log_theta(config.get_log_theta()),
-    theta_bg(config.get_initc(0)),
+    theta_bg(config.get_initc_theta(0)),
     get_darr_by_name{{twodads::field_t::f_theta,     &theta},
                 	 {twodads::field_t::f_theta_x,   &theta_x},
                 	 {twodads::field_t::f_theta_y,   &theta_y},
@@ -308,10 +307,10 @@ void diagnostics_cu :: diag_blobs(const twodads::real_t time)
 
 	// Compute mass-center position
 	theta_int = theta.get_sum();
-	theta_com_x = (theta * x_arr).get_sum();
-	theta_com_y = (theta * y_arr).get_sum();
-	theta_com_x /= theta_int;
-	theta_com_y /= theta_int;
+	theta_com_x = (theta * x_arr).get_sum() / theta_int;
+	theta_com_y = (theta * y_arr).get_sum() / theta_int;
+	//theta_com_x /= theta_int;
+	//theta_com_y /= theta_int;
 	theta_int *= dA;
 
 	// Compute dispersion

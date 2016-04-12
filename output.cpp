@@ -77,9 +77,9 @@ output_h5 :: output_h5(slab_config config) :
     fname_map[twodads::output_t::o_theta] = "N/";
     fname_map[twodads::output_t::o_theta_x] = "Nx/";
     fname_map[twodads::output_t::o_theta_y] = "Ny/";
-    fname_map[twodads::output_t::o_theta] = "T/";
-    fname_map[twodads::output_t::o_theta_x] = "Tx/";
-    fname_map[twodads::output_t::o_theta_y] = "Ty/";
+    fname_map[twodads::output_t::o_tau] = "T/";
+    fname_map[twodads::output_t::o_tau_x] = "Tx/";
+    fname_map[twodads::output_t::o_tau_y] = "Ty/";
     fname_map[twodads::output_t::o_omega] = "O/";
     fname_map[twodads::output_t::o_omega_x] = "Ox/";
     fname_map[twodads::output_t::o_omega_y] = "Oy/";
@@ -136,7 +136,7 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
     for(auto it : o_list)
     {
         // Make sure that get_array_ptr calls copy_device_to_host! 
-        slab.copy_device_to_host(it);
+        //slab.copy_device_to_host(it);
         arr = slab.get_array_ptr(it);
         surface(it, arr, time);
     }
@@ -144,11 +144,8 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 }
 
 
-
 void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
 {
-    // update host data on src
-    //src -> copy_device_to_host();
     // Dataset name is /[NOST]/[0-9]*
     stringstream foo;
     foo << fname_map[field_name] << "/" << to_string(get_output_counter());
@@ -159,20 +156,21 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>
 //#ifdef DEBUG
 //    cout << "Dataset name: " << dataset_name << "\n";
 //#endif //DEBUG
-        FloatType float_type(PredType::NATIVE_DOUBLE);
+    FloatType float_type(PredType::NATIVE_DOUBLE);
     DataSpace att_space(H5S_SCALAR);
 	
 	// Create dataset and write data
-	DataSet* dataset = new DataSet( 
-		output_file->createDataSet(dataset_name, PredType::NATIVE_DOUBLE, *dspace_file, ds_creatplist) );
+	DataSet* dataset = new DataSet(output_file->createDataSet(dataset_name, 
+                                                              PredType::NATIVE_DOUBLE, 
+                                                              *dspace_file, 
+                                                              ds_creatplist));
 
     // Create time attribute for the Dataset
     Attribute att = dataset -> createAttribute("time", float_type, att_space);
     att.write(float_type, &time);
-	dataset -> write( src -> get_array_h(), PredType::NATIVE_DOUBLE, *dspace_ptr );
+	dataset -> write(src -> get_array_h(), PredType::NATIVE_DOUBLE, *dspace_ptr);
 	delete dataset;
     delete output_file;
 }	
-
 
 // End of file output.cpp

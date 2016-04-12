@@ -3,7 +3,6 @@
 /// Dynamic variables are omega and theta
 ///
 
-
 #ifndef SLAB_CUDA_H
 #define SLAB_CUDA_H
 
@@ -18,7 +17,6 @@
 #include "slab_config.h"
 #include "initialize.h"
 #include "derivatives.h"
-
 
 
 class slab_cuda
@@ -168,9 +166,9 @@ class slab_cuda
         cuda_array<cuda::cmplx_t> omega_rhs_hat; ///< non-linear RHS for time integration of omea
 
         // Arrays that store data on CPU for diagnostic functions
-        rhs_fun_ptr theta_rhs_func; ///< Evaluate explicit part for time integrator
-        rhs_fun_ptr tau_rhs_func;   ///< Evaluate explicit part for time integrator
-        rhs_fun_ptr omega_rhs_func; ///< Evaluate explicit part for time integrator
+        rhs_fun_ptr theta_rhs_func{nullptr}; ///< Evaluate explicit part for time integrator
+        rhs_fun_ptr tau_rhs_func{nullptr};   ///< Evaluate explicit part for time integrator
+        rhs_fun_ptr omega_rhs_func{nullptr}; ///< Evaluate explicit part for time integrator
 
         // DFT plans
         cufftHandle plan_r2c; ///< Plan used for all D2Z DFTs used by cuFFT
@@ -222,10 +220,6 @@ class slab_cuda
         const std::map<twodads::field_t, cuda_arr_real*> get_field_by_name;
         const std::map<twodads::output_t, cuda_arr_real*> get_output_by_name;
 
-
-//        cuda::real_t* d_ss3_alpha; ///< Coefficients for implicit part of time integration
-//        cuda::real_t* d_ss3_beta; ///< Coefficients for explicit part of time integration
-
         ///@brief Compute RHS for Navier-Stokes Model
         ///@detailed
         void theta_rhs_ns(uint); ///< Navier-Stokes 
@@ -251,6 +245,7 @@ class slab_cuda
         ///@detailed $\tau^t = \left{\log n, \phi\right} + \alpha \sqrt{T} \exp\left( \Sigma - \delta \triangle \phi / T \right) + \kappa_n \left(n_x^2 + n_y^2\right)$ 
         ///@param uint t_src: Use data stored in tau_hat[t_src][%]
         void tau_rhs_sheath_nlin(uint);
+        void tau_rhs_null(uint);    ///< No explicit terms
 
         ///@brief Dummy function, set explicit part to zero
         ///@param uint t_src: Dummy parameter
@@ -284,6 +279,7 @@ class slab_cuda
             my_map[twodads::rhs_t::theta_rhs_hwmod] = &slab_cuda::theta_rhs_hwmod;
             my_map[twodads::rhs_t::theta_rhs_sheath_nlin] = &slab_cuda::theta_rhs_sheath_nlin;
             my_map[twodads::rhs_t::tau_rhs_sheath_nlin] = &slab_cuda::tau_rhs_sheath_nlin;
+            my_map[twodads::rhs_t::tau_rhs_null] = &slab_cuda::tau_rhs_null;
             my_map[twodads::rhs_t::omega_rhs_ns] = &slab_cuda::omega_rhs_ns;
             my_map[twodads::rhs_t::omega_rhs_hw] = &slab_cuda::omega_rhs_hw;
             my_map[twodads::rhs_t::omega_rhs_hwmod] = &slab_cuda::omega_rhs_hwmod;

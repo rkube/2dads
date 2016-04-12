@@ -73,7 +73,14 @@ const map<string, twodads::diagnostic_t> slab_config::diagnostic_map
 
 const map<string, twodads::init_fun_t> slab_config::init_func_map 
 {
-    {"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
+    {"gaussian", twodads::init_fun_t::init_gaussian},
+    {"constant", twodads::init_fun_t::init_constant}, 
+    {"sine", twodads::init_fun_t::init_sine},
+    {"mode", twodads::init_fun_t::init_mode},
+    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
+    {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole}
+};
+    /*{"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
     {"tau_gaussian", twodads::init_fun_t::init_tau_gaussian},
     {"both_gaussian", twodads::init_fun_t::init_both_gaussian},
     {"theta_sine", twodads::init_fun_t::init_theta_sine},
@@ -85,7 +92,7 @@ const map<string, twodads::init_fun_t> slab_config::init_func_map
     {"both_mode", twodads::init_fun_t::init_both_mode},
     {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
     {"lamb_dipole", twodads::init_fun_t::init_lamb}
-};
+};*/
 
 const map<string, twodads::rhs_t> slab_config::rhs_func_map 
 {
@@ -94,9 +101,10 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
     {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
     {"theta_rhs_hw", twodads::rhs_t::theta_rhs_hw},
     {"theta_rhs_hwmod", twodads::rhs_t::theta_rhs_hwmod},
-    {"theta_rhs_sheath", twodads::rhs_t::theta_rhs_sheath_nlin},
+    {"theta_rhs_sheath_nlin", twodads::rhs_t::theta_rhs_sheath_nlin},
     {"theta_rhs_null", twodads::rhs_t::theta_rhs_null},
-    {"tau_rhs_sheath", twodads::rhs_t::tau_rhs_sheath_nlin},
+    {"tau_rhs_sheath_nlin", twodads::rhs_t::tau_rhs_sheath_nlin},
+    {"tau_rhs_null", twodads::rhs_t::tau_rhs_null},
     {"omega_rhs_ns", twodads::rhs_t::omega_rhs_ns},
     {"omega_rhs_hw", twodads::rhs_t::omega_rhs_hw},
     {"omega_rhs_hwmod", twodads::rhs_t::omega_rhs_hwmod},
@@ -106,12 +114,13 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
     {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}
 };
 
+
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
 slab_config :: slab_config(string cfg_file) :
 	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
 	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
-	tout(0.0), log_theta(false), do_dealiasing(false), particle_tracking(0), 
+	tout(0.0), log_theta(false), log_tau(false), do_dealiasing(false), particle_tracking(0), 
 	nprobes(0), chunksize(0)
 {
 	po::options_description cf_opts("Allowed options");
@@ -126,10 +135,13 @@ slab_config :: slab_config(string cfg_file) :
 
 	// Temporary strings that need to be parsed
 	string model_params_str;
-	string initc_str;
+	string initc_theta_str;
+	string initc_tau_str;
+	string initc_omega_str;
 	string diagnostics_str;
 	string output_str;
     string theta_rhs_str;
+    string tau_rhs_str;
     string omega_rhs_str;
     string init_function_str;
     string strmf_solver_str;    
@@ -153,13 +165,19 @@ slab_config :: slab_config(string cfg_file) :
         ("nthreads", po::value<unsigned int>(&nthreads), "Number of threads for diagnostic arrays")
 		("model_params", po::value<string> (&model_params_str) , "Model parameters")
 		("theta_rhs", po::value<string> (&theta_rhs_str), "Right hand side function of theta")
+		("tau_rhs", po::value<string> (&tau_rhs_str), "Right hand side function of tau")
 		("omega_rhs", po::value<string> (&omega_rhs_str), "Right hand side function of omega")
 		("diagnostics", po::value<string> (&diagnostics_str), "List of diagnostic functions to use")
 		("output", po::value<string> (&output_str), "List of variables for output")
-		("init_function", po::value<string> (&init_function_str), "Initialization function")
-		("initial_conditions", po::value<string> (&initc_str) , "Initial conditions")
+		("init_function_theta", po::value<string> (&init_function_theta_str), "Initialization function for theta")
+		("init_function_omega", po::value<string> (&init_function_omega_str), "Initialization function for omega")
+		("init_function_tau", po::value<string> (&init_function_tau_str), "Initialization function for tau")
+		("initial_conditions_theta", po::value<string> (&initc_theta_str) , "Initial conditions for theta")
+		("initial_conditions_omega", po::value<string> (&initc_omega_str) , "Initial conditions for omega")
+		("initial_conditions_tau", po::value<string> (&initc_tau_str) , "Initial conditions for tau")
 		("chunksize", po::value<int> (&chunksize), "Chunksize")
 		("log_theta", po::value<bool> (&log_theta), "Use logarithmic particle density")
+		("log_tau", po::value<bool> (&log_tau), "Use logarithmic temperature")
         ("strmf_solver", po::value<string> (&strmf_solver_str), "Stream function solver")
         ("do_particle_tracking", po::value<int> (&particle_tracking), "Track particles")
         ("dealias", po::value<bool> (&do_dealiasing), "Set ambiguous frequencies to zero")
@@ -187,11 +205,10 @@ slab_config :: slab_config(string cfg_file) :
 	
 	// Split model_params and initial_condition strings at whitespaces, 
 	// convert substrings into floats and store in approproate vectors
-	if (vm.count("model_params"))
-		split_at_whitespace(model_params_str, &model_params);
-
-	if (vm.count("initial_conditions"))
-		split_at_whitespace(initc_str, &initc);
+    split_at_whitespace(model_params_str, &model_params);
+    split_at_whitespace(initc_theta_str, &initc_theta);
+    split_at_whitespace(initc_tau_str, &initc_tau);
+    split_at_whitespace(initc_omega_str, &initc_omega);
 
     vector<string> diagnostics_split_vec;
 	// Split up diagnostics_str at whitespaces and store substrings in diagnostics
@@ -254,57 +271,13 @@ slab_config :: slab_config(string cfg_file) :
         }
     }*/
 
-    // Assign theta_rhs, omega_rhs, and init_function by parsing the string 
-    // Use .at() for map access. Throws out of range errors, when 
-    // keys are requested that are not initialized
-    try 
-    {
-        cout << "init_function_str = " << init_function_str << endl;
-        init_function = init_func_map.at(init_function_str); 
-    }
-    catch (const std::out_of_range & oor)
-    {
-        stringstream err_msg;
-        err_msg << "Invalid initial_function: " << init_function_str << endl;
-        err_msg << "Valid strings are: " << endl;
-        for (auto const &it : init_func_map)
-            err_msg << it.first << endl;
-        throw out_of_range(err_msg.str());
-    }
+    init_function_theta = map_safe_select(init_function_theta_str, init_func_map);
+    init_function_omega = map_safe_select(init_function_omega_str, init_func_map);
+    init_function_tau = map_safe_select(init_function_tau_str, init_func_map);
 
-
-    // Set RHS type of theta equation
-    // Use .at() for map access. Throws out of range errors, when 
-    // keys are requested that are not initialized
-    try
-    {
-        theta_rhs = rhs_func_map.at(theta_rhs_str);
-    }
-    catch (const std::out_of_range & oor)
-    {
-        stringstream err_msg;
-        err_msg << "Invalid RHS for theta: " << theta_rhs_str << endl;
-        err_msg << "Valid strings are: " << endl;
-        for (auto const &it : rhs_func_map)
-            err_msg << it.first << endl;
-        throw out_of_range(err_msg.str());
-    }
-
-    // Use .at() for map access. Throws out of range errors, when 
-    // keys are requested that are not initialized
-    try
-    {
-        omega_rhs = rhs_func_map.at(omega_rhs_str);
-    }
-    catch (const std::out_of_range & oor)
-    {
-        stringstream err_msg;
-        err_msg << "Invalid RHS for omega: " << omega_rhs_str << endl;
-        err_msg << "Valid strings are: " << endl;
-        for (auto const &it : rhs_func_map)
-            err_msg << it.first << endl;
-        throw out_of_range(err_msg.str());
-    }
+    theta_rhs = map_safe_select(theta_rhs_str, rhs_func_map);
+    omega_rhs = map_safe_select(omega_rhs_str, rhs_func_map);
+    tau_rhs = map_safe_select(tau_rhs_str, rhs_func_map);
 }
 
 
@@ -320,13 +293,19 @@ int slab_config :: consistency()
 	if (ylow >= yup)
 		throw config_error("Lower domain boundary must be smaller than upper domain boundary\n");
 	// Test initialization routine
-	if (get_init_function() == twodads::init_fun_t::init_NA) 
-		throw config_error("Invalid initialization routine specified in init file\n");
+	if (get_init_function_theta() == twodads::init_fun_t::init_NA) 
+		throw config_error("Invalid initialization routine specified for theta in init file\n");
+	if (get_init_function_omega() == twodads::init_fun_t::init_NA) 
+		throw config_error("Invalid initialization routine specified for omega in init file\n");
+	if (get_init_function_tau() == twodads::init_fun_t::init_NA) 
+		throw config_error("Invalid initialization routine specified for tau in init file\n");
 	// Test if logarithmic theta has correct RHS
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false) 
 		throw config_error("Selecting rhs_theta_log as the RHS function must have log_theta = true\n");
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true) 
 		throw config_error("Selecting rhs_theta as the RHS function must have log_theta = false\n");
+    if (get_omega_rhs_type() == twodads::rhs_t::omega_rhs_sheath_nlin && (!get_log_theta() || !get_log_tau()))
+        throw config_error("Selecting omega_rhs_sheath_nlin requires logarithmic density and temperature\n");
 	// If radial probe diagnostics is specified we need the number of radial probes
 	if (nprobes == 0 ) 
 		throw config_error("Radial probe diagnostics requested but no number of radial probes specified\n");
@@ -364,6 +343,7 @@ void slab_config :: print_config() const
     cout << "12 tdiag = " << get_tdiag() << endl;
     cout << "13 tout = " << get_tout() << endl;
     cout << "14 log_theta = " << get_log_theta() << endl;
+    cout << "15 log_tau = " << get_log_theta() << endl;
     cout << "15 do_particle_tracking = " << do_particle_tracking() << endl;
     cout << "16 nprobes = " << get_nprobe() << endl;
     cout << "17 nthreads = " << get_nthreads() << endl;
@@ -381,27 +361,38 @@ void slab_config :: print_config() const
     cout << "18 theta_rhs = " << str_from_map<twodads::rhs_t>(get_theta_rhs_type(), rhs_func_map) << endl;
     cout << "19 omega_rhs = " << str_from_map<twodads::rhs_t>(get_omega_rhs_type(), rhs_func_map) << endl;
     cout << "20 strmf_solver = .... defaults, not parsed" << endl;
-    cout << "21 init_function = " << str_from_map<twodads::init_fun_t>(get_init_function(), init_func_map) << endl;
-    cout << "22 initial_conditions = ";
-    for(auto it : get_initc())
+    cout << "21 init_function_theta = " << str_from_map<twodads::init_fun_t>(get_init_function_theta(), init_func_map) << endl;
+    cout << "   initial_conditions: ";
+    for(auto it : get_initc_theta())
         cout << it << ", ";
     cout << endl;
 
-    cout << "23 model_params = ";
+    cout << "22 init_function_omega = " << str_from_map<twodads::init_fun_t>(get_init_function_omega(), init_func_map) << endl;
+    cout << "   initial_conditions: ";
+    for(auto it : get_initc_omega())
+        cout << it << ", ";
+    cout << endl;
+
+    cout << "23 init_function_tau = " << str_from_map<twodads::init_fun_t>(get_init_function_tau(), init_func_map) << endl;
+    cout << "   initial_conditions: ";
+    for(auto it : get_initc_tau())
+        cout << it << ", ";
+    cout << endl;
+
+    cout << "24 model_params = ";
     for(auto it : get_model_params())
         cout << it << ", ";
     cout << endl;
 
-    cout << "24 output = ";
+    cout << "25 output = ";
     for(auto it : get_output())
         cout << str_from_map<twodads::output_t>(it, output_map) << "\t";
     cout << endl;
     
-    cout << "25 diagnostics = ";
+    cout << "26 diagnostics = ";
     for(auto it : get_diagnostics())
         cout << str_from_map<twodads::diagnostic_t>(it, diagnostic_map) << "\t";
     cout << endl;
 }
-
 
 // End of file slab_config.cpp
