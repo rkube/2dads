@@ -396,7 +396,7 @@ void d_tau_sheath_nlin(cuda::real_t* rhs, cuda::real_t* tau_x, cuda::real_t* tau
     const double expT = exp(tau[idx]);
     if ((row < My) && (col < Nx))
         rhs[idx] = tau_x[idx] * strmf_y[idx] - tau_y[idx] * strmf_x[idx]
-                   - 4.0 * alpha * sqrt(expT) * exp(twodads::Sigma - delta * strmf[idx] / expT)
+                   - 5.5 * alpha * sqrt(expT) * exp(twodads::Sigma - delta * strmf[idx] / expT)
                    + diff * (tau_x[idx] * tau_x[idx] + tau_y[idx] * tau_y[idx]);
     return;
 }
@@ -1439,7 +1439,7 @@ void slab_cuda :: omega_rhs_sheath_nlin(const uint t_src)
 
 #ifdef DEBUG
     cout << "omega_rhs_sheath_nlin " << endl;
-    cout << "alpha = " << alpha << ", beta = " << beta << ", delta = " << delta << endl;
+    cout << "beta = " << beta << ", delta = " << delta << endl;
 #endif //DEBUG
     d_omega_sheath_nlin<<<grid_my_nx, block_my_nx>>>(tmp_array.get_array_d(0), strmf.get_array_d(0), strmf_x.get_array_d(0), strmf_y.get_array_d(0),
                                                      omega_x.get_array_d(0), omega_y.get_array_d(0), tau.get_array_d(0), 

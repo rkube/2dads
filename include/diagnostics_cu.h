@@ -18,9 +18,26 @@
 
 using namespace std;
 
+///@brief Structure to hold cnter-of-mass position and dispersion tensor elements
+struct com_t
+{
+    twodads::real_t X_c;
+    twodads::real_t Y_c;
+
+    twodads::real_t W_xx;
+    twodads::real_t W_yy;
+
+    friend std::ostream& operator<<(std::ostream& os, com_t com)
+    {
+        os << "X_c = " << com.X_c << ",\tY_c = " << com.Y_c << ",\tW_xx = " << com.W_xx << ",\tW_yy = " << com.W_yy;
+        return (os);
+    }
+};
+
 class diagnostics_cu {
 	public:
 		typedef void (diagnostics_cu::*diag_func_ptr)(twodads::real_t const);
+        typedef cuda_darray<cuda::real_t> cuda_darr;
         /// Default constructor, pass a slab_config object.
         /// This initializes the diagnostic arrays and diagnostic variables
 		diagnostics_cu(const slab_config&);
@@ -41,9 +58,38 @@ class diagnostics_cu {
 
 		/// @brief Print GPU memry usage to terminal
 		void diag_mem(const twodads::real_t);
-		/// @brief Write blob diagnostics:
-        /// @detailed blobs.dat: t theta_max theta_max_x theta_max_y strmf_max strmf_max_x strmf_max_y int(theta) int(theta *x) int(theta_y) V_(X,COM) V(Y,COM) WXX WYY DXX DYY
-        void diag_blobs(const twodads::real_t);
+
+        ///@brief Writes COM dynamics of theta field
+        inline void diag_com_theta(const twodads::real_t time); 
+        ///@brief Writes COM dynamics of tau field
+        inline void diag_com_tau(const twodads::real_t time); 
+
+        ///@brief Compute COM dynamics of a thermodynamic field
+        ///@param fname Name of field \f$\theta\f$, either theta or tau
+        ///@param time Time of output
+        ///@detailed Writes blobs_theta.dat / blobs_tau.dat
+        ///@detailed Columns: t X_c Y_c VX_c VY_c wxx wyy dxx wyy
+        ///@detailed \f$ X_c = \int \mathrm{d}A\, x \cdot (\theta - \theta_0) / \int \mathrm{d}A, (\theta - \theta_0) \f$
+        ///@detailed \f$ Y_c = \int \mathrm{d}A\, x \cdot (\theta - \theta_0) / \int \mathrm{d}A, (\theta - \theta_0) \f$
+        void diag_com(const twodads::field_t fname, com_t&, const twodads::real_t time);
+       
+        ///@brief Writes max dynamics of theta field
+        inline void diag_max_theta(const twodads::real_t time) {diag_max(twodads::field_t::f_theta, time);};
+        ///@brief Writes max dynamics of tau field
+        inline void diag_max_tau(const twodads::real_t time) {diag_max(twodads::field_t::f_tau, time);};
+        ///@brief Writes max dynamics of omega field
+        inline void diag_max_omega(const twodads::real_t time) {diag_max(twodads::field_t::f_omega, time);};
+        ///@brief Writes max dynamics of strmf field
+        inline void diag_max_strmf(const twodads::real_t time) {diag_max(twodads::field_t::f_strmf, time);};
+        
+        ///@brief Writes max dynamics
+        ///@param fname Name of the field
+        ///@param time Time of output
+        void diag_max(const twodads::field_t fname, const twodads::real_t time);
+
+        ///@brief Computes COM diagnostics 
+        void compute_com(const twodads::field_t, twodads::real_t, twodads::real_t, twodads::real_t, twodads::real_t);
+
         ///@brief Compute energy integrals for various turbulence models
         ///@param time Time of output
         ///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 <br>
@@ -78,7 +124,6 @@ class diagnostics_cu {
         ///@detailed: Reconstruct Omega from strmf and compare against Omega
         void diag_consistency(const twodads::real_t);
 
-
         /// @brief write output for probes
         /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
         /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
@@ -95,9 +140,10 @@ class diagnostics_cu {
         cuda::slab_layout_t slab_layout;
 
         cuda_darray<twodads::real_t> theta, theta_x, theta_y;
+        cuda_darray<twodads::real_t> tau, tau_x, tau_y;
         cuda_darray<twodads::real_t> omega, omega_x, omega_y;
         cuda_darray<twodads::real_t> strmf, strmf_x, strmf_y;
-        cuda_darray<twodads::real_t> theta_rhs, omega_rhs;
+        cuda_darray<twodads::real_t> theta_rhs, tau_rhs, omega_rhs;
 
         cuda_darray<twodads::real_t> theta_xx, theta_yy;
         cuda_darray<twodads::real_t> omega_xx, omega_yy;

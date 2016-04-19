@@ -700,6 +700,7 @@ void cuda_darray<T> :: upcast_row(T* in_data, const uint My_in)
 
 
 // Compute maximum
+// For index see http://stackoverflow.com/questions/22573473/from-given-vector-find-max-value-and-its-index-by-reduction-method-in-cuda
 template <typename T>
 T cuda_darray<T> :: get_max()
 {

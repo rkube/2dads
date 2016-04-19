@@ -64,6 +64,12 @@ const map<string, twodads::output_t> slab_config::output_map
 const map<string, twodads::diagnostic_t> slab_config::diagnostic_map 
 {
     {"blobs", twodads::diagnostic_t::diag_blobs},
+    {"com_theta", twodads::diagnostic_t::diag_com_theta},
+    {"com_tau", twodads::diagnostic_t::diag_com_tau},
+    {"max_theta", twodads::diagnostic_t::diag_max_theta},
+    {"max_tau", twodads::diagnostic_t::diag_max_tau},
+    {"max_omega", twodads::diagnostic_t::diag_max_omega},
+    {"max_strmf", twodads::diagnostic_t::diag_max_strmf},
     {"energy", twodads::diagnostic_t::diag_energy},
     {"energy_ns", twodads::diagnostic_t::diag_energy_ns},
     {"probes", twodads::diagnostic_t::diag_probes},
@@ -80,20 +86,7 @@ const map<string, twodads::init_fun_t> slab_config::init_func_map
     {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
     {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole}
 };
-    /*{"theta_gaussian", twodads::init_fun_t::init_theta_gaussian},
-    {"tau_gaussian", twodads::init_fun_t::init_tau_gaussian},
-    {"both_gaussian", twodads::init_fun_t::init_both_gaussian},
-    {"theta_sine", twodads::init_fun_t::init_theta_sine},
-    {"omega_sine", twodads::init_fun_t::init_omega_sine},
-    {"both_sine", twodads::init_fun_t::init_both_sine},
-    {"init_test", twodads::init_fun_t::init_test},
-    {"theta_mode", twodads::init_fun_t::init_theta_mode},
-    {"omega_mode", twodads::init_fun_t::init_omega_mode},
-    {"both_mode", twodads::init_fun_t::init_both_mode},
-    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
-    {"lamb_dipole", twodads::init_fun_t::init_lamb}
-};*/
-
+    
 const map<string, twodads::rhs_t> slab_config::rhs_func_map 
 {
     {"theta_rhs_ns", twodads::rhs_t::theta_rhs_ns},
