@@ -39,7 +39,6 @@ const map <twodads::diagnostic_t, std::string> dfile_header{
 	{twodads::diagnostic_t::diag_mem, "none"}
 };
 
-
 /****************************************
  * Update get_dfunc_by_name in the constructor when including another diagnostic routine
  */
