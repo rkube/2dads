@@ -228,25 +228,36 @@ slab_config :: slab_config(string cfg_file) :
 	// Split output_str at whitespaces and store substrings in output
     vector<string> output_split_vec;
 	if (vm.count("output"))
-		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
-
-    // Use .at() for map access. Throws out of range errors, when 
-    // keys are requested that are not initialized
-    for(auto str: output_split_vec)
     {
-        try
+		boost::split(output_split_vec, output_str, boost::is_any_of(" \t"), boost::token_compress_on);
+        // Use .at() for map access. Throws out of range errors, when 
+        // keys are requested that are not initialized
+        for(auto str: output_split_vec)
         {
-            output.push_back(output_map.at(str));
+            if (str.compare("None") == 0)
+            {
+                cout << "Not writing output\n";
+                output.clear();
+                break;
+            }
+            try
+            {
+                output.push_back(output_map.at(str));
+            }
+            catch (const std::out_of_range & oor )
+            {
+                stringstream err_msg;
+                err_msg << "Invalid output:" << str << endl;
+                err_msg << "Valid strings are: " << endl;
+                for(auto const &it : output_map)
+                    err_msg << it.first << endl;
+                throw out_of_range(err_msg.str());
+            }
         }
-        catch (const std::out_of_range & oor )
-        {
-            stringstream err_msg;
-            err_msg << "Invalid output:" << str << endl;
-            err_msg << "Valid strings are: " << endl;
-            for(auto const &it : output_map)
-                err_msg << it.first << endl;
-            throw out_of_range(err_msg.str());
-        }
+    }
+    else
+    {
+        cout << "Not writing output\n";
     }
     // Parse string shift_modes, string is in the form shift_modes = (kx1 ky1), (kx2 ky2), (kx3 ky3) ... (kxn kyn)
     /*if ( vm.count("shift_modes") ){
@@ -277,8 +288,8 @@ slab_config :: slab_config(string cfg_file) :
 int slab_config :: consistency() 
 {
 	// Test for empty output line
-	if (get_output().size() == 0) 
-		throw config_error("No output variables specified. If no full output is desired, write output = None\n");
+	//if (get_output().size() == 0) 
+	//	throw config_error("No output variables specified. If no full output is desired, write output = None\n");
 	// Test x domain boundary
 	if (xleft >= xright) 
 		throw config_error("Left domain boundary must be smaller than right domain boundary\n");

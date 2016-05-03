@@ -4,7 +4,6 @@
  *
  */
 
-
 #include <fstream>
 #include "diagnostics_cu.h"
 
@@ -184,33 +183,38 @@ void diagnostics_cu :: init_diagnostic_output(string filename, string header)
 
 void diagnostics_cu :: update_arrays(const slab_cuda& slab)
 {
-	slab.get_data_device(twodads::field_t::f_theta,   theta.get_array_d()  , slab_layout.My, slab_layout.Nx);
-
-	slab.get_data_device(twodads::field_t::f_theta_x, theta_x.get_array_d(), slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_theta_y, theta_y.get_array_d(), slab_layout.My, slab_layout.Nx);
+	slab.copy_field(twodads::field_t::f_theta,   theta);
+	slab.copy_field(twodads::field_t::f_theta_x, theta_x);
+	slab.copy_field(twodads::field_t::f_theta_y, theta_y);
     if(config.get_log_theta())
-    {
+    { 
         theta.op_apply_t<d_op0_expassign<cuda::real_t> >(0);
+        theta.copy_device_to_host();
         theta_x.op_array_t<d_op1_mulassign<cuda::real_t> >(theta, 0);
+        theta_x.copy_device_to_host();
         theta_y.op_array_t<d_op1_mulassign<cuda::real_t> >(theta, 0);
-    }
-	slab.get_data_device(twodads::field_t::f_tau,   tau.get_array_d()  , slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_tau_x, tau_x.get_array_d(), slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_tau_y, tau_y.get_array_d(), slab_layout.My, slab_layout.Nx);
+        theta_y.copy_device_to_host();
+    } 
 
+	slab.copy_field(twodads::field_t::f_tau,   tau);
+	slab.copy_field(twodads::field_t::f_tau_x, tau_x);
+	slab.copy_field(twodads::field_t::f_tau_y, tau_y);
     if(config.get_log_tau())
     {
         tau.op_apply_t<d_op0_expassign<cuda::real_t> >(0);
+        tau.copy_device_to_host();
         tau_x.op_array_t<d_op1_mulassign<cuda::real_t> >(tau, 0);
+        tau_x.copy_device_to_host();
         tau_y.op_array_t<d_op1_mulassign<cuda::real_t> >(tau, 0);
+        tau_y.copy_device_to_host();
     }
 
-	slab.get_data_device(twodads::field_t::f_omega  , omega.get_array_d()  , slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_omega_x, omega_x.get_array_d(), slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_omega_y, omega_y.get_array_d(), slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_strmf  , strmf.get_array_d(),   slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_strmf_x, strmf_x.get_array_d(), slab_layout.My, slab_layout.Nx);
-	slab.get_data_device(twodads::field_t::f_strmf_y, strmf_y.get_array_d(), slab_layout.My, slab_layout.Nx);
+	slab.copy_field(twodads::field_t::f_omega  , omega);
+	slab.copy_field(twodads::field_t::f_omega_x, omega_x);
+	slab.copy_field(twodads::field_t::f_omega_y, omega_y);
+	slab.copy_field(twodads::field_t::f_strmf  , strmf);
+	slab.copy_field(twodads::field_t::f_strmf_x, strmf_x);
+	slab.copy_field(twodads::field_t::f_strmf_y, strmf_y);
 }
 
 
@@ -314,22 +318,22 @@ void diagnostics_cu :: diag_consistency(const twodads::real_t time)
 
 void diagnostics_cu :: diag_com_theta(const twodads::real_t time)
 {
-    cout << "diag_com_theta " << endl;
     static com_t old_com{0.0, 0.0, 0.0, 0.0};
     diag_com(twodads::field_t::f_theta, old_com, time);
 }
 
 void diagnostics_cu :: diag_com_tau(const twodads::real_t time)
 {
-    cout << "diag_com_tau " << endl;
     static com_t old_com{0.0, 0.0, 0.0, 0.0};
     diag_com(twodads::field_t::f_tau, old_com, time);
 }
 
 void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, const twodads::real_t time)
 {
+    // The array we operate on, either theta or tau
     static const std::map<twodads::field_t, std::string> get_com_fname_by_name{{twodads::field_t::f_theta, "cu_com_theta.dat"},
                                                                                {twodads::field_t::f_tau, "cu_com_tau.dat"}};
+    cuda_darray<twodads::real_t>* arr_ptr = get_darr_by_name.at(fname);
     twodads::real_t X_c{0.0};
     twodads::real_t Y_c{0.0};
     twodads::real_t W_xx{0.0};
@@ -338,8 +342,6 @@ void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, co
     twodads::real_t com_vx{0.0}, com_vy{0.0};
     twodads::real_t D_xx{0.0}, D_yy{0.0};
 
-    // The array we operate on
-    cuda_darray<twodads::real_t>* arr_ptr = get_darr_by_name.at(fname);
     twodads::real_t array_int{0.0};
     // Surface area element
     ofstream output;
@@ -349,50 +351,63 @@ void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, co
                                      (*arr_ptr)(config.get_my() - 1, 0) +
                                      (*arr_ptr)(config.get_my() - 1, config.get_nx() -1 ));
 
-
+    //ofstream of_theta;
+    //of_theta.open("theta_com0.dat");
+    //of_theta << (*arr_ptr);
+    //of_theta.close();
     // Remove background before computing center of mass. Only when using logarithmic
     // formulation of thermodynamic fields
-    if(fname == twodads::field_t::f_theta) 
-        if(config.get_log_theta())
-        {
-            cout << "subtracting bg_val = " << bg_val << endl;
-            (*arr_ptr).remove_bg(bg_val);
-        }
-    else if (fname == twodads::field_t::f_tau)
-        if(config.get_log_tau())
-            (*arr_ptr).remove_bg(bg_val);
-
+    if(fname == twodads::field_t::f_theta && config.get_log_theta()) 
+    {
+        //cout << "subtracting bg_val = " << bg_val << endl;
+        (*arr_ptr) -= bg_val;
+    }
+    else if (fname == twodads::field_t::f_tau && config.get_log_tau())
+    {
+        //cout << "diag_com, fname == f_tau, config.get_log_tau() = " << config.get_log_tau() << endl;
+        //cout << "subtracting bg_val = " << bg_val << endl;
+        (*arr_ptr) -= bg_val;
+    }
     array_int = (*arr_ptr).get_sum();
 	X_c = ((*arr_ptr) * x_arr).get_sum() / array_int;
 	Y_c = ((*arr_ptr) * y_arr).get_sum() / array_int;
 
-    cout << "sum = " << (*arr_ptr).get_sum() << ", arr * x.sum() = " << ((*arr_ptr) * x_arr).get_sum() << ", X_c = " << X_c << endl;
+    //of_x.open("x_arr.dat", ios::trunc);
+    //of_y.open("y_arr.dat", ios::trunc);
+    //of_theta.open("theta_com1.dat");
+    //of_x << x_arr;
+    //of_y << y_arr;
+    //of_theta << (*arr_ptr);
+    //of_x.close();
+    //of_y.close();
+    //of_theta.close();
+
+    //cout << "sum = " << (*arr_ptr).get_sum() << ", (arr * x).sum() = " << ((*arr_ptr) * x_arr).get_sum() << ", X_c = " << X_c;
+    //cout << ", (arr * y).sum() = " << ((*arr_ptr) * y_arr).get_sum() << ", Y_c = " << Y_c << endl;
 
 	// Compute dispersion
-	//for(unsigned int n = 0; n < slab_layout.Nx; n++)
-	//	x_vec[n] = (x_vec[n] - X_c) * (x_vec[n] - X_c);
-	//for(unsigned int m = 0; m < slab_layout.My; m++)
-	//	y_vec[m] = (y_vec[m] - Y_c) * (y_vec[m] - Y_c);
-	//x_arr.upcast_col(x_vec, slab_layout.Nx);
-	//y_arr.upcast_row(y_vec, slab_layout.My);
+	for(unsigned int n = 0; n < slab_layout.Nx; n++)
+		x_vec[n] = (x_vec[n] - X_c) * (x_vec[n] - X_c);
+	for(unsigned int m = 0; m < slab_layout.My; m++)
+		y_vec[m] = (y_vec[m] - Y_c) * (y_vec[m] - Y_c);
+	x_arr.upcast_col(x_vec, slab_layout.Nx);
+	y_arr.upcast_row(y_vec, slab_layout.My);
 
-	//W_xx = ((*arr_ptr) * x_arr).get_sum() / array_int;
-	//W_yy = ((*arr_ptr) * y_arr).get_sum() / array_int;
+	W_xx = ((*arr_ptr) * x_arr).get_sum() / array_int;
+	W_yy = ((*arr_ptr) * y_arr).get_sum() / array_int;
 
-	//for(unsigned int n = 0; n < slab_layout.Nx; n++)
-	//	x_vec[n] = slab_layout.x_left + (double) n * slab_layout.delta_x;
+	for(unsigned int n = 0; n < slab_layout.Nx; n++)
+		x_vec[n] = slab_layout.x_left + (double) n * slab_layout.delta_x;
 
-	//for(unsigned int m = 0; m < slab_layout.My; m++)
-	//	y_vec[m] = slab_layout.y_lo + (double) m * slab_layout.delta_y;
-	//x_arr.upcast_col(x_vec, slab_layout.Nx);
-	//y_arr.upcast_row(y_vec, slab_layout.My);
+	for(unsigned int m = 0; m < slab_layout.My; m++)
+		y_vec[m] = slab_layout.y_lo + (double) m * slab_layout.delta_y;
+	x_arr.upcast_col(x_vec, slab_layout.Nx);
+	y_arr.upcast_row(y_vec, slab_layout.My);
 
-    if(fname == twodads::field_t::f_theta) 
-        if(config.get_log_theta())
-            (*arr_ptr).add_bg(bg_val);
-    else if (fname == twodads::field_t::f_tau)
-        if(config.get_log_tau())
-            (*arr_ptr).add_bg(bg_val);
+    if(fname == twodads::field_t::f_theta && config.get_log_theta()) 
+        (*arr_ptr) += bg_val;
+    else if (fname == twodads::field_t::f_tau && config.get_log_tau())
+        (*arr_ptr) += bg_val;
 
     // Update center of mass velocities with forward finite difference scheme
     com_vx = (X_c - old_com.X_c) / dt_diag;

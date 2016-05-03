@@ -1066,6 +1066,14 @@ void slab_cuda :: get_data_device(const twodads::field_t fname, cuda::real_t* bu
 	arr -> copy_device_to_device(0, buffer);
 }
 
+void slab_cuda :: copy_field(const twodads::field_t fname, cuda_array<cuda::real_t>& dst) const
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    dst = (*arr);
+    dst.copy_device_to_host();
+}
+
+
 /// Update device data and return a pointer to requested array
 cuda_arr_real* slab_cuda :: get_array_ptr(const twodads::output_t fname)
 {

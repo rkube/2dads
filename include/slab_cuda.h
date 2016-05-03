@@ -118,6 +118,9 @@ class slab_cuda
         /// @brief print complex field to ascii file
         void print_field(const twodads::field_k_t, string) const;
 
+        ///@brief Copy data from slab into a cuda_array
+        void copy_field(const twodads::field_t, cuda_array<twodads::real_t>&) const;
+
         /// @brief Copy data from a real field to a buffer in host memory
         /// @param twodads::field_t fname: Name of the field to be copied
         /// @param cuda_array<T> buffer: buffer in which array data is to be copied

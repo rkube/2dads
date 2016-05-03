@@ -147,6 +147,11 @@ public:
     cuda_darray(parent&&);
     ~cuda_darray();
 
+    /// https://gcc.gnu.org/onlinedocs/gcc/Name-lookup.html
+    inline void copy_device_to_host() {cuda_array<T>::copy_device_to_host();};
+    inline void copy_host_to_device() {cuda_array<T>::copy_host_to_device();};
+    ///
+
     T& operator()(uint m, uint n) {return (parent::operator()(0, m, n));};
     T operator()(uint m, uint n) const {return parent::operator()(0, m, n);};
 
@@ -169,6 +174,7 @@ public:
 		is_reduced_profile = false;
     	return(*this);
     }
+
     cuda_darray operator+= (const T& rhs)
     {
         parent::operator+=(rhs);
@@ -178,7 +184,6 @@ public:
 		is_reduced_profile = false;
     	return(*this);
     }
-        
 
     cuda_darray operator+ (const parent& rhs) const
     {
@@ -187,13 +192,13 @@ public:
     	return(result);
 
     }
+
     cuda_darray operator+ (const T& rhs) const
     {
         cuda_darray<T> result(*this);
         result += rhs;
         return(result);
     }
-
 
     cuda_darray operator-= (const cuda_array<T>& rhs)
     {
@@ -204,7 +209,16 @@ public:
     	is_reduced_profile = false;
     	return(*this);
     }
-    cuda_darray operator-= (const T&);
+
+    cuda_darray operator-= (const T& rhs)
+    {
+        parent::operator-=(rhs);
+        is_reduced_sum = false;
+        is_reduced_max = false;
+        is_reduced_min = false;
+        is_reduced_profile = false;
+        return (*this);
+    }
 
     cuda_darray operator- (const parent& rhs) const
     {
@@ -264,9 +278,9 @@ public:
 
 
     /// @brief: take exp of entire field and subtract bg_level
-    void remove_bg(const T& bg_level);
+    //void remove_bg(const T& bg_level);
     /// @brief: add background level and take log of array
-    void add_bg(const T& bg_level);
+    //void add_bg(const T& bg_level);
 
     /// @brief Returns maximum value of the array
     T get_max();
@@ -319,6 +333,7 @@ public:
 
     inline size_t get_shmem_size_col() const {return(shmem_size_col);};
     inline size_t get_shmem_size_row() const {return(shmem_size_row);};
+
 
 private:
     // Pointer to profile array (profile along x-direction)
@@ -847,32 +862,32 @@ cuda_darray<T> cuda_darray<T> :: bar() const
 
 
 // Remove background from theta field for logarithmic blob simulations
-template <typename T>
-void cuda_darray<T> :: remove_bg(const T& bg_level)
-{
-	// Take exp of entire array
-	this -> template op_apply_t<d_op0_expassign<T> >(0);
-	this -> template op_scalar_t<d_op1_subassign<T> >(bg_level, 0);
-	copy_device_to_host();
-	is_reduced_profile = false;
-	is_reduced_max = false;
-	is_reduced_min = false;
-	is_reduced_sum = false;
-}
-
-
-// Add background from logarithmic field
-template <typename T>
-void cuda_darray<T> :: add_bg(const T& bg_level)
-{
-	this -> template op_scalar_t<d_op1_addassign<T> >(bg_level, 0);
-	this -> template op_apply_t<d_op0_logassign<T> >(0);
-	copy_device_to_host();
-	is_reduced_profile = false;
-	is_reduced_max = false;
-	is_reduced_min = false;
-	is_reduced_sum = false;
-}
+//template <typename T>
+//void cuda_darray<T> :: remove_bg(const T& bg_level)
+//{
+//	// Take exp of entire array
+//	this -> template op_apply_t<d_op0_expassign<T> >(0);
+//	this -> template op_scalar_t<d_op1_subassign<T> >(bg_level, 0);
+//	copy_device_to_host();
+//	is_reduced_profile = false;
+//	is_reduced_max = false;
+//	is_reduced_min = false;
+//	is_reduced_sum = false;
+//}
+//
+//
+//// Add background from logarithmic field
+//template <typename T>
+//void cuda_darray<T> :: add_bg(const T& bg_level)
+//{
+//	this -> template op_scalar_t<d_op1_addassign<T> >(bg_level, 0);
+//	this -> template op_apply_t<d_op0_logassign<T> >(0);
+//	copy_device_to_host();
+//	is_reduced_profile = false;
+//	is_reduced_max = false;
+//	is_reduced_min = false;
+//	is_reduced_sum = false;
+//}
 
 #endif // __CUDACC__
 
