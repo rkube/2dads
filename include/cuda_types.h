@@ -32,14 +32,22 @@ namespace cuda
 {
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
-    constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
-    constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
+    //constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
+    //constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
+    constexpr unsigned int blockdim_col{4};
+    constexpr unsigned int blockdim_row{1};
 
     constexpr unsigned int blockdim_nx_max{1024};
     constexpr unsigned int blockdim_my_max{1024};
 
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
+
+    constexpr unsigned int num_gp_x{4};
+    constexpr unsigned int gp_offset_x{2};
+    constexpr unsigned int num_gp_y{4};
+    constexpr unsigned int gp_offset_y{2};
+
 
     constexpr real_t PI = 3.1415926535897932384; ///< $\pi$
     constexpr real_t TWOPI = 6.2831853071795864769; ///< $2.0 \pi$
@@ -49,6 +57,8 @@ namespace cuda
 
     constexpr int io_w{7}; //width of fields used in cout
     constexpr int io_p{4}; //precision when printing with cout
+
+    enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};
 
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when
@@ -104,6 +114,23 @@ namespace cuda
         real_t i5;
         real_t i6;
     } __attribute__ ((aligned (8)));
+
+
+    template <typename T>
+    struct bvals
+    {
+        // The boundary conditions on the domain border
+        bc_t bc_left;
+        bc_t bc_right;
+        bc_t bc_top;
+        bc_t bc_bottom;
+
+        // The boundary values on the domain border
+        T bval_left;
+        T bval_right;
+        T bval_top;
+        T bval_bottom;
+    };
 
 
     class stiff_params_t
