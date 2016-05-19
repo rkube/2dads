@@ -24,12 +24,11 @@ const map <twodads::diagnostic_t, std::string> dfile_fname{
 
 // Use fields with width 18
 const map <twodads::diagnostic_t, std::string> dfile_header{
-	{twodads::diagnostic_t::diag_blobs,     "#01: time         #02: theta_max   #03: theta_max_x #04: theta_max_y  #05: strmf_max    #06: strmf_max_x  #07: strmf_max_y  #08: theta_int   #09: theta_int_x   #10: theta_int_y  #11: COMvx        #12: COMvy       #13: Wxx          #14: Wyy          #15: Dxx          #16: Dyy\n"},
     {twodads::diagnostic_t::diag_energy,    "#01: time         #02: E           #03: K           #04: U            #05: T            #06: D            #07: A            #08: D_omega     #09: D_theta       #10: Gamma_tilde  #11: J_tilde      #12: CFL           \n"},
 	{twodads::diagnostic_t::diag_energy_ns, "#01: time         #02: V           #03: O           #04: E            #05: D1           #06: D2           #07: D4           #08CFL\n"},
 	{twodads::diagnostic_t::diag_probes,    "#01: time         #02: n_tilde     #03: n           #04: phi          #05: phi_tilde    #06: Omega        #07: Omega_tilde  #08: v_x         #09: v_y           #10: v_y_tilde    #11: Gamma_r\n"},
-    {twodads::diagnostic_t::diag_com_theta, "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy\n"},
-    {twodads::diagnostic_t::diag_com_tau,   "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy\n"},
+    {twodads::diagnostic_t::diag_com_theta, "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(n)\n"},
+    {twodads::diagnostic_t::diag_com_tau,   "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(t)\n"},
     {twodads::diagnostic_t::diag_max_theta, "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
     {twodads::diagnostic_t::diag_max_tau,   "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
     {twodads::diagnostic_t::diag_max_omega, "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
@@ -342,6 +341,7 @@ void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, co
     twodads::real_t com_vx{0.0}, com_vy{0.0};
     twodads::real_t D_xx{0.0}, D_yy{0.0};
 
+    const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
     twodads::real_t array_int{0.0};
     // Surface area element
     ofstream output;
@@ -351,39 +351,19 @@ void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, co
                                      (*arr_ptr)(config.get_my() - 1, 0) +
                                      (*arr_ptr)(config.get_my() - 1, config.get_nx() -1 ));
 
-    //ofstream of_theta;
-    //of_theta.open("theta_com0.dat");
-    //of_theta << (*arr_ptr);
-    //of_theta.close();
     // Remove background before computing center of mass. Only when using logarithmic
     // formulation of thermodynamic fields
     if(fname == twodads::field_t::f_theta && config.get_log_theta()) 
     {
-        //cout << "subtracting bg_val = " << bg_val << endl;
         (*arr_ptr) -= bg_val;
     }
     else if (fname == twodads::field_t::f_tau && config.get_log_tau())
     {
-        //cout << "diag_com, fname == f_tau, config.get_log_tau() = " << config.get_log_tau() << endl;
-        //cout << "subtracting bg_val = " << bg_val << endl;
         (*arr_ptr) -= bg_val;
     }
     array_int = (*arr_ptr).get_sum();
 	X_c = ((*arr_ptr) * x_arr).get_sum() / array_int;
 	Y_c = ((*arr_ptr) * y_arr).get_sum() / array_int;
-
-    //of_x.open("x_arr.dat", ios::trunc);
-    //of_y.open("y_arr.dat", ios::trunc);
-    //of_theta.open("theta_com1.dat");
-    //of_x << x_arr;
-    //of_y << y_arr;
-    //of_theta << (*arr_ptr);
-    //of_x.close();
-    //of_y.close();
-    //of_theta.close();
-
-    //cout << "sum = " << (*arr_ptr).get_sum() << ", (arr * x).sum() = " << ((*arr_ptr) * x_arr).get_sum() << ", X_c = " << X_c;
-    //cout << ", (arr * y).sum() = " << ((*arr_ptr) * y_arr).get_sum() << ", Y_c = " << Y_c << endl;
 
 	// Compute dispersion
 	for(unsigned int n = 0; n < slab_layout.Nx; n++)
@@ -431,7 +411,8 @@ void diagnostics_cu :: diag_com(const twodads::field_t fname, com_t& old_com, co
         output << setw(20) << std::fixed << std::setprecision(16) << W_xx << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << W_yy << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << D_xx << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << D_yy << "\n";
+        output << setw(20) << std::fixed << std::setprecision(16) << D_yy << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << array_int * dA<< "\n";
         output.close();
     }
 }

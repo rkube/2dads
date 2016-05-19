@@ -287,6 +287,18 @@ void d_theta_rhs_hw(cuda::cmplx_t* theta_rhs_hat, cuda::cmplx_t* strmf_hat, cuda
 
 
 __global__
+void d_theta_rhs_full(cuda::real_t* theta_x, cuda::real_t* theta_y, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* res, 
+                      cuda::real_t diff, cuda::real_t g1, cuda::real_t g2, const uint My, const uint Nx)
+{
+    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * Nx + col;
+    if ((row < My) && (col < Nx))
+    	res[idx] = theta_x[idx] * strmf_y[idx] - theta_y[idx] * strmf_x[idx] + g1 * strmf_y[idx] - g2 * theta_y[idx] + diff * (theta_x[idx] * theta_x[idx] + theta_y[idx] * theta_y[idx]);
+    return;
+}
+
+__global__
 void d_theta_sheath_nlin(cuda::real_t* res, cuda::real_t* theta_x, cuda::real_t* theta_y,
                          cuda::real_t* strmf, cuda::real_t* strmf_x, cuda::real_t* strmf_y, cuda::real_t* tau,
                          const cuda::real_t alpha, const cuda::real_t delta, const cuda::real_t diff, 
@@ -1253,12 +1265,32 @@ void slab_cuda :: theta_rhs_ns(const uint t_src)
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
 
-
+/// Compute RHS for linearized interchange model
 void slab_cuda :: theta_rhs_lin(const uint t_src)
 {
     d_pbracket<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), tmp_array.get_array_d(), My, Nx);
     gpuStatus();
 
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
+}
+
+/// Compute RHS for linearized interchange model, including compression of diamagnetic flux and
+/// compression of electric drift
+void slab_cuda :: theta_rhs_full(const uint t_src)
+{
+    static const cuda::real_t g1 = config.get_model_params(5);
+    static const cuda::real_t g2 = config.get_model_params(6);
+    d_theta_rhs_full<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(),
+                                                  tmp_array.get_array_d(), stiff_params.diff, g1, g2, My, Nx);
+    gpuStatus();
+    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
+}
+
+void slab_cuda :: theta_rhs_log(const uint t_src)
+{
+    d_theta_rhs_log<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), 
+                                                 stiff_params.diff, tmp_array.get_array_d(), My, Nx);
+    gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }
 
@@ -1299,12 +1331,6 @@ void slab_cuda :: theta_rhs_hwmod(const uint t_src)
 }
 
 
-void slab_cuda :: theta_rhs_log(const uint t_src)
-{
-    d_theta_rhs_log<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(), stiff_params.diff, tmp_array.get_array_d(), My, Nx);
-    gpuStatus();
-    dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
-}
 
 
 void slab_cuda :: theta_rhs_sheath_nlin(const uint t_src)

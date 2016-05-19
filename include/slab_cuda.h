@@ -225,40 +225,46 @@ class slab_cuda
 
         ///@brief Compute RHS for Navier-Stokes Model
         ///@detailed
-        void theta_rhs_ns(uint); ///< Navier-Stokes 
-        void theta_rhs_lin(uint); ///< Small amplitude blob
-        void theta_rhs_log(uint); ///< Arbitrary amplitude blob
+        void theta_rhs_ns(const uint); ///< Navier-Stokes 
+        void theta_rhs_lin(const uint); ///< Small amplitude blob
+        void theta_rhs_log(const uint); ///< Arbitrary amplitude blob
+
+
+        ///@brief Full continuity equation without sheath losses, logarithmic formulation
+        ///@detailed $\mathcal{N}^0 = \left{\log n, \phi \right} - 0.02 \phi_y - 0.003 n_y$
+        ///@param uint t_src: Use data stored in theta_hat[t_src][%]
+        void theta_rhs_full(const uint);
 
         ///@brief Compute explicit part for Hasegawa-Wakatani model
         ///@detailed $\mathcal{N}^0 = \left{n, \phi\right} + \mathcal{C} (\widetilde{phi} - n) - \phi_y$
         ///@param uint t_src: Use data stored in theta_hat[t_src][%]
-        void theta_rhs_hw(uint);
+        void theta_rhs_hw(const uint);
 
         ///@brief Compute explicit part of the modified Hasegawa-Wakatani model
         ///@detailed $\mathcal{N}^t = \left{n, \phi\right} - \mathcal{C} (\widetilde{phi} - \widetilde{n}) - \phi_y$
         ///@param uint t_src: Use data stored in theta_hat[t_src][%]
-        void theta_rhs_hwmod(uint);
+        void theta_rhs_hwmod(const uint);
 
         ///@brief Non-linear sheath losses
         ///@detailed $\mathcal{N}^t = \left{\log n, \phi\right} + \alpha \sqrt{T} \exp\left( \Sigma - \delta \triangle \phi / T \right) + \kappa_n \left(n_x^2 + n_y^2\right)$ 
         ///@param uint t_src: Use data stored in theta_hat[t_src][%]
-        void theta_rhs_sheath_nlin(uint);
+        void theta_rhs_sheath_nlin(const uint);
 
         ///@brief Non-linear sheath losses
         ///@detailed $\tau^t = \left{\log n, \phi\right} + \alpha \sqrt{T} \exp\left( \Sigma - \delta \triangle \phi / T \right) + \kappa_n \left(n_x^2 + n_y^2\right)$ 
         ///@param uint t_src: Use data stored in tau_hat[t_src][%]
-        void tau_rhs_sheath_nlin(uint);
-        void tau_rhs_null(uint);    ///< No explicit terms
+        void tau_rhs_sheath_nlin(const uint);
+        void tau_rhs_null(const uint);    ///< No explicit terms
 
         ///@brief Dummy function, set explicit part to zero
         ///@param uint t_src: Dummy parameter
-        void theta_rhs_null(uint);
+        void theta_rhs_null(const uint);
 
-        void omega_rhs_ns(uint); ///< Navier Stokes
+        void omega_rhs_ns(const uint); ///< Navier Stokes
 
         /// @brief RHS for the Hasegawa-Wakatani model
-        /// @detailed RHS = {Omega, phi} + C(phi - n)
-        void omega_rhs_hw(uint);
+        /// @detailed RHS = $\left{\Omega, \phi \right} + \mathcal{C}(\phi - n)$
+        void omega_rhs_hw(const uint);
 
         /// @brief RHS for modified Hasegawa-Wakatani model
         /// @detailed: RHS = {Omega, phi} - \tilde{C(phi - n)}
@@ -281,6 +287,7 @@ class slab_cuda
             my_map[twodads::rhs_t::theta_rhs_hw] =  &slab_cuda::theta_rhs_hw;
             my_map[twodads::rhs_t::theta_rhs_hwmod] = &slab_cuda::theta_rhs_hwmod;
             my_map[twodads::rhs_t::theta_rhs_sheath_nlin] = &slab_cuda::theta_rhs_sheath_nlin;
+            my_map[twodads::rhs_t::theta_rhs_full] = &slab_cuda::theta_rhs_full;
             my_map[twodads::rhs_t::tau_rhs_sheath_nlin] = &slab_cuda::tau_rhs_sheath_nlin;
             my_map[twodads::rhs_t::tau_rhs_null] = &slab_cuda::tau_rhs_null;
             my_map[twodads::rhs_t::omega_rhs_ns] = &slab_cuda::omega_rhs_ns;

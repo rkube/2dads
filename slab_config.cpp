@@ -93,6 +93,7 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
     {"theta_rhs_lin", twodads::rhs_t::theta_rhs_lin},
     {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
     {"theta_rhs_hw", twodads::rhs_t::theta_rhs_hw},
+    {"theta_rhs_full", twodads::rhs_t::theta_rhs_full}, 
     {"theta_rhs_hwmod", twodads::rhs_t::theta_rhs_hwmod},
     {"theta_rhs_sheath_nlin", twodads::rhs_t::theta_rhs_sheath_nlin},
     {"theta_rhs_null", twodads::rhs_t::theta_rhs_null},
@@ -306,6 +307,8 @@ int slab_config :: consistency()
 	// Test if logarithmic theta has correct RHS
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false) 
 		throw config_error("Selecting rhs_theta_log as the RHS function must have log_theta = true\n");
+	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_full && log_theta == false) 
+		throw config_error("Selecting rhs_theta_full as the RHS function must have log_theta = true\n");
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true) 
 		throw config_error("Selecting rhs_theta as the RHS function must have log_theta = false\n");
     if (get_omega_rhs_type() == twodads::rhs_t::omega_rhs_sheath_nlin && (!get_log_theta() || !get_log_tau()))

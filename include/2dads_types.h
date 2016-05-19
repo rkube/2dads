@@ -98,6 +98,7 @@ namespace twodads {
         theta_rhs_lin,         ///< interchange model, linear
         theta_rhs_log,         ///< Logarithmic interchange model
         theta_rhs_hw,          ///< Hasegawa-Wakatani model
+        theta_rhs_full,        ///< Density continuity equation with compression of ExB and diamagnetic drift
         theta_rhs_hwmod,       ///< Modified Hasegawa-Wakatani model
         theta_rhs_null,        ///< No explicit terms
         theta_rhs_sheath_nlin, ///< Non-linear sheath losses
