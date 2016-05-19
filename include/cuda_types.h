@@ -34,8 +34,8 @@ namespace cuda
     typedef CuCmplx<real_t> cmplx_t;
     //constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
     //constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
-    constexpr unsigned int blockdim_col{4};
-    constexpr unsigned int blockdim_row{1};
+    constexpr unsigned int blockdim_col{4}; ///< Block dimension for consecutive elements (y-direction)
+    constexpr unsigned int blockdim_row{1}; ///< Block dimension for non-consecutive elements (x-direction)
 
     constexpr unsigned int blockdim_nx_max{1024};
     constexpr unsigned int blockdim_my_max{1024};
@@ -43,15 +43,15 @@ namespace cuda
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
 
-    constexpr unsigned int num_gp_x{4};
-    constexpr unsigned int gp_offset_x{2};
-    constexpr unsigned int num_gp_y{4};
-    constexpr unsigned int gp_offset_y{2};
+    constexpr unsigned int num_gp_x{4};                 ///< Number of stored ghost-points in x-direction
+    constexpr unsigned int gp_offset_x{num_gp_x / 2};   ///< Offset for cell values in x-direction
+    constexpr unsigned int num_gp_y{4};                 ///< Number of stored ghost-points in y-direction
+    constexpr unsigned int gp_offset_y{num_gp_y / 2};   ///< Offset for cell values in y-direction
 
 
-    constexpr real_t PI = 3.1415926535897932384; ///< $\pi$
-    constexpr real_t TWOPI = 6.2831853071795864769; ///< $2.0 \pi$
-    constexpr real_t FOURPIS = 39.47841760435743; ///< $4.0 * \pi^2$
+    constexpr real_t PI{3.1415926535897932384};     ///< $\pi$
+    constexpr real_t TWOPI{6.2831853071795864769};  ///< $2.0 \pi$
+    constexpr real_t FOURPIS{39.47841760435743};    ///< $4.0 * \pi^2$
     constexpr real_t epsilon{1e-10};
     constexpr int max_initc{6}; /// < Maximal number of initial conditions
 
@@ -85,8 +85,8 @@ namespace cuda
             os << "y_lo = " << s.y_lo << "\t";
             os << "delta_y = " << s.delta_y << "\t";
             os << "delta_t = " << s.delta_t << "\t";
-            os << "My = " << s.My << "\n";
-            os << "Nx = " << s.Nx << "\t";
+            os << "My = " << s.My << "\t";
+            os << "Nx = " << s.Nx << "\n";
             return os;
         }
     } __attribute__ ((aligned (8)));

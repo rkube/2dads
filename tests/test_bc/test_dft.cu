@@ -13,8 +13,8 @@ int main(void){
 	cout << "Hello, World!" << endl;
 
     cuda::bvals<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic, 0.0, 1.0, 0.0, 0.0};
-    slab_layout_t my_geom(0.0, 1.0 / 16., 0.0, 1.0 / 16., 0.001, 16, 16);
-	cuda_array_bc<double> my_ca(1, 16, 16, my_bvals, my_geom);
+    cuda::slab_layout_t my_geom(0.0, 1.0 / 8., 0.0, 1.0 / 32., 0.001, 8, 32);
+	cuda_array_bc<double> my_ca(1, 32, 8, my_bvals, my_geom);
 
     my_ca.init_dft();
     my_ca.evaluate_device(0);
@@ -23,7 +23,6 @@ int main(void){
     cout << "===========================================================================================" << endl;
 
     my_ca.dft_r2c(0);
-    //my_ca.update_ghost_points(0);
 	my_ca.copy_device_to_host();
 	my_ca.dump_full();
 
