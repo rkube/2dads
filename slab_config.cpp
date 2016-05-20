@@ -72,6 +72,7 @@ const map<string, twodads::diagnostic_t> slab_config::diagnostic_map
     {"max_strmf", twodads::diagnostic_t::diag_max_strmf},
     {"energy", twodads::diagnostic_t::diag_energy},
     {"energy_ns", twodads::diagnostic_t::diag_energy_ns},
+    {"energy_local", twodads::diagnostic_t::diag_energy_local},
     {"probes", twodads::diagnostic_t::diag_probes},
     {"consistency", twodads::diagnostic_t::diag_consistency},
 	{"memory", twodads::diagnostic_t::diag_mem}

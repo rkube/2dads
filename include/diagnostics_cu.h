@@ -47,7 +47,6 @@ class diagnostics_cu {
         /// Update the diag_array members from GPU memory. They are used to
         /// compute diagnostic quantities
         void update_arrays(const slab_cuda&);
-		//void update_array(const cuda_array<double>*, const twodads::field_t);
 
         /// Call all diagnostic routines, as specified in the slab_config object
         void write_diagnostics(const twodads::real_t, const slab_config&);
@@ -72,7 +71,18 @@ class diagnostics_cu {
         ///@detailed \f$ X_c = \int \mathrm{d}A\, x \cdot (\theta - \theta_0) / \int \mathrm{d}A, (\theta - \theta_0) \f$
         ///@detailed \f$ Y_c = \int \mathrm{d}A\, x \cdot (\theta - \theta_0) / \int \mathrm{d}A, (\theta - \theta_0) \f$
         void diag_com(const twodads::field_t fname, com_t&, const twodads::real_t time);
-       
+      
+
+        ///@brief Compute energy integrals for local thermal convection
+        ///@param time Time of output
+        ///@detailed Model Equations: \f$\partial_t n + \{\phi, n\} = \kappa \nabla_\perp^2 n$\f
+        ///@detailed and \f$\partial_t \Omega + \{\phi, \Omega\} + \partial_y n = \kappa \nabla \perp^2 \Omega$\f
+        ///@detailed \f$ G = \int \mathrm{d}A\, x n $\f
+        ///@detailed \f$ E = \int \mathrm{d}A\, 1/2 \left( \nabla_\perp^2 \phi \right)^2 $\f
+        ///@detailed \f$ \Gamma = -\int \mathrm{d}A\, n \partial_y \phi $\f
+        ///@detailed \f$ \partial_t E(t) - G(t) = 0 $\f
+        void diag_energy_local(const twodads::real_t time);
+
         ///@brief Writes max dynamics of theta field
         inline void diag_max_theta(const twodads::real_t time) {diag_max(twodads::field_t::f_theta, time);};
         ///@brief Writes max dynamics of tau field
