@@ -11,7 +11,7 @@ using namespace std;
 int main(void){
 	cout << "Hello, World!" << endl;
 
-    constexpr unsigned int Nx{16};
+    constexpr unsigned int Nx{8};
     constexpr unsigned int My{8};
 
     cuda::bvals<double> my_bvals{cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic, 0.0, 1.0, 0.0, 0.0};
@@ -32,7 +32,7 @@ int main(void){
     my_ca.dft_c2r(0);
     my_ca.normalize(0);
     my_ca.copy_device_to_host();
-    cout << my_ca << endl;
+    //cout << my_ca << endl;
     my_ca.dump_full();
 
     return(0);

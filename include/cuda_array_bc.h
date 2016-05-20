@@ -319,7 +319,7 @@ public:
                 for(uint m = 0; m < my; m++)
                 {
                     // Remember to also set precision routines in CuCmplx :: operator<<
-                	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << src(n, m) << "\t";
+                	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(n, m) << "\t";
                 }
                 os << endl;
             }
@@ -499,7 +499,7 @@ void cuda_array_bc<T> :: evaluate_device(uint tlev)
 		{
 			T x{geom.x_left + (T(n) + 0.0) * geom.delta_x};
 			T y{geom.y_lo + (T(m) + 0.0) * geom.delta_y};
-		    return(sin(2.0 * M_PI * x) * sin(2.0 * M_PI * y));
+		    return(sin(2.0 * M_PI * x) + sin(2.0 * M_PI * y));
             //return(T(1000 * n + m));
 		}, 
         geom, 0);
@@ -583,7 +583,7 @@ void cuda_array_bc<T> :: init_dft()
                                     dist_real,      //int odist
                                     CUFFT_Z2D,      //cufftType type
                                     Nx)             //int batch
-              ) != CUFFT_SUCCESS)
+               ) != CUFFT_SUCCESS)
             {
                 stringstream err_str;
                 err_str << "Error planning 1d Z2D DFT: " << err << "\n";
@@ -592,31 +592,51 @@ void cuda_array_bc<T> :: init_dft()
             break;
         case cuda::bc_t::bc_periodic:
             // Initialize 2d transformation
-            dft_size[0] = int(My);
-            dft_size[1] = int(Nx);
-            dft_inembed[1] = int(My);
-            dft_onembed[1] = int(My / 2 + 1);
-            istride = int(My + cuda::num_gp_y); 
-            ostride = int(My / 2 + cuda::num_gp_y / 2 + 1);
+            dft_size[1] = int(My);
+            dft_size[0] = int(Nx);
+            dft_inembed[1] = My + cuda::num_gp_y;
+            dft_onembed[1] = My / 2 + cuda::gp_offset_y / 2 + 1;
+            istride = 1;
+            ostride = 1;
 
             if((err = cufftPlanMany(&plan_fw,
-                                    2, 
-                                    dft_size,
-                                    dft_onembed,
-                                    istride,
-                                    dist_cplx,
-                                    dft_size,
-                                    ostride, 
-                                    dist_real,
-                                    CUFFT_D2Z,
-                                    1)
-              ) != CUFFT_SUCCESS)
+                                    2,              //int rank
+                                    dft_size,       //int* n
+                                    dft_inembed,    //int* inembed
+                                    istride,        //int istride
+                                    (My + cuda::num_gp_y) * (Nx + cuda::num_gp_x), //int idist
+                                    dft_onembed,    //int* onembed
+                                    ostride,        //int ostride
+                                    (My / 2 + cuda::num_gp_y / 2 + 1) * (Nx + cuda::num_gp_x), //int odist
+                                    CUFFT_D2Z,      //cufftType typ
+                                    1)              //int batch
+               ) != CUFFT_SUCCESS)
             {
                 stringstream err_str;
                 err_str << "Error planning 2d D2Z DFT: " << err << "\n";
                 throw gpu_error(err_str.str());
             }
-            
+
+            // Plan inverse transformation
+            if((err = cufftPlanMany(&plan_bw,
+                                    2,
+                                    dft_size,
+                                    dft_onembed,
+                                    ostride,
+                                    (My / 2 + cuda::num_gp_y / 2 + 1) * (Nx + cuda::num_gp_x),
+                                    dft_inembed,
+                                    istride,
+                                    (My + cuda::num_gp_y) * (Nx + cuda::num_gp_x),
+                                    CUFFT_Z2D,
+                                    1)
+              ) != CUFFT_SUCCESS)
+            {
+                stringstream err_str;
+                err_str << "Error planning 2d Z2D DFT: " << err << "\n";
+                throw gpu_error(err_str.str());
+            }
+
+
             break;
     }
 
@@ -666,10 +686,24 @@ void cuda_array_bc<T> :: dft_c2r(const uint tlev)
 template <typename T>
 void cuda_array_bc<T> :: normalize(const uint tlev)
 {
-	d_evaluate_2<<<block, grid>>>(get_array_d_t(), [=] __device__ (T in, uint n, uint m, cuda::slab_layout_t geom) -> T 
-	{
-		return(in / T(geom.My));
-	}, geom, 0);
+    // If we made a 1d DFT, normalize by My. Otherwise nomalize by Nx * My
+    switch (boundaries.bc_left)
+    {
+        case cuda::bc_t::bc_dirichlet:
+            // fall through
+        case cuda::bc_t::bc_neumann:
+            d_evaluate_2<<<block, grid>>>(get_array_d_t(), [=] __device__ (T in, uint n, uint m, cuda::slab_layout_t geom) -> T 
+            {
+                return(in / T(geom.My));
+            }, geom, 0);
+            break;
+        case cuda::bc_t::bc_periodic:
+            d_evaluate_2<<<block, grid>>>(get_array_d_t(), [=] __device__ (T in, uint n, uint m, cuda::slab_layout_t geom) -> T 
+            {
+                return(in / T(geom.Nx * geom.My));
+            }, geom, 0);
+            break;
+    }
 }
 
 
