@@ -55,7 +55,7 @@ namespace cuda
     constexpr real_t epsilon{1e-10};
     constexpr int max_initc{6}; /// < Maximal number of initial conditions
 
-    constexpr int io_w{7}; //width of fields used in cout
+    constexpr int io_w{10}; //width of fields used in cout
     constexpr int io_p{4}; //precision when printing with cout
 
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};

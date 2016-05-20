@@ -259,10 +259,12 @@ void d_update_gp_y_periodic_bottom(T* array, const uint Nx, const uint My)
 	// Don't use an offset here! Instead check for row > cuda::gp_offset_x - 2 to access the corner elements.
 	const int row = d_get_row(0);
 	const int index = row * (My + cuda::num_gp_y) + col;
-	//printf("kernel: row = %d, col = %d, index = %d\n", row, col, index);
 
-	if((row > cuda::gp_offset_x - 2) && (row < My + cuda::gp_offset_x + 1))
+	if((row > cuda::gp_offset_x - 2) && (row < Nx + cuda::gp_offset_x + 1))
+    {
+        printf("kernel: row = %d, col = %d, index = %d\n", row, col, index);
 		array[index] = array[row * (My + cuda::num_gp_y) + col + My];
+    }
 }
 
 
@@ -275,7 +277,7 @@ void d_update_gp_y_periodic_top(T* array, const uint Nx, const uint My)
 	const int row = d_get_row(0);
 	const int index = row * (My + cuda::num_gp_y) + col;
 	
-	if((row > cuda::gp_offset_x - 2) && (row < My + cuda::gp_offset_y + 1))
+	if((row > cuda::gp_offset_x - 2) && (row < Nx + cuda::gp_offset_x + 1))
 		array[index] = array[row * (My + cuda::num_gp_y) + col - My];	
 }
 
@@ -453,12 +455,11 @@ cuda_array_bc<T> :: cuda_array_bc(uint _tlevs, uint _Nx, uint _My, cuda::bvals<T
 	gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(T*)));
 	gpuErrchk(cudaMalloc( (void**) &array_d, tlevs * get_nelem_per_t() * sizeof(T)));
 
-    cout << "cuda_array_bc<T> ::cuda_array_bc<T>\t";
-    cout << "Nx = " << Nx << ", My = " << My << endl;
-    cout << "block = ( " << block.x << ", " << block.y << ")" << endl;
-    cout << "grid = ( " << grid.x << ", " << grid.y << ")" << endl;
-    cout << geom << endl;
-
+    //cout << "cuda_array_bc<T> ::cuda_array_bc<T>\t";
+    //cout << "Nx = " << Nx << ", My = " << My << endl;
+    //cout << "block = ( " << block.x << ", " << block.y << ")" << endl;
+    //cout << "grid = ( " << grid.x << ", " << grid.y << ")" << endl;
+    //cout << geom << endl;
 
 	d_alloc_array_d_t<<<1, 1>>>(array_d_t, array_d, tlevs, Nx, My);
 	gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
@@ -469,9 +470,7 @@ cuda_array_bc<T> :: cuda_array_bc(uint _tlevs, uint _Nx, uint _My, cuda::bvals<T
         array_h_t[t] = &array_h[t * get_nelem_per_t()];
     }
 
-    cout << "array_h at " << array_h << endl;
     for(uint t = 0; t < tlevs; t++)
-        cout << "array_h_t[" << t << "] at " << array_h_t[t] << endl;
 
     cout << endl;
 }
@@ -491,15 +490,17 @@ void cuda_array_bc<T> :: evaluate(function<T (unsigned int, unsigned int)> op_fu
 template <typename T>
 void cuda_array_bc<T> :: evaluate_device(uint tlev)
 {
+#ifdef DEGUG
     cout << "evaluate_device..." << endl;
 	cout << "block: block.x = " << block.x << ", block.y = " << block.y << endl;
-	cout << "grid: grid.x = " << grid.x << ", grid.y = " << grid.y << endl;
-	d_evaluate<<<grid, block>>>(get_array_d_t(), [=] __device__ (uint n, uint m, cuda::slab_layout_t geom) -> T 
+    cout << "grid: grid.x = " << grid.x << ", grid.y = " << grid.y << endl;
+#endif //DEBUG
+    d_evaluate<<<grid, block>>>(get_array_d_t(), [=] __device__ (uint n, uint m, cuda::slab_layout_t geom) -> T 
 		{
 			T x{geom.x_left + (T(n) + 0.0) * geom.delta_x};
 			T y{geom.y_lo + (T(m) + 0.0) * geom.delta_y};
-		    //return(sin(2.0 * M_PI * x) * sin(2.0 * M_PI * y));
-            return(T(1000 * n + m));
+		    return(sin(2.0 * M_PI * x) * sin(2.0 * M_PI * y));
+            //return(T(1000 * n + m));
 		}, 
         geom, 0);
 }
@@ -534,9 +535,12 @@ void cuda_array_bc<T> :: init_dft()
 {
 	cufftResult err;
     int dft_size[2] = {0, 0};       // Size of the transformation
-    int dft_onembed[2] = {0, 0};    // Embedded size of the transformation
+    int dft_onembed[2] = {0, 0};    // Input, embedded size of the transformation
+    int dft_inembed[2] = {0, 0};    // Output, embedded size of the transformation
     int dist_real{0};               // Distance between two vectors inpu vectors for DFT, in units of double
     int dist_cplx{0};               // Distance between two complex input vectors for iDFT, in units of (2 * double)
+    int istride{1};                 // Distance between two successive input and output elements in the least significant (that is, the innermost) dimension
+    int ostride{1};
     switch(boundaries.bc_left)
     {
         case cuda::bc_t::bc_dirichlet:
@@ -544,26 +548,26 @@ void cuda_array_bc<T> :: init_dft()
         case cuda::bc_t::bc_neumann:
             // Initialize a 1d transformation
             dft_size[0] = int(My);                                  
-            dft_onembed[0] = int(My / 2 + 1);                       
-            dist_real = int(My + cuda::num_gp_y);                   
-            dist_cplx = int(My / 2 + 1 + cuda::gp_offset_y / 2);    
+            dft_onembed[0] = int(My / 2 + 1); 
+            dist_real = int(My + cuda::num_gp_y); 
+            dist_cplx = int(My / 2 + cuda::gp_offset_y / 2 + 1); 
 
             // Plan the DFT, D2Z
             if ((err = cufftPlanMany(&plan_fw, 
                                      1,             //int rank
                                      dft_size,      //int* n
                                      dft_size,      //int* inembed
-                                     1,             //int istride
+                                     istride,       //int istride
                                      dist_real,     //int idist
                                      dft_onembed,   //int* onembed
-                                     1,             //int ostride
+                                     ostride,       //int ostride
                                      dist_cplx,     //int odist
                                      CUFFT_D2Z,     //cufftType type
                                      Nx)            //int batch
                 ) != CUFFT_SUCCESS)
             {
                 stringstream err_str;
-                err_str << "Error planning D2Z DFT: " << err << "\n";
+                err_str << "Error planning 1d D2Z DFT: " << err << "\n";
                 throw gpu_error(err_str.str());
             }
            
@@ -572,28 +576,47 @@ void cuda_array_bc<T> :: init_dft()
                                     1,              //int rank
                                     dft_size,       //int* n
                                     dft_onembed,    //int* inembed
-                                    1,              //int istride
+                                    istride,        //int istride
                                     dist_cplx,      //int idist
                                     dft_size,       //int* onembed
-                                    1,              //int ostride
+                                    ostride,        //int ostride
                                     dist_real,      //int odist
                                     CUFFT_Z2D,      //cufftType type
                                     Nx)             //int batch
               ) != CUFFT_SUCCESS)
             {
                 stringstream err_str;
-                err_str << "Error planning Z2D DFT: " << err << "\n";
+                err_str << "Error planning 1d Z2D DFT: " << err << "\n";
                 throw gpu_error(err_str.str());
             }
             break;
         case cuda::bc_t::bc_periodic:
             // Initialize 2d transformation
-            //dft_size[0] = int(My);
-            //dft_size[1] = int(Nx);
-            //dft_onem
-            //if((err = cufftPlanMany(&plan_fw,
-            //                        2, 
-            cerr << "Not implemented yet" << endl;
+            dft_size[0] = int(My);
+            dft_size[1] = int(Nx);
+            dft_inembed[1] = int(My);
+            dft_onembed[1] = int(My / 2 + 1);
+            istride = int(My + cuda::num_gp_y); 
+            ostride = int(My / 2 + cuda::num_gp_y / 2 + 1);
+
+            if((err = cufftPlanMany(&plan_fw,
+                                    2, 
+                                    dft_size,
+                                    dft_onembed,
+                                    istride,
+                                    dist_cplx,
+                                    dft_size,
+                                    ostride, 
+                                    dist_real,
+                                    CUFFT_D2Z,
+                                    1)
+              ) != CUFFT_SUCCESS)
+            {
+                stringstream err_str;
+                err_str << "Error planning 2d D2Z DFT: " << err << "\n";
+                throw gpu_error(err_str.str());
+            }
+            
             break;
     }
 
@@ -690,43 +713,45 @@ void cuda_array_bc<T> :: update_ghost_points(uint tlev)
 	/// Grid for updating ghost points in y-direction, one column, fixed row
 	static dim3 block_gp_col(cuda::blockdim_col);
 	static dim3 grid_gp_col((My + cuda::num_gp_y + cuda::blockdim_col - 1) / cuda::blockdim_col);
-	
-	//cout << "updating ghost points\n";
-	//cout << "block_gp_row = (" << block_gp_row.x << ", " << block_gp_row.y << ")" << endl;
-	//cout << "grid_gp_row = (" << grid_gp_row.x << ", " << grid_gp_row.y << ")" << endl;
-	//cout << "block_gp_col = (" << block_gp_col.x << "), grid_gp_col = " << grid_gp_col.x << endl;
+
+#ifdef DEBUG    
+	cout << "updating ghost points\n";
+	cout << "block_gp_row = (" << block_gp_row.x << ", " << block_gp_row.y << ")" << endl;
+	cout << "grid_gp_row = (" << grid_gp_row.x << ", " << grid_gp_row.y << ")" << endl;
+	cout << "block_gp_col = (" << block_gp_col.x << "), grid_gp_col = " << grid_gp_col.x << endl;
+#endif //DEBUG
 
 	// Update left/right boundaries first. Value in the corner (0,0), (My, Nx) are updated 
 	// using periodic boundary conditions later.	
 	switch(boundaries.bc_left)
 	{
         case cuda::bc_t::bc_dirichlet:
-			d_update_gp_x_dirichlet_left<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), boundaries.bval_left, Nx, My);
+			d_update_gp_x_dirichlet_left<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), boundaries.bval_left, Nx, My);
 			break;
         case cuda::bc_t::bc_neumann:
-			d_update_gp_x_neumann_left<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), boundaries.bval_left, geom.delta_x, Nx, My);
+			d_update_gp_x_neumann_left<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), boundaries.bval_left, geom.delta_x, Nx, My);
 			break;
         case cuda::bc_t::bc_periodic:
-            d_update_gp_x_periodic_left<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), Nx, My);
+            d_update_gp_x_periodic_left<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), Nx, My);
             break;
 	}
 	
 	switch (boundaries.bc_right)
 	{
         case cuda::bc_t::bc_dirichlet:
-			d_update_gp_x_dirichlet_right<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), boundaries.bval_right, Nx, My);
+			d_update_gp_x_dirichlet_right<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), boundaries.bval_right, Nx, My);
 			break;
         case cuda::bc_t::bc_neumann:
-			d_update_gp_x_neumann_right<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), boundaries.bval_right, geom.delta_x, Nx, My);
+			d_update_gp_x_neumann_right<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), boundaries.bval_right, geom.delta_x, Nx, My);
 			break;
         case cuda::bc_t::bc_periodic:
-            d_update_gp_x_periodic_right<<<block_gp_col, grid_gp_col>>>(get_array_d(tlev), Nx, My);
+            d_update_gp_x_periodic_right<<<grid_gp_col, block_gp_col>>>(get_array_d(tlev), Nx, My);
             break;
 	}
 	// Update top/bottom boundaries. Use periodic boundary conditions to also update corner
 	// elements at (0,0), (My, Nx)
-	d_update_gp_y_periodic_top<<<block_gp_row, grid_gp_row>>>(get_array_d(tlev), Nx, My);
-	d_update_gp_y_periodic_bottom<<<block_gp_row, grid_gp_row>>>(get_array_d(tlev), Nx, My);
+	d_update_gp_y_periodic_top<<<grid_gp_row, block_gp_row>>>(get_array_d(tlev), Nx, My);
+	d_update_gp_y_periodic_bottom<<<grid_gp_row, block_gp_row>>>(get_array_d(tlev), Nx, My);
 }
 
 template <typename T>
