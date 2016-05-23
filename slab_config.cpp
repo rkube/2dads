@@ -72,6 +72,7 @@ const map<string, twodads::diagnostic_t> slab_config::diagnostic_map
     {"max_strmf", twodads::diagnostic_t::diag_max_strmf},
     {"energy", twodads::diagnostic_t::diag_energy},
     {"energy_ns", twodads::diagnostic_t::diag_energy_ns},
+    {"energy_local", twodads::diagnostic_t::diag_energy_local},
     {"probes", twodads::diagnostic_t::diag_probes},
     {"consistency", twodads::diagnostic_t::diag_consistency},
 	{"memory", twodads::diagnostic_t::diag_mem}
@@ -307,8 +308,8 @@ int slab_config :: consistency()
 	// Test if logarithmic theta has correct RHS
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false) 
 		throw config_error("Selecting rhs_theta_log as the RHS function must have log_theta = true\n");
-	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_full && log_theta == false) 
-		throw config_error("Selecting rhs_theta_full as the RHS function must have log_theta = true\n");
+	//if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_full && log_theta == false) 
+	//	throw config_error("Selecting rhs_theta_full as the RHS function must have log_theta = true\n");
 	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true) 
 		throw config_error("Selecting rhs_theta as the RHS function must have log_theta = false\n");
     if (get_omega_rhs_type() == twodads::rhs_t::omega_rhs_sheath_nlin && (!get_log_theta() || !get_log_tau()))

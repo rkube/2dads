@@ -120,11 +120,12 @@ namespace twodads {
         diag_com_theta,     ///< COM dynamics on theta field
         diag_com_tau,       ///< COM dynamics of tau field
         diag_max_theta,     ///< max dynamics on theta
-        diag_max_tau,     ///< max dynamics on tau
+        diag_max_tau,       ///< max dynamics on tau
         diag_max_omega,     ///< max dynamics on omega
         diag_max_strmf,     ///< max dynamics on strmf
         diag_energy,        ///< Energetics for turbulence simulations
         diag_energy_ns,     ///< Energetics for turbulence simulations
+        diag_energy_local,  ///< Energetics for local model energy theorem
         diag_probes,        ///< Time series from probes
         diag_consistency,   ///< Consistency of Laplace solver
         diag_mem            ///< GPU memory usage information

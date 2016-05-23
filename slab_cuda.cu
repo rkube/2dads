@@ -1278,10 +1278,10 @@ void slab_cuda :: theta_rhs_lin(const uint t_src)
 /// compression of electric drift
 void slab_cuda :: theta_rhs_full(const uint t_src)
 {
-    static const cuda::real_t g1 = config.get_model_params(5);
-    static const cuda::real_t g2 = config.get_model_params(6);
+    static const cuda::real_t kappa = config.get_model_params(5);
+    static const cuda::real_t delta = config.get_model_params(6);
     d_theta_rhs_full<<<grid_my_nx, block_my_nx>>>(theta_x.get_array_d(), theta_y.get_array_d(), strmf_x.get_array_d(), strmf_y.get_array_d(),
-                                                  tmp_array.get_array_d(), stiff_params.diff, g1, g2, My, Nx);
+                                                  tmp_array.get_array_d(), stiff_params.diff, kappa, delta, My, Nx);
     gpuStatus();
     dft_r2c(twodads::field_t::f_tmp, twodads::field_k_t::f_theta_rhs_hat, 0);
 }

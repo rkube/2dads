@@ -18,21 +18,23 @@ const map <twodads::diagnostic_t, std::string> dfile_fname{
 	{twodads::diagnostic_t::diag_probes, "cu_probes.dat"},
 	{twodads::diagnostic_t::diag_energy, "cu_energy.dat"},
 	{twodads::diagnostic_t::diag_energy_ns, "cu_energy_ns.dat"},
+    {twodads::diagnostic_t::diag_energy_local, "cu_energy_local.dat"},
     {twodads::diagnostic_t::diag_consistency, "cu_consistency.dat"},
 	{twodads::diagnostic_t::diag_mem, "cu_memory.dat"}
 };
 
 // Use fields with width 18
 const map <twodads::diagnostic_t, std::string> dfile_header{
-    {twodads::diagnostic_t::diag_energy,    "#01: time         #02: E           #03: K           #04: U            #05: T            #06: D            #07: A            #08: D_omega     #09: D_theta       #10: Gamma_tilde  #11: J_tilde      #12: CFL           \n"},
-	{twodads::diagnostic_t::diag_energy_ns, "#01: time         #02: V           #03: O           #04: E            #05: D1           #06: D2           #07: D4           #08CFL\n"},
-	{twodads::diagnostic_t::diag_probes,    "#01: time         #02: n_tilde     #03: n           #04: phi          #05: phi_tilde    #06: Omega        #07: Omega_tilde  #08: v_x         #09: v_y           #10: v_y_tilde    #11: Gamma_r\n"},
-    {twodads::diagnostic_t::diag_com_theta, "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(n)\n"},
-    {twodads::diagnostic_t::diag_com_tau,   "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(t)\n"},
-    {twodads::diagnostic_t::diag_max_theta, "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
-    {twodads::diagnostic_t::diag_max_tau,   "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
-    {twodads::diagnostic_t::diag_max_omega, "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
-    {twodads::diagnostic_t::diag_max_strmf, "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
+    {twodads::diagnostic_t::diag_energy,       "#01: time         #02: E           #03: K           #04: U            #05: T            #06: D            #07: A            #08: D_omega     #09: D_theta       #10: Gamma_tilde  #11: J_tilde      #12: CFL           \n"},
+	{twodads::diagnostic_t::diag_energy_ns,    "#01: time         #02: V           #03: O           #04: E            #05: D1           #06: D2           #07: D4           #08CFL\n"},
+    {twodads::diagnostic_t::diag_energy_local, "#01: time         #02: G           #03: E           #04: Gamma\n"},
+	{twodads::diagnostic_t::diag_probes,       "#01: time         #02: n_tilde     #03: n           #04: phi          #05: phi_tilde    #06: Omega        #07: Omega_tilde  #08: v_x         #09: v_y           #10: v_y_tilde    #11: Gamma_r\n"},
+    {twodads::diagnostic_t::diag_com_theta,    "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(n)\n"},
+    {twodads::diagnostic_t::diag_com_tau,      "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(t)\n"},
+    {twodads::diagnostic_t::diag_max_theta,    "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
+    {twodads::diagnostic_t::diag_max_tau,      "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
+    {twodads::diagnostic_t::diag_max_omega,    "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
+    {twodads::diagnostic_t::diag_max_strmf,    "#01: time         #02: max         #03: x(max)      #04: y(max)       #05: min          #06: x(min)       #07: y(min)\n"},
     {twodads::diagnostic_t::diag_consistency, "none"},
 	{twodads::diagnostic_t::diag_mem, "none"}
 };
@@ -94,6 +96,7 @@ diagnostics_cu :: diagnostics_cu(const slab_config& cfg) :
                 },
     get_dfunc_by_name{{twodads::diagnostic_t::diag_energy,  &diagnostics_cu::diag_energy},
                       {twodads::diagnostic_t::diag_energy_ns,  &diagnostics_cu::diag_energy_ns},
+                      {twodads::diagnostic_t::diag_energy_local,  &diagnostics_cu::diag_energy_local},
                       {twodads::diagnostic_t::diag_com_theta,  &diagnostics_cu::diag_com_theta},
                       {twodads::diagnostic_t::diag_com_tau,  &diagnostics_cu::diag_com_tau},
                       {twodads::diagnostic_t::diag_max_theta,  &diagnostics_cu::diag_max_theta},
@@ -447,107 +450,6 @@ void diagnostics_cu :: diag_max(const twodads::field_t fname, const twodads::rea
 }
 
 
-/*
-void diagnostics_cu :: diag_blobs(const twodads::real_t time)
-{
-	// Maximum value of theta and strmf, including x- and y- position
-	twodads::real_t theta_max{-1.0};
-	twodads::real_t theta_max_x{slab_layout.x_left};
-	twodads::real_t theta_max_y{slab_layout.y_lo};
-	twodads::real_t strmf_max{0.0};
-	twodads::real_t strmf_max_x{slab_layout.x_left};
-	twodads::real_t strmf_max_y{slab_layout.y_lo};
-	twodads::real_t theta_int{0.0};
-
-	// Mass center and dispersion tensor elements
-	static twodads::real_t theta_com_x{0.0};
-	static twodads::real_t theta_com_y{0.0};
-	static twodads::real_t wxx{0.0};
-	static twodads::real_t wyy{0.0};
-
-	// Mass center velocities and dispersion velocity
-	twodads::real_t com_vx{0.0}, com_vy{0.0};
-	twodads::real_t dxx{0.0};
-	twodads::real_t dyy{0.0};
-
-	// Save old values of com position and dispersion
-	twodads::real_t old_com_x{theta_com_x};
-	twodads::real_t old_com_y{theta_com_y};
-	twodads::real_t old_wxx{wxx};
-	twodads::real_t old_wyy{wyy};
-
-	static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
-	ofstream output;
-
-	if(use_log_theta)
-		theta.remove_bg(theta_bg);
-
-	theta_max = theta.get_max();
-	strmf_max = strmf.get_max();
-
-	// Compute mass-center position
-	theta_int = theta.get_sum();
-	theta_com_x = (theta * x_arr).get_sum() / theta_int;
-	theta_com_y = (theta * y_arr).get_sum() / theta_int;
-	//theta_com_x /= theta_int;
-	//theta_com_y /= theta_int;
-	theta_int *= dA;
-
-	// Compute dispersion
-	for(unsigned int n = 0; n < slab_layout.Nx; n++)
-		x_vec[n] = (x_vec[n] - theta_com_x) * (x_vec[n] - theta_com_x);
-	for(unsigned int m = 0; m < slab_layout.My; m++)
-		y_vec[m] = (y_vec[m] - theta_com_y) * (y_vec[m] - theta_com_y);
-	x_arr.upcast_col(x_vec, slab_layout.Nx);
-	y_arr.upcast_row(y_vec, slab_layout.My);
-
-	wxx = (theta * x_arr).get_sum() / (theta_int / dA);
-	wyy = (theta * y_arr).get_sum() / (theta_int / dA);
-
-	for(unsigned int n = 0; n < slab_layout.Nx; n++)
-		x_vec[n] = slab_layout.x_left + (double) n * slab_layout.delta_x;
-
-	for(unsigned int m = 0; m < slab_layout.My; m++)
-		y_vec[m] = slab_layout.y_lo + (double) m * slab_layout.delta_y;
-	x_arr.upcast_col(x_vec, slab_layout.Nx);
-	y_arr.upcast_row(y_vec, slab_layout.My);
-
-	if(use_log_theta)
-		theta.add_bg(theta_bg);
-
-	// Update center-of-mass velocities with forward finite-difference scheme
-	com_vx = (theta_com_x - old_com_x) / dt_diag;
-	com_vy = (theta_com_y - old_com_y) / dt_diag;
-	// Update dispersion velocities with forward finite-difference scheme
-	dxx = (wxx - old_wxx) / dt_diag;
-	dyy = (wyy - old_wyy) / dt_diag;
-
-
-	cout << "===================================diag_blobs: time = " << time << endl;
-	output.open("cu_blobs.dat", ios::app);
-	if(output.is_open())
-	{
-		output << time << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_max << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_max_x << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_max_y << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max_x << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << strmf_max_y << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_int << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_com_x << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << theta_com_y << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << com_vx << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << com_vy << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << wxx << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << wyy << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << dxx << "\t";
-		output << setw(20) << std::fixed << std::setprecision(16) << dyy << "\n";
-		output.close();
-	}
-}
-*/
-
 void diagnostics_cu :: diag_energy_ns(const twodads::real_t time)
 {
     ofstream output;
@@ -659,3 +561,39 @@ void diagnostics_cu :: diag_energy(const twodads::real_t time)
 	}
 }
 
+
+void diagnostics_cu :: diag_energy_local(const twodads::real_t time)
+{
+    ofstream output;
+
+    cuda_darray<twodads::real_t> theta_xx(config.get_my(), config.get_nx()), theta_yy(config.get_my(), config.get_nx());
+    cuda_darray<twodads::real_t> omega_xx(config.get_my(), config.get_nx()), omega_yy(config.get_my(), config.get_nx());
+
+    static const twodads::real_t dA{slab_layout.delta_x * slab_layout.delta_y};
+
+	x_arr.upcast_col(x_vec, slab_layout.Nx);
+    
+    const twodads::real_t E{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
+    const twodads::real_t G(dA * (theta * x_arr).get_sum());
+    const twodads::real_t Gamma{-1.0 * dA * (theta * strmf_y).get_sum()};
+
+    der.d_dx2_dy2(theta, theta_xx, theta_yy);
+    der.d_dx2_dy2(omega, omega_xx, omega_yy);
+
+    const twodads::real_t diss_n{dA * (x_arr * theta_xx * theta_xx).get_sum()};
+    const twodads::real_t diss_o{dA * (strmf * omega_xx * omega_xx).get_sum()};
+
+    output.open("cu_energy_local.dat", ios::app);
+    if(output.is_open())
+    {
+        output << time << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << E << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << G << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << Gamma << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_n << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_o << "\n";
+        output.close();
+    }
+}
+
+// End of file diagnostics_cu.cu
