@@ -576,12 +576,14 @@ void diagnostics_cu :: diag_energy_local(const twodads::real_t time)
     const twodads::real_t E{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
     const twodads::real_t G(dA * (theta * x_arr).get_sum());
     const twodads::real_t Gamma{-1.0 * dA * (theta * strmf_y).get_sum()};
+    const twodads::real_t K{0.5 * dA * (theta * theta).get_sum()};
 
     der.d_dx2_dy2(theta, theta_xx, theta_yy);
     der.d_dx2_dy2(omega, omega_xx, omega_yy);
 
-    const twodads::real_t diss_n{dA * (x_arr * theta_xx * theta_xx).get_sum()};
-    const twodads::real_t diss_o{dA * (strmf * omega_xx * omega_xx).get_sum()};
+    const twodads::real_t diss_xn{dA * (x_arr * theta_xx * theta_xx).get_sum()};
+    const twodads::real_t diss_n2{dA * (theta * theta_xx * theta_xx).get_sum()};
+    const twodads::real_t diss_po{dA * (strmf * omega_xx * omega_xx).get_sum()};
 
     output.open("cu_energy_local.dat", ios::app);
     if(output.is_open())
@@ -590,8 +592,10 @@ void diagnostics_cu :: diag_energy_local(const twodads::real_t time)
         output << setw(20) << std::fixed << std::setprecision(16) << E << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << G << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << Gamma << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << diss_n << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << diss_o << "\n";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_xn << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_po << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_n2 << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << K << endl;
         output.close();
     }
 }
