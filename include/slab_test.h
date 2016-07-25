@@ -46,10 +46,9 @@ void d_deriv_x(T* in, T* out, T inv_delta_x_2, slab_layout_t slab_layout)
 
 template <typename T>
 __global__
-void d_compute_dy(CuCmplx<T>* in_arr,  
+void d_compute_dy1(CuCmplx<T>* in_arr,  
         CuCmplx<T>* out_y_arr,
 		CuCmplx<T>* kmap, 
-        const uint order,
         const uint Nx, const uint My21)
 {
 	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -58,15 +57,26 @@ void d_compute_dy(CuCmplx<T>* in_arr,
    
     if(d_is_cellcenter(col, row, My21, Nx))
     {
-        if(order == 1)
-        {
             out_y_arr[idx] = in_arr[idx] * CuCmplx<T>(0.0, kmap[idx].im());
-        } else if (order == 2)
-        {
-            out_y_arr[idx] = in_arr[idx] * kmap[idx].im();
-        }
     }
 }
+template <typename T>
+__global__
+void d_compute_dy1(CuCmplx<T>* in_arr,  
+        CuCmplx<T>* out_y_arr,
+		CuCmplx<T>* kmap, 
+        const uint Nx, const uint My21)
+{
+	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
+	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint idx = row * My21 + col;
+   
+    if(d_is_cellcenter(col, row, My21, Nx))
+    {
+            out_y_arr[idx] = in_arr[idx] * CuCmplx<T>(0.0, kmap[idx].im());
+    }
+}
+            //out_y_arr[idx] = in_arr[idx] * kmap[idx].im();
 
 
 #endif //__CUDACC__

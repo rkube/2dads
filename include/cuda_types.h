@@ -35,7 +35,7 @@ namespace cuda
     //constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
     //constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
     constexpr unsigned int blockdim_col{4}; ///< Block dimension for consecutive elements (y-direction)
-    constexpr unsigned int blockdim_row{1}; ///< Block dimension for non-consecutive elements (x-direction)
+    constexpr unsigned int blockdim_row{4}; ///< Block dimension for non-consecutive elements (x-direction)
 
     constexpr unsigned int blockdim_nx_max{1024};
     constexpr unsigned int blockdim_my_max{1024};
@@ -43,11 +43,12 @@ namespace cuda
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
 
-    constexpr unsigned int num_gp_x{4};                 ///< Number of stored ghost-points in x-direction
-    constexpr unsigned int gp_offset_x{num_gp_x / 2};   ///< Offset for cell values in x-direction
-    constexpr unsigned int num_gp_y{4};                 ///< Number of stored ghost-points in y-direction
-    constexpr unsigned int gp_offset_y{num_gp_y / 2};   ///< Offset for cell values in y-direction
+    //constexpr unsigned int num_gp_x{4};                 ///< Number of stored ghost-points in x-direction
+    //constexpr unsigned int gp_offset_x{num_gp_x / 2};   ///< Offset for cell values in x-direction
+    //constexpr unsigned int num_gp_y{4};                 ///< Number of stored ghost-points in y-direction
+    //constexpr unsigned int gp_offset_y{num_gp_y / 2};   ///< Offset for cell values in y-direction
 
+    constexpr size_t num_pad_y{2};                      ///< Number of rows to pad for in-place DFT
 
     constexpr real_t PI{3.1415926535897932384};     ///< $\pi$
     constexpr real_t TWOPI{6.2831853071795864769};  ///< $2.0 \pi$
@@ -68,15 +69,16 @@ namespace cuda
     {
     public:
         // Provide standard ctor for pre-C++11
-        slab_layout_t(real_t xl, real_t dx, real_t yl, real_t dy, real_t dt, unsigned int my, unsigned int nx) :
-            x_left(xl), delta_x(dx), y_lo(yl), delta_y(dy), delta_t(dt), My(my), Nx(nx) {};
+        slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y) :
+            x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y) {};
         const real_t x_left;
         const real_t delta_x;
         const real_t y_lo;
         const real_t delta_y;
-        const real_t delta_t;
-        const unsigned int My;
-        const unsigned int Nx;
+        const size_t Nx;
+        const size_t pad_x;
+        const size_t My;
+        const size_t pad_y;
 
         friend std::ostream& operator<<(std::ostream& os, const slab_layout_t s)
         {
@@ -84,9 +86,10 @@ namespace cuda
             os << "delta_x = " << s.delta_x << "\t";
             os << "y_lo = " << s.y_lo << "\t";
             os << "delta_y = " << s.delta_y << "\t";
-            os << "delta_t = " << s.delta_t << "\t";
+            os << "Nx = " << s.Nx << "\t";
+            os << "pad_x = " << s.pad_x << "\t";
             os << "My = " << s.My << "\t";
-            os << "Nx = " << s.Nx << "\n";
+            os << "pad_y = " << s.pad_y << "\n";
             return os;
         }
     } __attribute__ ((aligned (8)));
@@ -117,7 +120,7 @@ namespace cuda
 
 
     template <typename T>
-    struct bvals
+    struct bvals_t
     {
         // The boundary conditions on the domain border
         bc_t bc_left;
