@@ -191,6 +191,8 @@ public:
 
 	void evaluate(function<T (size_t, size_t)>, size_t);
     void evaluate_device(size_t);
+    void init_inv_laplace();
+    void init_sine();
 	void enumerate();
 
 	inline T& operator() (const size_t n, const size_t m) {return(*(array_h + address(n, m)));};
@@ -426,6 +428,32 @@ void cuda_array_bc_nogp<T> :: evaluate_device(size_t tlev)
 
 
 template <typename T>
+void cuda_array_bc_nogp<T> :: init_inv_laplace()
+{
+    d_evaluate<<<grid, block>>>(get_array_d(0), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T
+            {
+                T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
+                T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
+                return(exp(-0.5 * (x * x + y * y)) * (x * x - 1.0) * (y * y - 1.0));
+            },
+            geom);
+}
+
+
+template <typename T>
+void cuda_array_bc_nogp<T> :: init_sine()
+{
+    d_evaluate<<<grid, block>>>(get_array_d(0), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T
+            {
+                T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
+                T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
+                //return(sin(2.0 * cuda::PI * y));
+                return(sin(2.0 * cuda::PI * y));
+            },
+            geom);
+}
+
+template <typename T>
 void cuda_array_bc_nogp<T> :: dump_full() const
 {
 	for(size_t t = 0; t < tlevs; t++)
@@ -443,7 +471,6 @@ void cuda_array_bc_nogp<T> :: dump_full() const
         cout << endl << endl;
 	}
 }
-
 
 
 template <typename T>

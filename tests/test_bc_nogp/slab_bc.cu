@@ -7,32 +7,39 @@
 slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _bc) :
     Nx(_sl.Nx), My(_sl.My), tlevs(1), 
     boundaries(_bc), geom(_sl), 
-    arr1(_sl, _bc, tlevs), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1)
+    der(_sl),
+    arr1(_sl, _bc, tlevs), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
+    arr2(_sl, _bc, tlevs), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
+    get_field_by_name{ {test_ns::field_t::arr1,     &arr1},
+                       {test_ns::field_t::arr1_x,   &arr1_x},
+                       {test_ns::field_t::arr1_y,   &arr1_y},
+                       {test_ns::field_t::arr2,     &arr2},
+                       {test_ns::field_t::arr2_x,   &arr2_x},
+                       {test_ns::field_t::arr2_y,   &arr2_y}}
 {
     cout << "Creating new slab" << endl;
     arr1.evaluate_device(0);
+    init_dft();
 }
 
 
-void slab_bc :: dump_arr1()
+void slab_bc :: print_field(const test_ns::field_t fname) const
 {
-    arr1.copy_device_to_host();
-    arr1.dump_full();
+    get_field_by_name.at(fname) -> copy_device_to_host();
+    get_field_by_name.at(fname) -> dump_full();
 }
 
 
-void slab_bc :: dump_arr1x()
+void slab_bc :: print_field(const test_ns::field_t fname, const string file_name) const
 {
-    arr1_x.copy_device_to_host();
-    arr1_x.dump_full();
+    get_field_by_name.at(fname) -> copy_device_to_host();
+
+    ofstream output_file;
+    output_file.open(file_name.data());
+    output_file << *get_field_by_name.at(fname) << endl;
+    output_file.close();
 }
 
-
-void slab_bc :: dump_arr1y()
-{
-    arr1_y.copy_device_to_host();
-    arr1_y.dump_full();
-}
 
 void slab_bc :: init_dft()
 {
@@ -151,34 +158,35 @@ void slab_bc :: init_dft()
 
 
 /// Perform DFT in y-direction, row-wise
-void slab_bc :: dft_r2c(const size_t tlev)
+void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
 {
-    //const size_t offset = cuda::gp_offset_x * (geom.My + geom.pad_y) + cuda::gp_offset_y; 
+    cuda_arr_real* arr{get_field_by_name.at(fname)};
     cufftResult err;
-	
+
 	// Use the CUFFT plan to transform the signal in place. 
 	if ((err = cufftExecD2Z(plan_r2c, 
-	                        arr1.get_array_d(tlev),
-					        (cufftDoubleComplex*) arr1.get_array_d(tlev)) 
+	                        (*arr).get_array_d(tlev),
+					        (cufftDoubleComplex*) (*arr).get_array_d(tlev)) 
         ) != CUFFT_SUCCESS)
     {
         stringstream err_str;
         err_str << "Error executing D2Z DFT: " << cufftGetErrorString.at(err) << endl;
         throw gpu_error(err_str.str());
     }
+    cerr << err << endl;
 }
 
 
 /// Perform iDFT in y-direction, row-wise. Normalize real array after transform
-void slab_bc :: dft_c2r(const size_t tlev)
+void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
 {
-	//const size_t offset = cuda::gp_offset_x * (My + cuda::num_gp_y) + cuda::gp_offset_y; 
+	cuda_arr_real* arr{get_field_by_name.at(fname)};
 	cufftResult err;
 
 	// Use the CUFFT plan to transform the signal in place. 
 	err = cufftExecZ2D(plan_c2r,
-					   (cufftDoubleComplex*) arr1.get_array_d(tlev), 
-				       arr1.get_array_d(tlev));
+					   (cufftDoubleComplex*) (*arr).get_array_d(tlev), 
+				       (*arr).get_array_d(tlev));
 	if(err != CUFFT_SUCCESS)
     {
         stringstream err_str;
@@ -187,19 +195,39 @@ void slab_bc :: dft_c2r(const size_t tlev)
     }
 
     // Normalize
-    arr1.normalize(0);
+    (*arr).normalize(0);
+}
+
+
+void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    (*arr).init_inv_laplace();
+}
+
+
+void slab_bc :: initialize_sine(const test_ns::field_t fname)
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    (*arr).init_sine();
 }
 
 
 // Compute spatial derivatives in x and y direction
 void slab_bc :: d_dx_dy(const size_t tlev)
 {
-    dx_1(arr1, arr1_x, 0, geom, boundaries);
     //dft_r2c(0);
     //d_dy1(arr1, arr1_y);
     //dft_c2r(0);
 }
 
+// Invert the laplace equation
+void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t out, const size_t tlev)
+{
+    cuda_arr_real* in_arr = get_field_by_name.at(in);
+    cuda_arr_real* out_arr = get_field_by_name.at(out);
+    der.invert_laplace((*in_arr), (*out_arr), tlev);
+}
 
 
 slab_bc :: ~slab_bc()

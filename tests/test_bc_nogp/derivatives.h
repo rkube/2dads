@@ -2,8 +2,15 @@
  * Interface to derivation functions
  */
 
+#ifndef DERIVATIVES_H
+#define DERIVATIVES_H
+
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
+#include "cucmplx.h"
+#include <cusolverSp.h>
+#include <cublas_v2.h>
+#include <cassert>
 
 __device__ inline size_t d_get_col_2(){
     return (blockIdx.x * blockDim.x + threadIdx.x); 
@@ -128,6 +135,245 @@ void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tl
 }
 
 
+/*
+ * Datatype that provides derivation routines and solver for QR factorization
+ *
+ */
+template <typename T>
+class derivs
+{
+    public:
+        derivs(const cuda::slab_layout_t);
+        ~derivs();
+
+        void invert_laplace(cuda_array_bc_nogp<T>&, cuda_array_bc_nogp<T>&, const size_t t_src);
+
+    private:
+        const size_t Nx;
+        const size_t My;
+        const size_t My21;
+        // Handles for cusparse library
+        cusparseHandle_t cusparse_handle;
+        cusparseMatDescr_t cusparse_descr;
+
+        // Handles for cuBLAS library
+        cublasHandle_t cublas_handle;
+
+        // Matrix storage for solving tridiagonal equations
+        CuCmplx<T>* d_diag;     // Main diagonal
+        CuCmplx<T>* d_diag_l;   // lower diagonal
+        CuCmplx<T>* d_diag_u;   // upper diagonal, for Laplace equatoin this is the same as the lower diagonal
+
+        CuCmplx<T>* d_tmp_mat;  // workspace, used to transpose matrices for invert_laplace
+};
+
+
+template <typename T>
+derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
+    Nx(_sl.Nx), My(_sl.My), My21(int(My) / 2 + 1),
+    d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr}
+{
+    // Host copy of main and lower diagonal
+    CuCmplx<T>* h_diag = new CuCmplx<T>[Nx];
+    CuCmplx<T>* h_diag_l = new CuCmplx<T>[Nx];
+
+    // Initialize cusparse
+    cusparseStatus_t cusparse_status;
+    if((cusparse_status = cusparseCreate(&cusparse_handle)) != CUSPARSE_STATUS_SUCCESS)
+    {
+        cerr << "Could not initialize CUSPARSE" << endl;
+    }
+
+    if((cusparse_status = cusparseCreateMatDescr(&cusparse_descr)) != CUSPARSE_STATUS_SUCCESS)
+    {
+        cerr << "Could not create CUSPARSE matrix description" << endl;
+    }
+    
+    cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+    cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO);
+
+    // Initialize cublas
+    cublasStatus_t cublas_status;
+    if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
+    {
+        cerr << "Could not initialize cuBLAS" << endl;
+    }
+
+    // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
+    // The upper diagonal is equal to the lower diagonal
+    gpuErrchk(cudaMalloc((void**) &d_diag, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
+
+    d_diag_u = d_diag_l;
+
+    // Initialize the main diagonal separately for every ky
+    T ky{0.0};
+    for(size_t m = 0; m < My21; m++)
+    {
+        ky = cuda::TWOPI * double(m) / (_sl.y_lo + _sl.My * _sl.delta_y);
+        for(size_t n = 0; n < Nx; n++)
+        {
+            h_diag[n] = -2.0 - _sl.delta_x * _sl.delta_x * ky * ky;
+        }
+        h_diag[0] = h_diag[0] - 1.0;
+        h_diag[Nx - 1] = h_diag[Nx - 1] - 1.0;
+        gpuErrchk(cudaMemcpy(d_diag + m * Nx, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+    }
+
+    // Initialize the lower diagonal with all ones
+    for(size_t n = 0; n < Nx; n++)
+        h_diag_l[n] = 1.0;
+    gpuErrchk(cudaMemcpy(d_diag_l, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+
+    /*
+     * Check if the main diagonal elements are copied correctly
+     * CuCmplx<T>* tmp = new CuCmplx<T>[Nx * My21];
+     * gpuErrchk(cudaMemcpy(tmp, d_diag, Nx * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+     * for(size_t m = 0; m < My21; m++)
+     * {
+     *     for(size_t n = 0; n < Nx; n++)
+     *     {
+     *         cout << "m = " << m << " n = " << n << ": " << tmp[m * Nx + n] << endl;
+     *     }
+     * }
+     * delete [] tmp;
+     */
+
+    delete [] h_diag_l;
+    delete [] h_diag;
+}
+
+
+template <typename T>
+derivs<T> :: ~derivs()
+{
+    cudaFree(d_tmp_mat);
+    cudaFree(d_diag_l);
+    cudaFree(d_diag);
+
+    cublasDestroy(cublas_handle);
+    cusparseDestroy(cusparse_handle);
+}
+
+template <typename T>
+void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<T>& src, const size_t t_src){
+    cout << "Inverting Laplace" << endl;
+    const int My21{src.get_my() / 2 + 1};
+
+    // Copy data from src into dst. This is overwritten when calling cusparse<T>gtsv
+    gpuErrchk(cudaMemcpy(dst.get_array_d(0), src.get_array_d(t_src), src.get_nx() * My21 * sizeof(CuCmplx<T>),
+                         cudaMemcpyDeviceToDevice));
+    // Call cuBLAS to transpose the memory.
+    // cuda_array_bc_nogp stores the Fourier coefficients in each column consecutively.
+    // For tridiagonal matrix factorization, cusparseZgtsvStridedBatch, the rows (approx. sol. at cell center)
+    // need to be consecutive
+    const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
+    const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
+    cublasZgeam(cublas_handle,
+                CUBLAS_OP_T, 
+                CUBLAS_OP_N,
+                My21, src.get_nx(),
+                &alpha,
+                (cuDoubleComplex*) dst.get_array_d(0),
+                Nx,
+                &beta,
+                (cuDoubleComplex*) dst.get_array_d(0),
+                Nx,
+                (cuDoubleComplex*) dst.get_array_d(0),
+                Nx);
+
+
+    /*
+    cusparseStatus_t 
+        cusparseZgtsvStridedBatch(cusparseHandle_t handle, int m,         
+                const cuDoubleComplex *dl, 
+                const cuDoubleComplex  *d,  
+                const cuDoubleComplex *du, cuDoubleComplex *x,     
+                int batchCount, int batchStride)
+    */
+
+}
+
+/******** temporary code used with cusolve library ******************
+        // Provide CSR description of the 2d laplace matrix
+        // See http://docs.nvidia.com/cuda/cusolver/index.html#format-csr
+        // 1.) Device vectors 
+        //int* d_csrRowPtrA;
+        //int* d_csrColIndA;
+        //T* d_csrValA;
+        //T* d_b;
+        //T* d_x;
+        // 2.) Host vectors
+        //int m;        // Dimension of the Matrix
+        //int nnzA;     // Number of non-zero elements
+        //int* csrRowPtrA;
+        //int* csrColIndA;
+        //T* csrValA;
+        //T* b;
+        //int batch_size;
+
+        // Size information of QR factorization
+        //size_t size_qr;
+        //size_t size_internal;
+        //void* buffer_qr;
+};
+
+
+//template <typename T>
+//derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
+//    info{nullptr},
+//    descrA{nullptr},
+//    d_csrRowPtrA{nullptr}, d_csrColIndA{nullptr}, d_csrValA{nullptr}, d_b{nullptr}, d_x{nullptr},
+//    size_qr{0}, size_internal{0}, buffer_qr{nullptr},
+//    m{int(_sl.My)}, nnzA{3 * m}, batch_size{1},
+//    csrRowPtrA{new int[nnzA]}, csrColIndA{new int[nnzA]}, csrValA{new T[nnzA]}, b{new T[_sl.My]}
+//{
+//    cout << "derivs<T> ::derivs" << endl;
+//    // Initialize cusolver and create a handle for the cuSolver context
+//    if (cusolverSpCreate(&cusolver_handle) != CUSOLVER_STATUS_SUCCESS)
+//    {
+//        cerr << "Error creating cusolver handle" << endl; 
+//    };
+//    // Initialize cusparse
+//    if(cusparseCreateMatDescr(&descrA) != CUSPARSE_STATUS_SUCCESS)
+//    {
+//        cerr << "Error creating cusparse Matrix description" << endl;
+//    }
+//    // Set matrix type
+//    cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
+//    cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ONE);
+//
+//    if(cusolverSpCreateCsrqrInfo(&info) != CUSOLVER_STATUS_SUCCESS)
+//    {
+//        cerr << "Error creating QR solver info" << endl;
+//    }
+//
+//}
+
+
+
+
+//template <typename T>
+//derivs<T> :: ~derivs()
+//{
+//    cout << "~derivs<T>" << endl;
+//    cusolverSpDestroy(cusolver_handle);
+//
+//    // Free GPU arrays
+//    //
+//
+//    // Free CPU arrays
+//    delete [] b;
+//    delete [] csrValA;
+//    delete [] csrColIndA;
+//    delete [] csrRowPtrA;
+//}
+
+**************** End of temporary code used with cusparse library *********/
+
+
+
 //
 //template <typename T>
 //class derivs
@@ -204,3 +450,4 @@ void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tl
 //}
 
 
+#endif //DERIVATIVES_H

@@ -15,5 +15,11 @@ test_slab: slab_bc.cu slab_bc.h test_slab.cu
 test_derivs: slab_bc.cu slab_bc.h test_derivs.cu derivatives.h
 	$(CUDACC) $(CUDACFLAGS) -o test_derivs test_derivs.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS)
 
+test_cusolve: test_cusolve.cu derivatives.h
+	$(CUDACC) $(CUDACFLAGS) -o test_cusolve test_cusolve.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
+
+test_laplace: slab_bc.cu slab_bc.h derivatives.h test_laplace.cu
+	$(CUDACC) $(CUDACFLAGS) -o test_laplace test_laplace.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
+
 clean:
 	rm test_dtype test_dft

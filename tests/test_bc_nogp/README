@@ -1,0 +1,2 @@
+Tests for slab based on datatype that allows non-periodic boundary
+conditions in x-direction

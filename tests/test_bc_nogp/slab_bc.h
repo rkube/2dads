@@ -7,12 +7,18 @@
 #ifndef SLAB_BC_H
 #define SLAB_BC_H
 
+#include <fstream>
 #include <string>
+#include <map>
 #include <cufft.h>
 #include "derivatives.h"
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
 
+
+namespace test_ns{
+    enum class field_t {arr1, arr1_x, arr1_y, arr2, arr2_x, arr2_y};
+}
 
 class slab_bc
 {
@@ -24,15 +30,18 @@ class slab_bc
         ~slab_bc();
 
         void init_dft();
-        void dft_r2c(const size_t);
-        void dft_c2r(const size_t);
+        void dft_r2c(const test_ns::field_t, const size_t);
+        void dft_c2r(const test_ns::field_t, const size_t);
         void finish_dft();
 
+        void initialize_invlaplace(const test_ns::field_t);
+        void initialize_sine(const test_ns::field_t);
+
+        void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t);
         void d_dx_dy(const size_t);
 
-        void dump_arr1();
-        void dump_arr1x();
-        void dump_arr1y();
+        void print_field(const test_ns::field_t) const;
+        void print_field(const test_ns::field_t, const string) const;
 
     private:
         const size_t Nx;
@@ -42,12 +51,20 @@ class slab_bc
         const cuda::bvals_t<cuda::real_t> boundaries;
         const cuda::slab_layout_t geom;
 
+        derivs<cuda::real_t> der;
+
         cuda_array_bc_nogp<cuda::real_t> arr1;
         cuda_array_bc_nogp<cuda::real_t> arr1_x;
         cuda_array_bc_nogp<cuda::real_t> arr1_y;
 
+        cuda_array_bc_nogp<cuda::real_t> arr2;
+        cuda_array_bc_nogp<cuda::real_t> arr2_x;
+        cuda_array_bc_nogp<cuda::real_t> arr2_y;
+
         cufftHandle plan_r2c;
         cufftHandle plan_c2r;
+
+        const std::map<test_ns::field_t, cuda_arr_real*> get_field_by_name;
 
         bool dft_is_initialized;
 };
