@@ -211,12 +211,15 @@ public:
         const size_t tl{src.get_tlevs()};
         const size_t my{src.get_my()};
         const size_t nx{src.get_nx()};
+        const size_t pad_x{src.get_geom().pad_x};
+        const size_t pad_y{src.get_geom().pad_y};
+
         os << "\n";
         for(size_t t = 0; t < tl; t++)
         {
-            for(size_t n = 0; n < nx; n++)
+            for(size_t n = 0; n < nx + pad_x; n++)
             {
-                for(size_t m = 0; m < my; m++)
+                for(size_t m = 0; m < my + pad_y; m++)
                 {
                     // Remember to also set precision routines in CuCmplx :: operator<<
                 	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(n, m) << "\t";
@@ -269,6 +272,8 @@ public:
 	inline size_t get_nx() const {return(Nx);};
 	inline size_t get_my() const {return(My);};
 	inline size_t get_tlevs() const {return(tlevs);};
+    inline cuda::slab_layout_t get_geom() const {return(geom);};
+    inline cuda::bvals_t<T> get_bvals() const {return(boundaries);};
 
 	inline size_t address(size_t n, size_t m) const {
         size_t retval = n * (geom.My + geom.pad_y) + m; 

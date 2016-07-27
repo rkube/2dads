@@ -8,9 +8,12 @@
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
 #include "cucmplx.h"
+#include "error.h"
 #include <cusolverSp.h>
 #include <cublas_v2.h>
 #include <cassert>
+#include <fstream>
+
 
 __device__ inline size_t d_get_col_2(){
     return (blockIdx.x * blockDim.x + threadIdx.x); 
@@ -170,7 +173,7 @@ class derivs
 
 template <typename T>
 derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
-    Nx(_sl.Nx), My(_sl.My), My21(int(My) / 2 + 1),
+    Nx(_sl.Nx), My(_sl.My), My21(static_cast<int>(My / 2 + 1)),
     d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr}
 {
     // Host copy of main and lower diagonal
@@ -181,12 +184,12 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     cusparseStatus_t cusparse_status;
     if((cusparse_status = cusparseCreate(&cusparse_handle)) != CUSPARSE_STATUS_SUCCESS)
     {
-        cerr << "Could not initialize CUSPARSE" << endl;
+        throw cusparse_err(cusparse_status);
     }
 
     if((cusparse_status = cusparseCreateMatDescr(&cusparse_descr)) != CUSPARSE_STATUS_SUCCESS)
     {
-        cerr << "Could not create CUSPARSE matrix description" << endl;
+        throw cusparse_err(cusparse_status);
     }
     
     cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
@@ -196,14 +199,16 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     cublasStatus_t cublas_status;
     if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
     {
-        cerr << "Could not initialize cuBLAS" << endl;
+        throw cublas_err(cublas_status);
     }
+
+    // Allocate memory for temporary matrix storage
+    gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
 
     // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
     // The upper diagonal is equal to the lower diagonal
     gpuErrchk(cudaMalloc((void**) &d_diag, Nx * My21 * sizeof(CuCmplx<T>)));
     gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<T>)));
-    gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
 
     d_diag_u = d_diag_l;
 
@@ -258,31 +263,65 @@ derivs<T> :: ~derivs()
 
 template <typename T>
 void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<T>& src, const size_t t_src){
-    cout << "Inverting Laplace" << endl;
-    const int My21{src.get_my() / 2 + 1};
+    // Safe casts because I am feeling fancy today :)
+    const int My_int{static_cast<int>(src.get_my())};
+    const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
+    const int Nx_int{static_cast<int>(src.get_nx())};
 
-    // Copy data from src into dst. This is overwritten when calling cusparse<T>gtsv
-    gpuErrchk(cudaMemcpy(dst.get_array_d(0), src.get_array_d(t_src), src.get_nx() * My21 * sizeof(CuCmplx<T>),
-                         cudaMemcpyDeviceToDevice));
+    static const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
+    static const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
+    cublasStatus_t cublas_status;
+
     // Call cuBLAS to transpose the memory.
     // cuda_array_bc_nogp stores the Fourier coefficients in each column consecutively.
-    // For tridiagonal matrix factorization, cusparseZgtsvStridedBatch, the rows (approx. sol. at cell center)
+    // For tridiagonal matrix factorization, cusparseZgtsvStridedBatch, the rows (approx. solution at cell center)
     // need to be consecutive
-    const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
-    const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
-    cublasZgeam(cublas_handle,
-                CUBLAS_OP_T, 
-                CUBLAS_OP_N,
-                My21, src.get_nx(),
-                &alpha,
-                (cuDoubleComplex*) dst.get_array_d(0),
-                Nx,
-                &beta,
-                (cuDoubleComplex*) dst.get_array_d(0),
-                Nx,
-                (cuDoubleComplex*) dst.get_array_d(0),
-                Nx);
+   
+    size_t nelem = src.get_nx() *  (src.get_my() + src.get_geom().pad_y);
+    T tmp_arr[nelem];
 
+    gpuErrchk(cudaMemcpy(tmp_arr, src.get_array_d(0), nelem * sizeof(T), cudaMemcpyDeviceToHost));
+    ofstream ofile("cublas_input.dat");
+    if (!ofile)
+        cerr << "cannot open file" << endl;
+
+    for(size_t t = 0;  t < nelem; t++)
+    {
+        ofile << tmp_arr[t] << " ";
+    } 
+    ofile << endl;
+    ofile.close();
+
+    if((cublas_status = cublasZgeam(cublas_handle,
+                                    CUBLAS_OP_T, CUBLAS_OP_N,
+                                    Nx_int, My21_int,
+                                    &alpha,
+                                    (cuDoubleComplex*) src.get_array_d(0), My21_int,
+                                    &beta,
+                                    nullptr, Nx_int,
+                                    (cuDoubleComplex*) d_tmp_mat, Nx_int
+                                    )) != CUBLAS_STATUS_SUCCESS)
+    {
+        cout << cublas_status << endl;
+        throw cublas_err(cublas_status);
+    }
+
+    gpuErrchk(cudaMemcpy(tmp_arr, d_tmp_mat, nelem * sizeof(T), cudaMemcpyDeviceToHost));
+
+    ofile.open("cublas_output.dat");
+    if(!ofile)
+        cerr << "cannot open file" << endl;
+
+    for(size_t t = 0;  t < nelem; t++)
+    {
+        ofile << tmp_arr[t] << " ";
+    } 
+    ofile << endl;
+    ofile.close();
+
+    
+    gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>),
+                         cudaMemcpyDeviceToDevice));
 
     /*
     cusparseStatus_t 
