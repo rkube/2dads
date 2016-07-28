@@ -56,10 +56,11 @@ namespace cuda
     constexpr real_t epsilon{1e-10};
     constexpr int max_initc{6}; /// < Maximal number of initial conditions
 
-    constexpr int io_w{10}; //width of fields used in cout
-    constexpr int io_p{4}; //precision when printing with cout
+    constexpr int io_w{16}; //width of fields used in cout
+    constexpr int io_p{10}; //precision when printing with cout
 
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};
+    enum class grid_t {vertex_centered, cell_centered};
 
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when
@@ -79,6 +80,22 @@ namespace cuda
         const size_t pad_x;
         const size_t My;
         const size_t pad_y;
+
+        real_t get_xleft() const {return(x_left);};
+        real_t get_deltax() const {return(delta_x);};
+        real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * delta_x);};
+        real_t get_Lx() const {return(static_cast<real_t>(Nx) * delta_x);};
+        
+        real_t get_ylo() const {return(y_lo);};
+        real_t get_deltay() const {return(delta_y);};
+        real_t get_yup() const {return(y_lo + static_cast<real_t>(My) * delta_y);};
+        real_t get_Ly() const {return(static_cast<real_t>(My) * delta_y);};
+
+        size_t get_nx() const {return(Nx);};
+        size_t get_pad_x() const {return(pad_x);};
+
+        size_t get_my() const {return(My);};
+        size_t get_pad_y() const {return(pad_y);};
 
         friend std::ostream& operator<<(std::ostream& os, const slab_layout_t s)
         {

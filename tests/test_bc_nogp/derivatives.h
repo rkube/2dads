@@ -155,6 +155,7 @@ class derivs
         const size_t Nx;
         const size_t My;
         const size_t My21;
+        const cuda::slab_layout_t sl;
         // Handles for cusparse library
         cusparseHandle_t cusparse_handle;
         cusparseMatDescr_t cusparse_descr;
@@ -173,11 +174,12 @@ class derivs
 
 template <typename T>
 derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
-    Nx(_sl.Nx), My(_sl.My), My21(static_cast<int>(My / 2 + 1)),
+    Nx(_sl.Nx), My(_sl.My), My21(static_cast<int>(My / 2 + 1)), sl(_sl),
     d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr}
 {
     // Host copy of main and lower diagonal
     CuCmplx<T>* h_diag = new CuCmplx<T>[Nx];
+    CuCmplx<T>* h_diag_u = new CuCmplx<T>[Nx];
     CuCmplx<T>* h_diag_l = new CuCmplx<T>[Nx];
 
     // Initialize cusparse
@@ -208,28 +210,43 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
     // The upper diagonal is equal to the lower diagonal
     gpuErrchk(cudaMalloc((void**) &d_diag, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_diag_u, Nx * My21 * sizeof(CuCmplx<T>)));
     gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<T>)));
 
-    d_diag_u = d_diag_l;
+    T ky2{0.0};                             // ky^2
+    const T inv_dx{1.0 / sl.delta_x};      // 1 / delta_x
+    const T inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
+    const T Ly{static_cast<T>(sl.My) * sl.delta_y};
 
     // Initialize the main diagonal separately for every ky
-    T ky{0.0};
     for(size_t m = 0; m < My21; m++)
     {
-        ky = cuda::TWOPI * double(m) / (_sl.y_lo + _sl.My * _sl.delta_y);
+        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
         for(size_t n = 0; n < Nx; n++)
         {
-            h_diag[n] = -2.0 - _sl.delta_x * _sl.delta_x * ky * ky;
+            h_diag[n] = -2.0 * inv_dx2 - ky2;
         }
-        h_diag[0] = h_diag[0] - 1.0;
-        h_diag[Nx - 1] = h_diag[Nx - 1] - 1.0;
+        h_diag[0] = h_diag[0] - inv_dx2;
+        h_diag[Nx - 1] = h_diag[Nx - 1] - inv_dx2;
         gpuErrchk(cudaMemcpy(d_diag + m * Nx, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
     }
 
-    // Initialize the lower diagonal with all ones
+    // Initialize the upper and lower diagonal with 1/delta_x^2
     for(size_t n = 0; n < Nx; n++)
-        h_diag_l[n] = 1.0;
-    gpuErrchk(cudaMemcpy(d_diag_l, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+    {
+        h_diag_u[n] = inv_dx2;
+        h_diag_l[n] = inv_dx2;
+    }
+    // Set first/last element of lower/upper diagonal to zero (required by cusparseZgtsvStridedBatch)
+    h_diag_u[Nx - 1] = 0.0;
+    h_diag_l[0] = 0.0;
+
+    // Paste copies of this vector together (required by cusparseZgtsvStridedBatch
+    for(size_t m = 0; m < My21; m++)
+    {
+        gpuErrchk(cudaMemcpy(d_diag_l + m * Nx, h_diag_l, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+        gpuErrchk(cudaMemcpy(d_diag_u + m * Nx, h_diag_u, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+    }
 
     /*
      * Check if the main diagonal elements are copied correctly
@@ -246,6 +263,7 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
      */
 
     delete [] h_diag_l;
+    delete [] h_diag_u;
     delete [] h_diag;
 }
 
@@ -255,6 +273,7 @@ derivs<T> :: ~derivs()
 {
     cudaFree(d_tmp_mat);
     cudaFree(d_diag_l);
+    cudaFree(d_diag_u);
     cudaFree(d_diag);
 
     cublasDestroy(cublas_handle);
@@ -268,29 +287,50 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
     const int Nx_int{static_cast<int>(src.get_nx())};
 
-    static const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
-    static const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
+    const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
+    const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
     cublasStatus_t cublas_status;
+    cusparseStatus_t cusparse_status;
 
     // Call cuBLAS to transpose the memory.
     // cuda_array_bc_nogp stores the Fourier coefficients in each column consecutively.
     // For tridiagonal matrix factorization, cusparseZgtsvStridedBatch, the rows (approx. solution at cell center)
     // need to be consecutive
    
-    size_t nelem = src.get_nx() *  (src.get_my() + src.get_geom().pad_y);
-    T tmp_arr[nelem];
+    
+    /*
+     * To verify whether cublasZgeam does a proper job write the raw input and output 
+     * memory from the device into text files to circumvent the memory layout used by
+     * cuda_array_gp_nobc when writing to files
+     *
+     * size_t nelem = src.get_nx() *  (src.get_my() + src.get_geom().pad_y);
+     * T tmp_arr[nelem];
+     * gpuErrchk(cudaMemcpy(tmp_arr, src.get_array_d(0), nelem * sizeof(T), cudaMemcpyDeviceToHost));
+     * ofstream ofile("cublas_input.dat");
+     * if (!ofile)
+     *     cerr << "cannot open file" << endl;
 
-    gpuErrchk(cudaMemcpy(tmp_arr, src.get_array_d(0), nelem * sizeof(T), cudaMemcpyDeviceToHost));
-    ofstream ofile("cublas_input.dat");
-    if (!ofile)
-        cerr << "cannot open file" << endl;
-
-    for(size_t t = 0;  t < nelem; t++)
-    {
-        ofile << tmp_arr[t] << " ";
-    } 
-    ofile << endl;
-    ofile.close();
+     * for(size_t t = 0;  t < nelem; t++)
+     * {
+     *     ofile << tmp_arr[t] << " ";
+     * } 
+     * ofile << endl;
+     * ofile.close();
+     *
+     *
+     * Then use the following python snippet to verify:
+     *
+     * Nx = ...
+     * My = ...
+     * My21 = My / 2 + 1
+     * a1 = np.loadtxt('cublas_input.dat')
+     * a2 = np.loadtxt('cublas_output.dat')
+     * a1f = (a1[::2] + 1j * a1[1::2]).reshape([Nx, My21])
+     * a2f = (a2[::2] + 1j * a2[1::2]).reshape([My21, Nx])
+     * a2f should now be a1f if everything is correct
+     *
+     *
+     */
 
     if((cublas_status = cublasZgeam(cublas_handle,
                                     CUBLAS_OP_T, CUBLAS_OP_N,
@@ -302,12 +342,13 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
                                     (cuDoubleComplex*) d_tmp_mat, Nx_int
                                     )) != CUBLAS_STATUS_SUCCESS)
     {
-        cout << cublas_status << endl;
+        cout << "cublas_status: " << cublas_status << endl;
         throw cublas_err(cublas_status);
     }
+    cout << "cublas_status: " << cublas_status << endl;
 
+    /* Write output of cublasZgeam to file for debugging purposes
     gpuErrchk(cudaMemcpy(tmp_arr, d_tmp_mat, nelem * sizeof(T), cudaMemcpyDeviceToHost));
-
     ofile.open("cublas_output.dat");
     if(!ofile)
         cerr << "cannot open file" << endl;
@@ -318,19 +359,214 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     } 
     ofile << endl;
     ofile.close();
+    */
+    
+    //gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>),
+    //                     cudaMemcpyDeviceToDevice));
+
+
+    // Next step: Solve the tridiagonal system
+
+    if((cusparse_status = cusparseZgtsvStridedBatch(cusparse_handle,
+                                                    Nx_int,
+                                                    (cuDoubleComplex*)(d_diag_l),
+                                                    (cuDoubleComplex*)(d_diag),
+                                                    (cuDoubleComplex*)(d_diag_l),
+                                                    (cuDoubleComplex*)(d_tmp_mat),
+                                                    My21,
+                                                    Nx_int)) != CUSPARSE_STATUS_SUCCESS)
+    {
+        throw cusparse_err(cusparse_status);
+    }
+    cout << "cusparse_status: " << cusparse_status << endl;
+    // Convert d_tmp_mat from column-major to row-major order
+    if((cublas_status = cublasZgeam(cublas_handle,
+                                    CUBLAS_OP_T, CUBLAS_OP_N,
+                                    My21_int, Nx_int,
+                                    &alpha,
+                                    (cuDoubleComplex*) d_tmp_mat, Nx_int,
+                                    &beta,
+                                    nullptr, My21_int,
+                                    (cuDoubleComplex*) dst.get_array_d(0), My21_int
+                                    )) != CUBLAS_STATUS_SUCCESS)
+    {
+        cout << cublas_status << endl;
+        throw cublas_err(cublas_status);
+    }
+    //gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToDevice));
+    cout << "cublas_status: " << cublas_status << endl;
+
+
+#ifdef DEBUG
+    // Test the precision of the solution
+
+    // 1.) Build the laplace matrix in csr form
+    // Host data
+    size_t nnz{Nx + 2 * (Nx - 1)};    // Main diagonal plus 2 side diagonals
+    CuCmplx<T>* csrValA_h = new CuCmplx<T>[nnz];  
+    int* csrRowPtrA_h = new int[Nx + 1];
+    int* csrColIndA_h = new int[nnz];
+
+    // Input columns
+    CuCmplx<T>* h_inp_mat_col = new CuCmplx<T>[Nx];
+    // Result columns
+    CuCmplx<T>* h_tmp_mat_col = new CuCmplx<T>[Nx];
+
+    // Device data
+    CuCmplx<T>* csrValA_d{nullptr};
+    int* csrRowPtrA_d{nullptr}; 
+    int* csrColIndA_d{nullptr};
+
+    CuCmplx<T>* d_inp_mat{nullptr};
+
+    // Some constants we need later on
+    const T inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
+    const CuCmplx<T> inv_dx2_cmplx = CuCmplx<T>(inv_dx2);
+
+    gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &csrRowPtrA_d, (Nx + 1) * sizeof(int)));
+    gpuErrchk(cudaMalloc((void**) &csrColIndA_d, nnz * sizeof(int)));
+    gpuErrchk(cudaMalloc((void**) &d_inp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
+
+    // Build Laplace matrix structure: ColIndA and RowPtrA
+    // Matrix values on main diagonal are later updated individually for each ky mode.
+    // Side bands (upper/lower diagonal) are computed once here.
+    csrColIndA_h[0] = 0;
+    csrColIndA_h[1] = 0;
+
+    csrRowPtrA_h[0] = 0;
+    csrValA_h[1] = inv_dx2_cmplx;
+
+    for(size_t n = 2; n < nnz - 3; n += 3)
+    {
+        csrColIndA_h[n    ] = static_cast<int>((n - 2) / 3);
+        csrColIndA_h[n + 1] = static_cast<int>((n - 2) / 3) + 1;
+        csrColIndA_h[n + 2] = static_cast<int>((n - 2) / 3) + 2;
+
+        csrRowPtrA_h[(n - 2) / 3 + 1] = n; 
+
+        csrValA_h[n] = inv_dx2_cmplx;
+        csrValA_h[n + 2] = inv_dx2_cmplx;
+    }   
+
+    csrColIndA_h[nnz - 2] = Nx - 2;
+    csrColIndA_h[nnz - 1] = Nx - 1;  
+
+    csrRowPtrA_h[Nx - 1] = nnz;
+
+    csrValA_h[nnz - 2] = CuCmplx<T>(inv_dx2);
+
+    gpuErrchk(cudaMemcpy(csrRowPtrA_d, csrRowPtrA_h, (Nx + 1) * sizeof(int), cudaMemcpyHostToDevice)); 
+    gpuErrchk(cudaMemcpy(csrColIndA_d, csrColIndA_h, nnz * sizeof(int), cudaMemcpyHostToDevice));
+
+    cusparseMatDescr_t mat_type;
+    cusparseCreateMatDescr(&mat_type); 
 
     
-    gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>),
-                         cudaMemcpyDeviceToDevice));
+    // 2.) Compare solution for all ky modes
+    //     -> Solution of ZgtsvStridedBatch is stored, column-wise in d_tmp_mat. Apply Laplace matrix A to this data.
+    //     -> Input to ZgtsvStridedBatch is stored, column-wise in d_inp_mat. Compare A * d_tmp_mat to d_inp_mat
+    //     -> Iterate over ky modes 
+    //        * update values of csrValA_h for the current mode
+    //        * Create Laplace matrix A
+    //        * Apply Laplace matrix to d_tmp_mat, column-wise
+    //        * Compute ||(A * d_tmp_mat - d_inp_mat)||_2
+    
+    if((cublas_status = cublasZgeam(cublas_handle,
+                                    CUBLAS_OP_T, CUBLAS_OP_N,
+                                    Nx_int, My21_int,
+                                    &alpha, // 1.0 + 0.0i
+                                    (cuDoubleComplex*) src.get_array_d(0), My21_int,
+                                    &beta,  // 0.0 + 0.0i
+                                    nullptr, Nx_int,
+                                    (cuDoubleComplex*) d_inp_mat, Nx_int
+                                    )) != CUBLAS_STATUS_SUCCESS)
+    {
+        cerr << "cublas_status: " << cublas_status << endl;
+        throw cublas_err(cublas_status);
+    } 
 
-    /*
-    cusparseStatus_t 
-        cusparseZgtsvStridedBatch(cusparseHandle_t handle, int m,         
-                const cuDoubleComplex *dl, 
-                const cuDoubleComplex  *d,  
-                const cuDoubleComplex *du, cuDoubleComplex *x,     
-                int batchCount, int batchStride)
-    */
+    // Pointers to current row in d_inp_mat (the result we check against) and
+    //                            d_tmp_mat (the input for Dcsrmv)
+    CuCmplx<T>* row_ptr_d_inp{nullptr};
+    CuCmplx<T>* row_ptr_d_tmp{nullptr};
+
+    T ky2{0.0};
+    const T Ly{static_cast<T>(sl.My) * sl.delta_y};
+    for(size_t m = 0; m < My21; m++)
+    {
+        row_ptr_d_inp = d_inp_mat + m * Nx;
+        row_ptr_d_tmp = d_tmp_mat + m * Nx;
+
+        // Copy reference data in h_inp_mat
+        gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+        //for(size_t n = 0; n < Nx; n++)
+        //{
+        //    cout << n << ":\t h_inp_mat_col = " << h_inp_mat_col[n] << endl;
+        //}
+
+        // Update values of csrValA_h
+        // Assume Dirichlet=0 boundary conditions for now
+        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
+        csrValA_h[0] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
+        //cout << csrValA_h[0] << "\t" << csrValA_h[1] << "\t";
+        for(size_t n = 2; n < nnz - 3; n += 3)
+        {
+            csrValA_h[n + 1] = CuCmplx<T>(-2.0 * inv_dx2 - ky2);
+            //cout << csrValA_h[n] << "\t" << csrValA_h[n + 1] << "\t" << csrValA_h[n + 1] << "\t";
+        }
+        csrValA_h[nnz - 1] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
+        //cout << csrValA_h[nnz - 2] << "\t" << csrValA_h[nnz - 1] << "\t";
+
+        gpuErrchk(cudaMemcpy(csrValA_d, csrValA_h, nnz * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+
+        // Apply Laplace matrix to every column in d_tmp_mat.
+        // Overwrite the current column in d_inp_mat
+        // Store result in h_tmp_mat
+        if((cusparse_status = cusparseZcsrmv(cusparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,   
+                                             static_cast<int>(Nx), static_cast<int>(Nx), static_cast<int>(nnz),
+                                             &alpha, mat_type,
+                                             (cuDoubleComplex*) csrValA_d,
+                                             csrRowPtrA_d,
+                                             csrColIndA_d,
+                                             (cuDoubleComplex*) row_ptr_d_tmp,
+                                             &beta,
+                                             (cuDoubleComplex*) row_ptr_d_inp)
+           ) != CUSPARSE_STATUS_SUCCESS)
+        {
+            cerr << "cusparse_status = " << cusparse_status << endl;
+            throw cusparse_err(cusparse_status);
+        }
+        gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+
+        // Compute L2 distance between h_inp_mat and h_tmp_mat
+      T L2_norm{0.0};
+      //CuCmplx<T> tmp(0.0, 0.0);
+      for(size_t n = 0; n < Nx; n++)
+        {
+            //cout << n << ": h_inp_mat_col = " << h_inp_mat_col[n] << "\th_tmp_mat_col = " << h_tmp_mat_col[n] << endl;
+            L2_norm += ((h_inp_mat_col[n] - h_tmp_mat_col[n]) * (h_inp_mat_col[n] - h_tmp_mat_col[n])).abs();
+        }
+        L2_norm = sqrt(L2_norm);
+        cout << m << ": ky = " << sqrt(ky2) << "\t L2 = " << L2_norm << endl;
+    }
+     
+
+    // 4.) Clean up sparse storage
+    cudaFree(d_inp_mat);
+    cudaFree(csrColIndA_d);
+    cudaFree(csrRowPtrA_d);
+    cudaFree(csrValA_d);
+    
+    // Input columns
+    delete [] h_inp_mat_col;
+    delete [] h_tmp_mat_col;
+
+    delete [] csrColIndA_h;
+    delete [] csrRowPtrA_h;
+    delete [] csrValA_h;
+#endif
+
 
 }
 

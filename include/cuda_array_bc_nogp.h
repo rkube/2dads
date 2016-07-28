@@ -411,7 +411,7 @@ void cuda_array_bc_nogp<T> :: evaluate_device(size_t tlev)
                 {
                     T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
                     T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
-                    return(sin(2.0 * M_PI * x) + 0.0 * sin(2.0 * M_PI * y));
+                    return(sin(cuda::TWOPI * x) + 0.0 * sin(cuda::TWOPI * y));
                     //return(T(1000 * m + n));
                 }, 
                 geom);
@@ -423,7 +423,7 @@ void cuda_array_bc_nogp<T> :: evaluate_device(size_t tlev)
                 {
                     T x{geom.x_left + (T(n) + 0.0) * geom.delta_x};
                     T y{geom.y_lo + (T(m) + 0.0) * geom.delta_y};
-                    return(sin(2.0 * M_PI * x) + 0.0 * sin(2.0 * M_PI * y));
+                    return(sin(cuda::TWOPI * x) + 0.0 * sin(cuda::TWOPI * y));
                     //return(T(1000 * m + n));
                 }, 
                 geom);
@@ -453,7 +453,7 @@ void cuda_array_bc_nogp<T> :: init_sine()
                 T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
                 T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
                 //return(sin(2.0 * cuda::PI * y));
-                return(sin(2.0 * cuda::PI * y));
+                return(sin(cuda::TWOPI * y) + 0.0 * sin(cuda::TWOPI * x));
             },
             geom);
 }

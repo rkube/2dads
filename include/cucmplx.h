@@ -11,7 +11,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
-//#include "cucmplx.h"
+
 
 #ifdef __CUDACC__
 #define CUDA_MEMBER __host__ __device__
@@ -19,7 +19,8 @@
 #define CUDA_MEMBER
 #endif
 
-
+constexpr size_t io_width{16};
+constexpr size_t io_prec{10};
 
 template<typename T>
 class CuCmplx
@@ -188,8 +189,7 @@ public:
     CUDA_MEMBER void dump();
     friend std::ostream& operator<<(std::ostream& os, CuCmplx<T> rhs)
     {
-        os << "(" << std::setw(7) << std::setprecision(4) << rhs.re() << ", ";
-        os << std::setw(7) << std::setprecision(4) << rhs.im() << ")";
+        os << "(" << std::setw(io_width) << std::setprecision(io_prec) << "(" << rhs.re() << ", " << rhs.im() << ")";
         return (os);
     }
 
