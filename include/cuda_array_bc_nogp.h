@@ -439,7 +439,8 @@ void cuda_array_bc_nogp<T> :: init_inv_laplace()
             {
                 T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
                 T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
-                return(exp(-0.5 * (x * x + y * y)) * (x * x - 1.0) * (y * y - 1.0));
+                //return(exp(-0.5 * (x * x + y * y)) * (x * x - 1.0) * (y * y - 1.0));
+                return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
             },
             geom);
 }

@@ -94,7 +94,7 @@ void do_test()
     cuda::real_t Ly{10.0};
     cuda::real_t dx{Lx / Nx};
     cuda::real_t dy{Lx / My};
-    const cuda::slab_layout_t sl(-0.5 * Lx, Lx / (cuda::real_t) Nx, -0.5 * Ly, Ly / (cuda::real_t) My, 1e-3, My, Nx);
+    const cuda::slab_layout_t sl(-0.5 * Lx, Lx / static_cast<cuda::real_t>(Nx), -0.5 * Ly, Ly / static_cast<cuda::real_t>(My), Nx, 0, My, 0); 
 
     cout << "Nx = " << Nx << ", Lx = " << Lx << ", dx = " << dx << ", dy = " << dy << endl;
 

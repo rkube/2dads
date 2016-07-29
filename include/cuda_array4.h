@@ -499,10 +499,10 @@ cuda_array<T> :: cuda_array(uint t, uint my, uint nx) :
     My(my),
     Nx(nx), 
     array_bounds(tlevs, My, Nx),
-	block(dim3(cuda::blockdim_nx, cuda::blockdim_my)),
+	block(dim3(cuda::blockdim_col, cuda::blockdim_row)),
 	// Round integer division for grid.y, see: http://stackoverflow.com/questions/2422712/c-rounding-integer-division-instead-of-truncating
 	// a la int a = (59 + (4 - 1)) / 4;
-	grid(dim3((Nx + (cuda::blockdim_nx - 1)) / cuda::blockdim_nx, My)),
+	grid(dim3((Nx + (cuda::blockdim_col - 1)) / cuda::blockdim_col, (My + (cuda::blockdim_row -1) / cuda::blockdim_row))),
 	array_d(nullptr), 
     array_d_t(nullptr), 
     array_d_t_host(new T*[tlevs]),

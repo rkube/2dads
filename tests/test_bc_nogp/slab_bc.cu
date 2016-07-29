@@ -226,7 +226,10 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
 {
     cuda_arr_real* in_arr = get_field_by_name.at(in);
     cuda_arr_real* out_arr = get_field_by_name.at(out);
-    der.invert_laplace((*in_arr), (*out_arr), tlev);
+    der.invert_laplace((*in_arr), (*out_arr), 
+                       in_arr -> get_bvals().bc_left, in_arr -> get_bvals().bval_left,
+                       in_arr -> get_bvals().bc_right, in_arr -> get_bvals().bval_right,
+            tlev);
 }
 
 

@@ -54,10 +54,10 @@ namespace cuda
     constexpr real_t TWOPI{6.2831853071795864769};  ///< $2.0 \pi$
     constexpr real_t FOURPIS{39.47841760435743};    ///< $4.0 * \pi^2$
     constexpr real_t epsilon{1e-10};
-    constexpr int max_initc{6}; /// < Maximal number of initial conditions
+    constexpr size_t max_initc{6}; /// < Maximal number of initial conditions
 
-    constexpr int io_w{16}; //width of fields used in cout
-    constexpr int io_p{10}; //precision when printing with cout
+    constexpr size_t io_w{16}; //width of fields used in cout
+    constexpr size_t io_p{10}; //precision when printing with cout
 
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};
     enum class grid_t {vertex_centered, cell_centered};
@@ -72,6 +72,7 @@ namespace cuda
         // Provide standard ctor for pre-C++11
         slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y) :
             x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y) {};
+
         const real_t x_left;
         const real_t delta_x;
         const real_t y_lo;
@@ -137,8 +138,44 @@ namespace cuda
 
 
     template <typename T>
-    struct bvals_t
+    class bvals_t
     {
+        public:
+            bvals_t(bc_t _bc_left, bc_t _bc_right, bc_t _bc_top, bc_t _bc_bottom, T _bv_l, T _bv_r, T _bv_t, T _bv_b)
+                : bc_left(_bc_left), bc_right(_bc_right), bc_top(_bc_top), bc_bottom(_bc_bottom),
+                bval_left(_bv_l), bval_right(_bv_r), bval_top(_bv_t), bval_bottom(_bv_b) {};
+
+            bc_t get_bc_left() const {return(bc_left);};
+            bc_t get_bc_right() const {return(bc_right);};
+            bc_t get_bc_top() const {return(bc_top);};
+            bc_t get_bc_bottom() const {return(bc_bottom);};
+
+            T get_bv_left() const {return(bval_left);};
+            T get_bv_right() const {return(bval_right);};
+            T get_bv_top() const {return(bval_top);};
+            T get_bv_bottom() const {return(bval_bottom);};
+
+            bool operator==(const bvals_t rhs) const
+            {
+                if((bc_left  == rhs.bc_left) 
+                   && (bc_right == rhs.bc_right)
+                   && (bc_top == rhs.bc_top)
+                   && (bc_bottom == rhs.bc_bottom)
+                   && (abs(bval_left - rhs.bval_left) < cuda::epsilon)
+                   && (abs(bval_right - rhs.bval_right) < cuda::epsilon)
+                   && (abs(bval_top - rhs.bval_top) < cuda::epsilon)
+                   && (abs(bval_bottom - rhs.bval_bottom) < cuda::epsilon))
+                {
+                    return (true);
+                }
+                return (false);
+            }
+
+            bool operator!=(const bvals_t rhs) const
+            {
+                return(!(*this == rhs));
+            }
+
         // The boundary conditions on the domain border
         bc_t bc_left;
         bc_t bc_right;
@@ -157,16 +194,16 @@ namespace cuda
     {
     public:
         // Provide a standard constructor for pre-C++11
-        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, unsigned int my, unsigned int nx21, unsigned int l) :
+        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, size_t my, size_t nx21, size_t l) :
         delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx21(nx21), level(l) {};
         const real_t delta_t;
         const real_t length_x;
         const real_t length_y;
         const real_t diff;
         const real_t hv;
-        const int My;
-        const int Nx21;
-        const int level;
+        const size_t My;
+        const size_t Nx21;
+        const size_t level;
         friend std::ostream& operator<<(std::ostream& os, const stiff_params_t s)
         {
             os << "delta_t = " << s.delta_t << "\t";

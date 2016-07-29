@@ -140,8 +140,8 @@ void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tl
 
 /*
  * Datatype that provides derivation routines and solver for QR factorization
- *
  */
+
 template <typename T>
 class derivs
 {
@@ -149,7 +149,10 @@ class derivs
         derivs(const cuda::slab_layout_t);
         ~derivs();
 
-        void invert_laplace(cuda_array_bc_nogp<T>&, cuda_array_bc_nogp<T>&, const size_t t_src);
+        void invert_laplace(cuda_array_bc_nogp<T>&, cuda_array_bc_nogp<T>&, 
+                            const cuda::bc_t, const T,
+                            const cuda::bc_t, const T,
+                            const size_t t_src);
 
     private:
         const size_t Nx;
@@ -169,18 +172,29 @@ class derivs
         CuCmplx<T>* d_diag_u;   // upper diagonal, for Laplace equatoin this is the same as the lower diagonal
 
         CuCmplx<T>* d_tmp_mat;  // workspace, used to transpose matrices for invert_laplace
+
+        CuCmplx<T>* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions
+                                // passed to invert_laplace routine.
 };
 
 
 template <typename T>
 derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     Nx(_sl.Nx), My(_sl.My), My21(static_cast<int>(My / 2 + 1)), sl(_sl),
-    d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr}
+    d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr},
+    h_diag{nullptr}
 {
     // Host copy of main and lower diagonal
-    CuCmplx<T>* h_diag = new CuCmplx<T>[Nx];
+    h_diag = new CuCmplx<T>[Nx];
     CuCmplx<T>* h_diag_u = new CuCmplx<T>[Nx];
     CuCmplx<T>* h_diag_l = new CuCmplx<T>[Nx];
+
+    // Initialize cublas
+    cublasStatus_t cublas_status;
+    if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
+    {
+        throw cublas_err(cublas_status);
+    }
 
     // Initialize cusparse
     cusparseStatus_t cusparse_status;
@@ -196,13 +210,6 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     
     cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
     cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO);
-
-    // Initialize cublas
-    cublasStatus_t cublas_status;
-    if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
-    {
-        throw cublas_err(cublas_status);
-    }
 
     // Allocate memory for temporary matrix storage
     gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
@@ -241,56 +248,54 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     h_diag_u[Nx - 1] = 0.0;
     h_diag_l[0] = 0.0;
 
-    // Paste copies of this vector together (required by cusparseZgtsvStridedBatch
+    // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
     for(size_t m = 0; m < My21; m++)
     {
         gpuErrchk(cudaMemcpy(d_diag_l + m * Nx, h_diag_l, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
         gpuErrchk(cudaMemcpy(d_diag_u + m * Nx, h_diag_u, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
     }
 
-    /*
-     * Check if the main diagonal elements are copied correctly
-     * CuCmplx<T>* tmp = new CuCmplx<T>[Nx * My21];
-     * gpuErrchk(cudaMemcpy(tmp, d_diag, Nx * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
-     * for(size_t m = 0; m < My21; m++)
-     * {
-     *     for(size_t n = 0; n < Nx; n++)
-     *     {
-     *         cout << "m = " << m << " n = " << n << ": " << tmp[m * Nx + n] << endl;
-     *     }
-     * }
-     * delete [] tmp;
-     */
-
     delete [] h_diag_l;
     delete [] h_diag_u;
-    delete [] h_diag;
 }
 
 
 template <typename T>
 derivs<T> :: ~derivs()
 {
-    cudaFree(d_tmp_mat);
     cudaFree(d_diag_l);
     cudaFree(d_diag_u);
     cudaFree(d_diag);
+    cudaFree(d_tmp_mat);
 
+    delete [] h_diag;
+    cerr << "Deleting cublas handle" << endl;
     cublasDestroy(cublas_handle);
+    cerr << "Deleting cusparse handle" << endl;
     cusparseDestroy(cusparse_handle);
 }
 
 template <typename T>
-void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<T>& src, const size_t t_src){
-    // Safe casts because I am feeling fancy today :)
+void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<T>& src, 
+                                 const cuda::bc_t bctype_left, const T bval_left,
+                                 const cuda::bc_t bctype_right, const T bval_right,
+                                 const size_t t_src)
+{
+    // Safe casts because we are fancy :)
     const int My_int{static_cast<int>(src.get_my())};
     const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
     const int Nx_int{static_cast<int>(src.get_nx())};
+    const T inv_dx2{1.0 / (sl.delta_x * sl.delta_x)};
 
     const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
     cublasStatus_t cublas_status;
     cusparseStatus_t cusparse_status;
+
+    if (dst.get_bvals() != src.get_bvals())
+    {
+        throw assert_error(string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
+    }
 
     // Call cuBLAS to transpose the memory.
     // cuda_array_bc_nogp stores the Fourier coefficients in each column consecutively.
@@ -345,7 +350,6 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         cout << "cublas_status: " << cublas_status << endl;
         throw cublas_err(cublas_status);
     }
-    cout << "cublas_status: " << cublas_status << endl;
 
     /* Write output of cublasZgeam to file for debugging purposes
     gpuErrchk(cudaMemcpy(tmp_arr, d_tmp_mat, nelem * sizeof(T), cudaMemcpyDeviceToHost));
@@ -366,6 +370,37 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
 
 
     // Next step: Solve the tridiagonal system
+    // 1.) Update the first and last element of the main diagonal for ky=0 mode with the boundary values
+    //     Add the Fourier coefficient for mode m=0 of f(0.0, y) = u: hat(u) = My * u
+    switch(bctype_left)
+    {
+        case cuda::bc_t::bc_dirichlet:
+            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            break;
+        case cuda::bc_t::bc_neumann:
+            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            break;
+        case cuda::bc_t::bc_periodic:
+            cerr << "Periodic boundary conditions not implemented yet." << endl;
+            cerr << "Treating as dirichlet, bval=0" << endl;
+            break;
+    }
+
+    switch(bctype_right)
+    {
+        case cuda::bc_t::bc_dirichlet:
+            h_diag[Nx - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            break;
+        case cuda::bc_t::bc_neumann:
+            h_diag[Nx - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            break;
+        case cuda::bc_t::bc_periodic:
+            cerr << "Periodic boundary conditions not implemented yet." << endl;
+            cerr << "Treating as dirichlet, bval=0" << endl;
+            break;
+    }
+
+    //gpuErrchk(cudaMemcpy(d_diag, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
 
     if((cusparse_status = cusparseZgtsvStridedBatch(cusparse_handle,
                                                     Nx_int,
@@ -378,7 +413,6 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     {
         throw cusparse_err(cusparse_status);
     }
-    cout << "cusparse_status: " << cusparse_status << endl;
     // Convert d_tmp_mat from column-major to row-major order
     if((cublas_status = cublasZgeam(cublas_handle,
                                     CUBLAS_OP_T, CUBLAS_OP_N,
@@ -393,8 +427,6 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         cout << cublas_status << endl;
         throw cublas_err(cublas_status);
     }
-    //gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToDevice));
-    cout << "cublas_status: " << cublas_status << endl;
 
 
 #ifdef DEBUG
@@ -420,7 +452,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     CuCmplx<T>* d_inp_mat{nullptr};
 
     // Some constants we need later on
-    const T inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
+    //const T inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
     const CuCmplx<T> inv_dx2_cmplx = CuCmplx<T>(inv_dx2);
 
     gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(CuCmplx<T>)));
@@ -429,10 +461,10 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     gpuErrchk(cudaMalloc((void**) &d_inp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
 
     // Build Laplace matrix structure: ColIndA and RowPtrA
-    // Matrix values on main diagonal are later updated individually for each ky mode.
+    // Matrix values on main diagonal are updated individually lateron for each ky mode.
     // Side bands (upper/lower diagonal) are computed once here.
     csrColIndA_h[0] = 0;
-    csrColIndA_h[1] = 0;
+    csrColIndA_h[1] = 1;
 
     csrRowPtrA_h[0] = 0;
     csrValA_h[1] = inv_dx2_cmplx;
@@ -443,16 +475,17 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         csrColIndA_h[n + 1] = static_cast<int>((n - 2) / 3) + 1;
         csrColIndA_h[n + 2] = static_cast<int>((n - 2) / 3) + 2;
 
-        csrRowPtrA_h[(n - 2) / 3 + 1] = n; 
+        csrRowPtrA_h[(n - 2) / 3 + 1] = static_cast<int>(n); 
 
         csrValA_h[n] = inv_dx2_cmplx;
         csrValA_h[n + 2] = inv_dx2_cmplx;
     }   
 
-    csrColIndA_h[nnz - 2] = Nx - 2;
-    csrColIndA_h[nnz - 1] = Nx - 1;  
+    csrColIndA_h[nnz - 2] = static_cast<int>(Nx - 2);
+    csrColIndA_h[nnz - 1] = static_cast<int>(Nx - 1);  
 
-    csrRowPtrA_h[Nx - 1] = nnz;
+    csrRowPtrA_h[Nx - 1] = static_cast<int>(nnz - 2);
+    csrRowPtrA_h[Nx] = static_cast<int>(nnz);
 
     csrValA_h[nnz - 2] = CuCmplx<T>(inv_dx2);
 
@@ -462,7 +495,9 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     cusparseMatDescr_t mat_type;
     cusparseCreateMatDescr(&mat_type); 
 
-    
+    gpuErrchk(cudaMemcpy(csrColIndA_h, csrColIndA_d, nnz * sizeof(int), cudaMemcpyDeviceToHost));
+    cout << endl;
+
     // 2.) Compare solution for all ky modes
     //     -> Solution of ZgtsvStridedBatch is stored, column-wise in d_tmp_mat. Apply Laplace matrix A to this data.
     //     -> Input to ZgtsvStridedBatch is stored, column-wise in d_inp_mat. Compare A * d_tmp_mat to d_inp_mat
@@ -494,11 +529,13 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     T ky2{0.0};
     const T Ly{static_cast<T>(sl.My) * sl.delta_y};
     for(size_t m = 0; m < My21; m++)
+    //for(size_t m = 0; m < 2; m++)
     {
         row_ptr_d_inp = d_inp_mat + m * Nx;
         row_ptr_d_tmp = d_tmp_mat + m * Nx;
 
-        // Copy reference data in h_inp_mat
+        // Copy reference data in d_inp_mat
+        // These are fourier coefficients for ky=0 mode at various xn positions
         gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
         //for(size_t n = 0; n < Nx; n++)
         //{
@@ -509,17 +546,23 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         // Assume Dirichlet=0 boundary conditions for now
         ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
         csrValA_h[0] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
-        //cout << csrValA_h[0] << "\t" << csrValA_h[1] << "\t";
         for(size_t n = 2; n < nnz - 3; n += 3)
         {
             csrValA_h[n + 1] = CuCmplx<T>(-2.0 * inv_dx2 - ky2);
-            //cout << csrValA_h[n] << "\t" << csrValA_h[n + 1] << "\t" << csrValA_h[n + 1] << "\t";
         }
         csrValA_h[nnz - 1] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
-        //cout << csrValA_h[nnz - 2] << "\t" << csrValA_h[nnz - 1] << "\t";
+
+        //for(size_t n = 0; n < nnz; n++)
+        //{
+        //    cout << n << ":\tcsrValA_h = " << csrValA_h[n] << "\t\t\tcsrColIndA = " << csrColIndA_h[n];
+        //    if(n < Nx + 1)
+        //        cout << "\t\tcsrRowPtrA_h = " << csrRowPtrA_h[n];
+        //    cout << endl;
+        //}
+        //cout << "===========================================================================================" << endl;
 
         gpuErrchk(cudaMemcpy(csrValA_d, csrValA_h, nnz * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
-
+        
         // Apply Laplace matrix to every column in d_tmp_mat.
         // Overwrite the current column in d_inp_mat
         // Store result in h_tmp_mat
@@ -537,116 +580,43 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
             cerr << "cusparse_status = " << cusparse_status << endl;
             throw cusparse_err(cusparse_status);
         }
+
         gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+        //if(m > 4 && m < 7)
+        //{
+        //    for(size_t n = 0; n < Nx; n++)
+        //    {
+        //        cout << n << ": h_inp_mat_col = " << h_inp_mat_col[n] << "\th_tmp_mat_col = " << h_tmp_mat_col[n] << endl;
+        //    }
+        //}
 
         // Compute L2 distance between h_inp_mat and h_tmp_mat
-      T L2_norm{0.0};
-      //CuCmplx<T> tmp(0.0, 0.0);
-      for(size_t n = 0; n < Nx; n++)
+        T L2_norm{0.0};
+        for(size_t n = 0; n < Nx; n++)
         {
-            //cout << n << ": h_inp_mat_col = " << h_inp_mat_col[n] << "\th_tmp_mat_col = " << h_tmp_mat_col[n] << endl;
             L2_norm += ((h_inp_mat_col[n] - h_tmp_mat_col[n]) * (h_inp_mat_col[n] - h_tmp_mat_col[n])).abs();
         }
-        L2_norm = sqrt(L2_norm);
+        L2_norm = sqrt(L2_norm / static_cast<T>(Nx));
         cout << m << ": ky = " << sqrt(ky2) << "\t L2 = " << L2_norm << endl;
     }
-     
+    row_ptr_d_inp = nullptr;
+    row_ptr_d_tmp = nullptr;
 
     // 4.) Clean up sparse storage
     cudaFree(d_inp_mat);
-    cudaFree(csrColIndA_d);
     cudaFree(csrRowPtrA_d);
+    cudaFree(csrColIndA_d);
     cudaFree(csrValA_d);
     
     // Input columns
-    delete [] h_inp_mat_col;
     delete [] h_tmp_mat_col;
+    delete [] h_inp_mat_col;
 
     delete [] csrColIndA_h;
     delete [] csrRowPtrA_h;
     delete [] csrValA_h;
 #endif
-
-
 }
-
-/******** temporary code used with cusolve library ******************
-        // Provide CSR description of the 2d laplace matrix
-        // See http://docs.nvidia.com/cuda/cusolver/index.html#format-csr
-        // 1.) Device vectors 
-        //int* d_csrRowPtrA;
-        //int* d_csrColIndA;
-        //T* d_csrValA;
-        //T* d_b;
-        //T* d_x;
-        // 2.) Host vectors
-        //int m;        // Dimension of the Matrix
-        //int nnzA;     // Number of non-zero elements
-        //int* csrRowPtrA;
-        //int* csrColIndA;
-        //T* csrValA;
-        //T* b;
-        //int batch_size;
-
-        // Size information of QR factorization
-        //size_t size_qr;
-        //size_t size_internal;
-        //void* buffer_qr;
-};
-
-
-//template <typename T>
-//derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
-//    info{nullptr},
-//    descrA{nullptr},
-//    d_csrRowPtrA{nullptr}, d_csrColIndA{nullptr}, d_csrValA{nullptr}, d_b{nullptr}, d_x{nullptr},
-//    size_qr{0}, size_internal{0}, buffer_qr{nullptr},
-//    m{int(_sl.My)}, nnzA{3 * m}, batch_size{1},
-//    csrRowPtrA{new int[nnzA]}, csrColIndA{new int[nnzA]}, csrValA{new T[nnzA]}, b{new T[_sl.My]}
-//{
-//    cout << "derivs<T> ::derivs" << endl;
-//    // Initialize cusolver and create a handle for the cuSolver context
-//    if (cusolverSpCreate(&cusolver_handle) != CUSOLVER_STATUS_SUCCESS)
-//    {
-//        cerr << "Error creating cusolver handle" << endl; 
-//    };
-//    // Initialize cusparse
-//    if(cusparseCreateMatDescr(&descrA) != CUSPARSE_STATUS_SUCCESS)
-//    {
-//        cerr << "Error creating cusparse Matrix description" << endl;
-//    }
-//    // Set matrix type
-//    cusparseSetMatType(descrA, CUSPARSE_MATRIX_TYPE_GENERAL);
-//    cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ONE);
-//
-//    if(cusolverSpCreateCsrqrInfo(&info) != CUSOLVER_STATUS_SUCCESS)
-//    {
-//        cerr << "Error creating QR solver info" << endl;
-//    }
-//
-//}
-
-
-
-
-//template <typename T>
-//derivs<T> :: ~derivs()
-//{
-//    cout << "~derivs<T>" << endl;
-//    cusolverSpDestroy(cusolver_handle);
-//
-//    // Free GPU arrays
-//    //
-//
-//    // Free CPU arrays
-//    delete [] b;
-//    delete [] csrValA;
-//    delete [] csrColIndA;
-//    delete [] csrRowPtrA;
-//}
-
-**************** End of temporary code used with cusparse library *********/
-
 
 
 //

@@ -189,7 +189,7 @@ public:
     CUDA_MEMBER void dump();
     friend std::ostream& operator<<(std::ostream& os, CuCmplx<T> rhs)
     {
-        os << "(" << std::setw(io_width) << std::setprecision(io_prec) << "(" << rhs.re() << ", " << rhs.im() << ")";
+        os << std::setw(io_width) << std::setprecision(io_prec) << "(" << rhs.re() << ", " << rhs.im() << ")";
         return (os);
     }
 
