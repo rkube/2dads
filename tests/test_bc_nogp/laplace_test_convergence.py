@@ -32,7 +32,7 @@ for idx, Nx in enumerate(Nx_arr):
     arr1 = np.loadtxt("test_laplace_arr1_%d.dat" % (Nx))[:Nx, :Nx]
     arr2 = np.loadtxt("test_laplace_arr2_%d.dat" % (Nx))[:Nx, :Nx]
 
-    dx = 20. / float(Nx)
+    dx = L / float(Nx)
     xrg = -0.5 * L + (np.arange(Nx) + 0.5) * dx
     yrg = -0.5 * L + (np.arange(Nx) + 0.5) * dx
 

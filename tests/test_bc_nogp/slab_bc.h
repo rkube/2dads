@@ -40,8 +40,9 @@ class slab_bc
         void initialize_sine(const test_ns::field_t);
         void initialize_arakawa(const test_ns::field_t, const test_ns::field_t);
 
-        void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t);
+        void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
         void d_dx_dy(const size_t);
+        void arakawa(const test_ns::field_t, const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
         void print_field(const test_ns::field_t) const;
         void print_field(const test_ns::field_t, const string) const;

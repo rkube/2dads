@@ -1,0 +1,8 @@
+gmon.out
+*.dat
+test_arakawa
+test_arakawa
+test_derivs
+test_dtype
+test_laplace
+test_slab

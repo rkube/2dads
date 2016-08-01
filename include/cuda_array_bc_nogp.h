@@ -49,7 +49,7 @@
 #include "bounds.h"
 #include "error.h"
 #include "cuda_types.h"
-#include "allocator_device.h"
+#include "allocators.h"
 
 
 typedef unsigned int uint;
@@ -112,43 +112,6 @@ void d_alloc_array_d_t(T** array_d_t, T* array, const cuda::slab_layout_t geom, 
         array_d_t[t] = &array[t * (geom.Nx + geom.pad_x) * (geom.My + geom.pad_y)];
     }
 }
-
-
-template <typename T>
-__global__
-void d_enumerate(T* array_d, const cuda::slab_layout_t geom) 
-{
-	const size_t col{d_get_col()};
-    const size_t row{d_get_row()};
-    const size_t index{row * (geom.My + geom.pad_y) + col};
-
-#ifdef DEBUG
-	if (good_idx(row, col, geom))
-        printf("Good: blockIdx.x = %d, threadIdx.x = %d, col = %d, blockIdx.y = %d, threadIdx.y = %d, row = %d, index = %d\n", 
-                blockIdx.x, threadIdx.x, col, blockIdx.y, threadIdx.y, row, index);
-    else
-        printf("Bad: blockIdx.x = %d, threadIdx.x = %d, col = %d, blockIdx.y = %d, threadIdx.y = %d, row = %d, index = %d\n", 
-                blockIdx.x, threadIdx.x, col, blockIdx.y, threadIdx.y, row, index);
-#endif
-
-	if (good_idx(row, col, geom))
-        array_d[index] = T(index);
-}
-
-
-template <typename T>
-__global__
-void d_set_to_zero(T** array_d_t, const cuda::slab_layout_t geom, const size_t tlev) 
-{
-	const size_t col{d_get_col()};
-	const size_t row{d_get_row()};
-	const size_t index{row * (geom.My + geom.pad_y) + col};
-	
-	//if (good_idx(row, col, geom))
-    if((col < geom.My + geom.pad_y) & (row < geom.Nx + geom.pad_x))
-		array_d_t[tlev][index] = T(0.0);
-}
-	
 
 
 /// Evaluate the function lambda d_op_fun (with type given by template parameter O)
@@ -335,8 +298,8 @@ private:
 	value_t** array_h_t;	
 	
 	// CuFFT related stuff
-	cufftHandle plan_fw;
-	cufftHandle plan_bw;
+	//cufftHandle plan_fw;
+	//cufftHandle plan_bw;
 };
 
 
@@ -379,7 +342,6 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp
 
 	for(size_t t = 0; t < tlevs; t++)
     {
-		d_set_to_zero<<<grid, block>>>(array_d_t, geom, t);
         array_h_t[t] = &array_h[t * get_nelem_per_t()];
         // Initialize array to zero
         //evaluate(*this, [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
@@ -397,8 +359,12 @@ void cuda_array_bc_nogp<allocator> :: enumerate()
 	for(size_t t = 0; t < tlevs; t++)
 	{
 		cout << t << endl;
-		d_enumerate<<<grid, block>>>(get_array_d(t), geom);
-	}
+		//d_enumerate<<<grid, block>>>(get_array_d(t), geom);
+        evaluate([=] __device__ (const size_t n, const size_t m, cuda::slab_layout_t geom) -> value_t
+                                 {
+                                     return(n * (geom.My + geom.pad_y) + m);
+                                 }, t);
+    }
 }
 
 
@@ -494,8 +460,8 @@ cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
 	if(array_d_t != nullptr)
 		cudaFree(array_d_t);
 		
-	cufftDestroy(plan_fw);
-	cufftDestroy(plan_bw);
+	//cufftDestroy(plan_fw);
+	//cufftDestroy(plan_bw);
 }
 
 #endif /* cuda_array_bc_H_ */

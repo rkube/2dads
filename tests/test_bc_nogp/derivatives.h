@@ -32,6 +32,38 @@ __device__ inline bool good_idx2(size_t row, size_t col, const cuda::slab_layout
 }  
 
 
+// Interpolates the value just outside the left domain border
+template <typename T>
+__device__ inline T interp_bv_left(const T u1, const T bval, const T delta_x, const cuda::bc_t bc)
+{
+    switch(bc)
+    {
+        case cuda::bc_t::bc_dirichlet:
+            return(2.0 * bval - u1);
+        case cuda::bc_t::bc_neumann:
+            return(u1 - delta_x * bval);
+        case cuda::bc_t::bc_periodic:
+            return(-1.0);
+    }
+}
+
+// Interpolates the value just outside the right domain border
+template <typename T>
+__device__ inline T interp_bv_right(const T uN, const T bval, const T delta_x, const cuda::bc_t bc)
+{
+    switch(bc)
+    {
+        case cuda::bc_t::bc_dirichlet:
+            return(2.0 * bval - uN);
+        case cuda::bc_t::bc_neumann:
+            return(uN + delta_x * bval);
+        case cuda::bc_t::bc_periodic:
+            return(-1.0);
+    }
+}
+
+
+
 // compute the first derivative in x-direction in rows 1..Nx-2
 // no interpolation needed
 template <typename T>
@@ -126,96 +158,262 @@ void kernel_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const c
 
 template <typename T>
 __global__
-void kernel_arakawa_center(const cuda_array_bc_nogp<T> u, const cuda_array_bc_nogp<T>& v, cuda_array_bc_nogp<T>& result, const cuda::slab_layout_t geom)
+void kernel_arakawa_center(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
 {
     const size_t col{d_get_col_2()};
     const size_t row{d_get_row_2()};
     const size_t index{row * (geom.My + geom.pad_y) + col}; 
 
-    if(row > 0 && row < geom.Nx && col > 0 && col < geom.My)
+    const T inv_dx_dy{1.0 / (12.0 * geom.delta_x * geom.delta_y)};
+    // This checks whether we are at an inside point when calling this kernel with a thread layout
+    // that covers the entire grid
+    if(row > 0 && row < geom.Nx  - 1 && col > 0 && col < geom.My - 1)
     {
-        result[index] = 
-        (u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] +
-         u[(row + 1) * (geom.My + geom.pad_y) * (col - 1)] -
-         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)] -
-         u[(row + 1) * (geom.My + geom.pad_y) * (col + 1)])
-        * 
-        (v[(row + 1) * (geom.My + geom.pad_y) * (col    )] +
-         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+        result[index] =  
+        ((u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
+          
+         -
+         (u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row - 1) * (geom.My + geom.pad_y) + (col    )])
 
-        -
-        (u[(row - 1) * (geom.My + geom.pad_y) * (col - 1)] +
-         u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col + 1)] -
-         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)])
-        * 
-        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
-         v[(row - 1) * (geom.My + geom.pad_y) * (col    )])
+         +
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
 
-        +
-        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] +
-         u[(row + 1) * (geom.My + geom.pad_y) * (col + 1)] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col    )] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col + 1)])
-        * 
-        (v[(row    ) * (geom.My + geom.pad_y) * (col + 1)] +
-         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+         -
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
 
-        -
-        (u[(row + 1) * (geom.My + geom.pad_y) * (col - 1)] +
-         u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col - 1)] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
-        * 
-        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
-         v[(row    ) * (geom.My + geom.pad_y) * (col - 1)])
+         +
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
+         *
+         (v[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
 
-        +
-        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
-         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)])
-        *
-        (v[(row + 1) * (geom.My + geom.pad_y) * (col + 1)] +
-         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+         -
+         (u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         *
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row - 1) * (geom.My + geom.pad_y) + (col - 1)])
+         
+         +
+         (u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         *
+         (v[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
 
-        -
-        (u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
-        *
-        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
-         v[(row - 1) * (geom.My + geom.pad_y) * (col - 1)])
-        
-        +
-        (u[(row    ) * (geom.My + geom.pad_y) * (col + 1)] -
-         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
-        *
-        (v[(row - 1) * (geom.My + geom.pad_y) * (col + 1)] +
-         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
-
-        -
-        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
-         u[(row    ) * (geom.My + geom.pad_y) * (col - 1)])
-        *
-        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
-         v[(row + 1) * (geom.My + geom.pad_y) * (col - 1)]);
-        
+         -
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
+         *
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row + 1) * (geom.My + geom.pad_y) + (col - 1)])
+         ) * inv_dx_dy;
     }
 };
 
+
+// Kernel operates on elements with n = 0, m = 0..My-1. Compute left ghost point of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_left(const T* u, const T bv_u_left, cuda::bc_t bc_u_left, 
+                         const T* v, const T bv_v_left, cuda::bc_t bc_v_left,
+                         T* result, const cuda::slab_layout_t geom)
+{
+    const size_t col{d_get_col_2()};
+    const size_t row{0};
+    const size_t index{row * (geom.My + geom.pad_y) + col}; 
+
+    const T inv_dx_dy{1.0 / (12.0 * geom.delta_x * geom.delta_y)};
+    
+    // Compute the value of the left ghost point in the current column, offset_0
+    const T u_left_c0  = interp_bv_left(u[col], bv_u_left, geom.delta_x, bc_u_left);
+    T u_left_cp1{0.0};
+    T u_left_cm1{0.0};
+
+    const T v_left_c0 = interp_bc_left(u[col], bv_v_left, geom.delta_x, bc_v_left);
+    T v_left_cp1{0.0};
+    T v_left_cm1{0.0};
+
+    // Wrap around when accessing over the last element, using periodic boundary conditions in y
+    if (col < geom.My - 1)
+        u_left_cp1 = interp_bv_left(u[col + 1], bv_u_left, geom.delta_x, bc_u_left);
+    else if(col == geom.My - 1)
+        u_left_cp1 = interp_bv_left(u[0], bv_u_left, geom.delta_x, bc_u_left);
+
+    if (col < geom.My - 1)
+        v_left_cp1 = interp_bv_left(v[col + 1], bv_v_left, geom.delta_x, bc_v_left);
+    else if(col == geom.My - 1)
+        v_left_cp1 = interp_bv_left(v[0], bv_v_left, geom.delta_x, bc_v_left);
+
+
+    // Wrap around when accessing before the first element, using periodic boundary conditions in y
+    if(col > 0)
+        u_left_cm1 = interp_bv_left(u[col - 1], bv_u_left, geom.delta_x, bc_u_left);
+    else if(col == 0)
+        u_left_cm1 = interp_bc_left(u[geom.My - 1], bv_u_left, geom.delta_x, bc_u_left); 
+   
+    if(col > 0)
+        v_left_cm1 = interp_bv_left(v[col - 1], bv_v_left, geom.delta_x, bc_v_left);
+    else if(col == 0)
+        v_left_cm1 = interp_bc_left(v[geom.My - 1], bv_v_left, geom.delta_x, bc_v_left); 
+   
+
+    if(row < geom.My)
+    {
+        result[index] =  
+        ((u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
+          
+         -
+         (u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+
+         +
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
+
+         -
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] +
+          u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         * 
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
+
+         +
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
+         *
+         (v[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
+
+         -
+         (u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         *
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row - 1) * (geom.My + geom.pad_y) + (col - 1)])
+         
+         +
+         (u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
+          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
+         *
+         (v[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] +
+          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
+
+         -
+         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
+          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
+         *
+         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
+          v[(row + 1) * (geom.My + geom.pad_y) + (col - 1)])
+         ) * inv_dx_dy;
+    }
+}
+
+
+// Kernel operates on elements with n = Nx - 1, m = 0..My-1. Computes right ghost points of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_right(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
+{
+    const size_t col{d_get_col_2()};
+    const size_t row{geom.Nx - 1};
+    const size_t index{row * (geom.My + geom.pad_y) + col}; 
+
+    if(col < geom.My)   
+    {
+        result[index] = -2.0; 
+    }
+
+}
+
+// Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_top(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
+{
+    const size_t col{geom.My - 1};
+    const size_t row{d_get_row_2()};
+    const size_t index{row * (geom.My + geom.pad_y) + col};
+
+    if(row < geom.Nx)
+    {
+        result[index] = -3.0;
+    }
+}
+
+
+// Kernel operates on elements with n = 0..Nx-1, m = 0. Computes bottom ghost points of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_bottom(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
+{
+    const size_t col{0};
+    const size_t row{d_get_row_2()};
+    const size_t index{row * (geom.My + geom.pad_y) + col};
+
+    if(row < geom.Nx)
+    {
+        result[index] = -4.0;
+    }
+}
 
 #endif //__CUDACC__
 
 template <typename T>
 void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tlev,
-             const cuda::slab_layout_t sl, const cuda::bvals_t<T> bc)
+             const cuda::slab_layout_t geom, const cuda::bvals_t<T> bc)
 {
     cout << "Computing x derivative\n";
 
     // Size of the grid for boundary kernels in x-direction
-    dim3 gridsize_line(int((sl.My + cuda::blockdim_row - 1) / cuda::blockdim_row));
+    dim3 gridsize_line(int((geom.My + cuda::blockdim_row - 1) / cuda::blockdim_row));
 
-    kernel_dx1_center<T> <<<in.get_grid(), in.get_block()>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
-    kernel_dx1_boundary_left<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
-    kernel_dx1_boundary_right<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
+    kernel_dx1_center<T> <<<in.get_grid(), in.get_block()>>>(in.get_array_d(tlev), out.get_array_d(0), bc, geom);
+    kernel_dx1_boundary_left<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, geom);
+    kernel_dx1_boundary_right<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, geom);
 }
 
 
@@ -236,15 +434,15 @@ class derivs
         void invert_laplace(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
                             const cuda::bc_t, const value_t,
                             const cuda::bc_t, const value_t,
-                            const size_t t_src);
+                            const size_t, const size_t);
         
-        void arakawa(const cuda_array_bc_nogp<allocator>&, const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&);
+        void arakawa(const cuda_array_bc_nogp<allocator>&, const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, const size_t, const size_t);
 
     private:
         const size_t Nx;
         const size_t My;
         const size_t My21;
-        const cuda::slab_layout_t sl;
+        const cuda::slab_layout_t geom;
         // Handles for cusparse library
         cusparseHandle_t cusparse_handle;
         cusparseMatDescr_t cusparse_descr;
@@ -265,11 +463,11 @@ class derivs
 
 
 template <typename allocator>
-derivs<allocator> :: derivs(const cuda::slab_layout_t _sl) :
-    Nx(_sl.Nx), 
-    My(_sl.My), 
+derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
+    Nx(_geom.Nx), 
+    My(_geom.My), 
     My21(static_cast<int>(My / 2 + 1)), 
-    sl(_sl),
+    geom(_geom),
     d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr},
     h_diag{nullptr}
 {
@@ -310,9 +508,9 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _sl) :
     gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<value_t>)));
 
     value_t ky2{0.0};                             // ky^2
-    const value_t inv_dx{1.0 / sl.delta_x};      // 1 / delta_x
+    const value_t inv_dx{1.0 / geom.delta_x};      // 1 / delta_x
     const value_t inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
-    const value_t Ly{static_cast<value_t>(sl.My) * sl.delta_y};
+    const value_t Ly{static_cast<value_t>(geom.My) * geom.delta_y};
 
     // Initialize the main diagonal separately for every ky
     for(size_t m = 0; m < My21; m++)
@@ -350,15 +548,26 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _sl) :
 
 
 template <typename allocator>
-void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res)
+void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res,
+                                  const size_t t_src, const size_t t_dst)
 {
     cout << "Computing arakawa bracket for u and v" << endl;
+    // Thread layout for accessing a single row (My = const, n = 0...Nx)
+    static dim3 block_single_row(cuda::blockdim_row, 1);
+    static dim3 grid_single_row(((Nx + geom.pad_x) + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
 
-    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u, v, res, sl);
-    //kernel_arakawa_left<<<grid_row, block_row>>>(u, v, res, sl);
-    //kernel_arakawa_right<<<grid_row, block_row>>>(u, v, res, sl);
-    //kernel_arakawa_top<<<grid_col, block_col>>>(u, v, res, sl);
-    //kernel_arakawa_bottom<<<grid_col, block_col>>>(u, v, res, sl);
+    // Thread layout for accessing a single column (m = 0...My, n = const)
+    static dim3 block_single_col(1, cuda::blockdim_col);
+    static dim3 grid_single_col(1, ((My + geom.pad_y) + cuda::blockdim_col - 1) / cuda::blockdim_col);
+
+    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
+    kernel_arakawa_left<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_bvals().get_bv_left(), u.get_bvals().get_bc_left(),
+                                                               v.get_array_d(t_src), v.get_bvals().get_bv_left(), v.get_bvals().get_bc_left(),
+                                                               res.get_array_d(t_dst), geom);
+    kernel_arakawa_right<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
+    kernel_arakawa_top<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
+    kernel_arakawa_bottom<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
+    cout << "done" << endl;
 }
 
 
@@ -381,13 +590,13 @@ template <typename allocator>
 void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cuda_array_bc_nogp<allocator>& src, 
                                          const cuda::bc_t bctype_left, const value_t bval_left,
                                          const cuda::bc_t bctype_right, const value_t bval_right,
-                                         const size_t t_src)
+                                         const size_t t_src, const size_t t_dst)
 {
     // Safe casts because we are fancy :)
     const int My_int{static_cast<int>(src.get_my())};
     const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
     const int Nx_int{static_cast<int>(src.get_nx())};
-    const value_t inv_dx2{1.0 / (sl.delta_x * sl.delta_x)};
+    const value_t inv_dx2{1.0 / (geom.delta_x * geom.delta_x)};
 
     const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
@@ -443,7 +652,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
                                     CUBLAS_OP_T, CUBLAS_OP_N,
                                     Nx_int, My21_int,
                                     &alpha,
-                                    (cuDoubleComplex*) src.get_array_d(0), My21_int,
+                                    (cuDoubleComplex*) src.get_array_d(t_src), My21_int,
                                     &beta,
                                     nullptr, Nx_int,
                                     (cuDoubleComplex*) d_tmp_mat, Nx_int
@@ -477,10 +686,10 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     switch(bctype_left)
     {
         case cuda::bc_t::bc_dirichlet:
-            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
+            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<value_t>(My) / geom.get_Ly();
             break;
         case cuda::bc_t::bc_neumann:
-            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
+            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<value_t>(My) / geom.get_Ly();
             break;
         case cuda::bc_t::bc_periodic:
             cerr << "Periodic boundary conditions not implemented yet." << endl;
@@ -491,10 +700,10 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     switch(bctype_right)
     {
         case cuda::bc_t::bc_dirichlet:
-            h_diag[Nx - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
+            h_diag[Nx - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<value_t>(My) / geom.get_Ly();
             break;
         case cuda::bc_t::bc_neumann:
-            h_diag[Nx - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
+            h_diag[Nx - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<value_t>(My) / geom.get_Ly();
             break;
         case cuda::bc_t::bc_periodic:
             cerr << "Periodic boundary conditions not implemented yet." << endl;
@@ -523,7 +732,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
                                     (cuDoubleComplex*) d_tmp_mat, Nx_int,
                                     &beta,
                                     nullptr, My21_int,
-                                    (cuDoubleComplex*) dst.get_array_d(0), My21_int
+                                    (cuDoubleComplex*) dst.get_array_d(t_dst), My21_int
                                     )) != CUBLAS_STATUS_SUCCESS)
     {
         cout << cublas_status << endl;
@@ -554,7 +763,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     cmplx_t* d_inp_mat{nullptr};
 
     // Some constants we need later on
-    //const value_t inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
+    //const value_t inv_dx2 = 1.0 / (geom.delta_x * geom.delta_x);
     const cmplx_t inv_dx2_cmplx = cmplx_t(inv_dx2);
 
     gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(cmplx_t)));
@@ -613,7 +822,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
                                     CUBLAS_OP_T, CUBLAS_OP_N,
                                     Nx_int, My21_int,
                                     &alpha, // 1.0 + 0.0i
-                                    (cuDoubleComplex*) src.get_array_d(0), My21_int,
+                                    (cuDoubleComplex*) src.get_array_d(t_src), My21_int,
                                     &beta,  // 0.0 + 0.0i
                                     nullptr, Nx_int,
                                     (cuDoubleComplex*) d_inp_mat, Nx_int
@@ -629,7 +838,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     cmplx_t* row_ptr_d_tmp{nullptr};
 
     value_t ky2{0.0};
-    const value_t Ly{static_cast<value_t>(sl.My) * sl.delta_y};
+    const value_t Ly{static_cast<value_t>(geom.My) * geom.delta_y};
     for(size_t m = 0; m < My21; m++)
     //for(size_t m = 0; m < 2; m++)
     {

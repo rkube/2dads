@@ -235,14 +235,14 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
             {
                 value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
                 value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
-                return(sin(cuda::TWOPI * y) + (1.0 * sin(cuda::TWOPI * x)));
+                return(x - 1.0 * sin(cuda::TWOPI * y));
             }, 0);
 
     (*arr2).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
                 value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
                 value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
-                return(sin(cuda::TWOPI * y) + (1.0 * sin(cuda::TWOPI * x)));
+                return(sin(cuda::TWOPI * x) + y);
             }, 0);
 }
 
@@ -255,15 +255,35 @@ void slab_bc :: d_dx_dy(const size_t tlev)
     //dft_c2r(0);
 }
 
+
+// Compute Arakawa brackets
+// res = {f, g} = f_y g_x - g_y f_x
+// Input:
+// fname_arr_f: array where f is stored
+// fname_arr_g: array where g is stored
+// fname_arr_res: array where we store the result
+// t_src: time level at which f and g are taken
+// t_dst: time level where we store the result in res
+void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
+                        const size_t t_src, const size_t t_dst)
+{
+    cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
+    cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
+    cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
+
+    der.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
+}
+
+
 // Invert the laplace equation
-void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t out, const size_t tlev)
+void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t out, const size_t t_src, const size_t t_dst)
 {
     cuda_arr_real* in_arr = get_field_by_name.at(in);
     cuda_arr_real* out_arr = get_field_by_name.at(out);
     der.invert_laplace((*in_arr), (*out_arr), 
                        in_arr -> get_bvals().bc_left, in_arr -> get_bvals().bval_left,
                        in_arr -> get_bvals().bc_right, in_arr -> get_bvals().bval_right,
-            tlev);
+                       t_src, t_dst);
 }
 
 
