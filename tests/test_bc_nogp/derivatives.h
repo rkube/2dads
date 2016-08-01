@@ -15,6 +15,8 @@
 #include <fstream>
 
 
+#ifdef __CUDACC__
+
 __device__ inline size_t d_get_col_2(){
     return (blockIdx.x * blockDim.x + threadIdx.x); 
 }
@@ -34,7 +36,7 @@ __device__ inline bool good_idx2(size_t row, size_t col, const cuda::slab_layout
 // no interpolation needed
 template <typename T>
 __global__ 
-void d_dx1_center(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
+void kernel_dx1_center(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
 {
     const size_t col{d_get_col_2()};
     const size_t row{d_get_row_2()};
@@ -57,7 +59,7 @@ void d_dx1_center(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_lay
 // Interpolate to the value in row n=-1 get the ghost point value
 template <typename T>
 __global__ 
-void d_dx1_boundary_left(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
+void kernel_dx1_boundary_left(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
 {
     const size_t col{d_get_col_2()};
     const size_t row{0};
@@ -92,7 +94,7 @@ void d_dx1_boundary_left(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::s
 // Interpolate the value at row n = Nx to get the ghost point value
 template <typename T>
 __global__ 
-void d_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
+void kernel_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::slab_layout_t geom)
 {
     const size_t col{d_get_col_2()};
     const size_t row{geom.Nx - 1};
@@ -123,6 +125,86 @@ void d_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const cuda::
 
 
 template <typename T>
+__global__
+void kernel_arakawa_center(const cuda_array_bc_nogp<T> u, const cuda_array_bc_nogp<T>& v, cuda_array_bc_nogp<T>& result, const cuda::slab_layout_t geom)
+{
+    const size_t col{d_get_col_2()};
+    const size_t row{d_get_row_2()};
+    const size_t index{row * (geom.My + geom.pad_y) + col}; 
+
+    if(row > 0 && row < geom.Nx && col > 0 && col < geom.My)
+    {
+        result[index] = 
+        (u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] +
+         u[(row + 1) * (geom.My + geom.pad_y) * (col - 1)] -
+         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)] -
+         u[(row + 1) * (geom.My + geom.pad_y) * (col + 1)])
+        * 
+        (v[(row + 1) * (geom.My + geom.pad_y) * (col    )] +
+         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+
+        -
+        (u[(row - 1) * (geom.My + geom.pad_y) * (col - 1)] +
+         u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col + 1)] -
+         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)])
+        * 
+        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
+         v[(row - 1) * (geom.My + geom.pad_y) * (col    )])
+
+        +
+        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] +
+         u[(row + 1) * (geom.My + geom.pad_y) * (col + 1)] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col    )] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col + 1)])
+        * 
+        (v[(row    ) * (geom.My + geom.pad_y) * (col + 1)] +
+         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+
+        -
+        (u[(row + 1) * (geom.My + geom.pad_y) * (col - 1)] +
+         u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col - 1)] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
+        * 
+        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
+         v[(row    ) * (geom.My + geom.pad_y) * (col - 1)])
+
+        +
+        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
+         u[(row    ) * (geom.My + geom.pad_y) * (col + 1)])
+        *
+        (v[(row + 1) * (geom.My + geom.pad_y) * (col + 1)] +
+         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+
+        -
+        (u[(row    ) * (geom.My + geom.pad_y) * (col - 1)] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
+        *
+        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
+         v[(row - 1) * (geom.My + geom.pad_y) * (col - 1)])
+        
+        +
+        (u[(row    ) * (geom.My + geom.pad_y) * (col + 1)] -
+         u[(row - 1) * (geom.My + geom.pad_y) * (col    )])
+        *
+        (v[(row - 1) * (geom.My + geom.pad_y) * (col + 1)] +
+         v[(row    ) * (geom.My + geom.pad_y) * (col    )])
+
+        -
+        (u[(row + 1) * (geom.My + geom.pad_y) * (col    )] -
+         u[(row    ) * (geom.My + geom.pad_y) * (col - 1)])
+        *
+        (v[(row    ) * (geom.My + geom.pad_y) * (col    )] +
+         v[(row + 1) * (geom.My + geom.pad_y) * (col - 1)]);
+        
+    }
+};
+
+
+#endif //__CUDACC__
+
+template <typename T>
 void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tlev,
              const cuda::slab_layout_t sl, const cuda::bvals_t<T> bc)
 {
@@ -131,10 +213,9 @@ void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tl
     // Size of the grid for boundary kernels in x-direction
     dim3 gridsize_line(int((sl.My + cuda::blockdim_row - 1) / cuda::blockdim_row));
 
-
-    d_dx1_center<T> <<<in.get_grid(), in.get_block()>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
-    d_dx1_boundary_left<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
-    d_dx1_boundary_right<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
+    kernel_dx1_center<T> <<<in.get_grid(), in.get_block()>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
+    kernel_dx1_boundary_left<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
+    kernel_dx1_boundary_right<<<gridsize_line, cuda::blockdim_row>>>(in.get_array_d(tlev), out.get_array_d(0), bc, sl);
 }
 
 
@@ -142,17 +223,22 @@ void dx_1(cuda_array_bc_nogp<T>& in, cuda_array_bc_nogp<T>& out, const size_t tl
  * Datatype that provides derivation routines and solver for QR factorization
  */
 
-template <typename T>
+template <typename allocator>
 class derivs
 {
     public:
+        using value_t = typename my_allocator_traits<allocator> :: value_type;
+        using cmplx_t = CuCmplx<value_t>;
+
         derivs(const cuda::slab_layout_t);
         ~derivs();
 
-        void invert_laplace(cuda_array_bc_nogp<T>&, cuda_array_bc_nogp<T>&, 
-                            const cuda::bc_t, const T,
-                            const cuda::bc_t, const T,
+        void invert_laplace(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+                            const cuda::bc_t, const value_t,
+                            const cuda::bc_t, const value_t,
                             const size_t t_src);
+        
+        void arakawa(const cuda_array_bc_nogp<allocator>&, const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&);
 
     private:
         const size_t Nx;
@@ -167,27 +253,30 @@ class derivs
         cublasHandle_t cublas_handle;
 
         // Matrix storage for solving tridiagonal equations
-        CuCmplx<T>* d_diag;     // Main diagonal
-        CuCmplx<T>* d_diag_l;   // lower diagonal
-        CuCmplx<T>* d_diag_u;   // upper diagonal, for Laplace equatoin this is the same as the lower diagonal
+        cmplx_t* d_diag;     // Main diagonal
+        cmplx_t* d_diag_l;   // lower diagonal
+        cmplx_t* d_diag_u;   // upper diagonal, for Laplace equatoin this is the same as the lower diagonal
 
-        CuCmplx<T>* d_tmp_mat;  // workspace, used to transpose matrices for invert_laplace
+        cmplx_t* d_tmp_mat;  // workspace, used to transpose matrices for invert_laplace
 
-        CuCmplx<T>* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions
+        cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions
                                 // passed to invert_laplace routine.
 };
 
 
-template <typename T>
-derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
-    Nx(_sl.Nx), My(_sl.My), My21(static_cast<int>(My / 2 + 1)), sl(_sl),
+template <typename allocator>
+derivs<allocator> :: derivs(const cuda::slab_layout_t _sl) :
+    Nx(_sl.Nx), 
+    My(_sl.My), 
+    My21(static_cast<int>(My / 2 + 1)), 
+    sl(_sl),
     d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr},
     h_diag{nullptr}
 {
     // Host copy of main and lower diagonal
-    h_diag = new CuCmplx<T>[Nx];
-    CuCmplx<T>* h_diag_u = new CuCmplx<T>[Nx];
-    CuCmplx<T>* h_diag_l = new CuCmplx<T>[Nx];
+    h_diag = new cmplx_t[Nx];
+    cmplx_t* h_diag_u = new cmplx_t[Nx];
+    cmplx_t* h_diag_l = new cmplx_t[Nx];
 
     // Initialize cublas
     cublasStatus_t cublas_status;
@@ -212,30 +301,30 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO);
 
     // Allocate memory for temporary matrix storage
-    gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_tmp_mat, Nx * My21 * sizeof(CuCmplx<value_t>)));
 
     // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
     // The upper diagonal is equal to the lower diagonal
-    gpuErrchk(cudaMalloc((void**) &d_diag, Nx * My21 * sizeof(CuCmplx<T>)));
-    gpuErrchk(cudaMalloc((void**) &d_diag_u, Nx * My21 * sizeof(CuCmplx<T>)));
-    gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_diag, Nx * My21 * sizeof(CuCmplx<value_t>)));
+    gpuErrchk(cudaMalloc((void**) &d_diag_u, Nx * My21 * sizeof(CuCmplx<value_t>)));
+    gpuErrchk(cudaMalloc((void**) &d_diag_l, Nx * My21 * sizeof(CuCmplx<value_t>)));
 
-    T ky2{0.0};                             // ky^2
-    const T inv_dx{1.0 / sl.delta_x};      // 1 / delta_x
-    const T inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
-    const T Ly{static_cast<T>(sl.My) * sl.delta_y};
+    value_t ky2{0.0};                             // ky^2
+    const value_t inv_dx{1.0 / sl.delta_x};      // 1 / delta_x
+    const value_t inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
+    const value_t Ly{static_cast<value_t>(sl.My) * sl.delta_y};
 
     // Initialize the main diagonal separately for every ky
     for(size_t m = 0; m < My21; m++)
     {
-        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
+        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
         for(size_t n = 0; n < Nx; n++)
         {
             h_diag[n] = -2.0 * inv_dx2 - ky2;
         }
         h_diag[0] = h_diag[0] - inv_dx2;
         h_diag[Nx - 1] = h_diag[Nx - 1] - inv_dx2;
-        gpuErrchk(cudaMemcpy(d_diag + m * Nx, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+        gpuErrchk(cudaMemcpy(d_diag + m * Nx, h_diag, Nx * sizeof(cmplx_t), cudaMemcpyHostToDevice));
     }
 
     // Initialize the upper and lower diagonal with 1/delta_x^2
@@ -251,8 +340,8 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
     // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
     for(size_t m = 0; m < My21; m++)
     {
-        gpuErrchk(cudaMemcpy(d_diag_l + m * Nx, h_diag_l, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
-        gpuErrchk(cudaMemcpy(d_diag_u + m * Nx, h_diag_u, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+        gpuErrchk(cudaMemcpy(d_diag_l + m * Nx, h_diag_l, Nx * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
+        gpuErrchk(cudaMemcpy(d_diag_u + m * Nx, h_diag_u, Nx * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
     }
 
     delete [] h_diag_l;
@@ -260,8 +349,21 @@ derivs<T> :: derivs(const cuda::slab_layout_t _sl) :
 }
 
 
-template <typename T>
-derivs<T> :: ~derivs()
+template <typename allocator>
+void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res)
+{
+    cout << "Computing arakawa bracket for u and v" << endl;
+
+    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u, v, res, sl);
+    //kernel_arakawa_left<<<grid_row, block_row>>>(u, v, res, sl);
+    //kernel_arakawa_right<<<grid_row, block_row>>>(u, v, res, sl);
+    //kernel_arakawa_top<<<grid_col, block_col>>>(u, v, res, sl);
+    //kernel_arakawa_bottom<<<grid_col, block_col>>>(u, v, res, sl);
+}
+
+
+template <typename allocator>
+derivs<allocator> :: ~derivs()
 {
     cudaFree(d_diag_l);
     cudaFree(d_diag_u);
@@ -275,17 +377,17 @@ derivs<T> :: ~derivs()
     cusparseDestroy(cusparse_handle);
 }
 
-template <typename T>
-void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<T>& src, 
-                                 const cuda::bc_t bctype_left, const T bval_left,
-                                 const cuda::bc_t bctype_right, const T bval_right,
-                                 const size_t t_src)
+template <typename allocator>
+void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cuda_array_bc_nogp<allocator>& src, 
+                                         const cuda::bc_t bctype_left, const value_t bval_left,
+                                         const cuda::bc_t bctype_right, const value_t bval_right,
+                                         const size_t t_src)
 {
     // Safe casts because we are fancy :)
     const int My_int{static_cast<int>(src.get_my())};
     const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
     const int Nx_int{static_cast<int>(src.get_nx())};
-    const T inv_dx2{1.0 / (sl.delta_x * sl.delta_x)};
+    const value_t inv_dx2{1.0 / (sl.delta_x * sl.delta_x)};
 
     const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);
@@ -309,8 +411,8 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
      * cuda_array_gp_nobc when writing to files
      *
      * size_t nelem = src.get_nx() *  (src.get_my() + src.get_geom().pad_y);
-     * T tmp_arr[nelem];
-     * gpuErrchk(cudaMemcpy(tmp_arr, src.get_array_d(0), nelem * sizeof(T), cudaMemcpyDeviceToHost));
+     * value_t  tmp_arr[nelem];
+     * gpuErrchk(cudaMemcpy(tmp_arr, src.get_array_d(0), nelem * sizeof(value_t), cudaMemcpyDeviceToHost));
      * ofstream ofile("cublas_input.dat");
      * if (!ofile)
      *     cerr << "cannot open file" << endl;
@@ -352,7 +454,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     }
 
     /* Write output of cublasZgeam to file for debugging purposes
-    gpuErrchk(cudaMemcpy(tmp_arr, d_tmp_mat, nelem * sizeof(T), cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(tmp_arr, d_tmp_mat, nelem * sizeof(value_t), cudaMemcpyDeviceToHost));
     ofile.open("cublas_output.dat");
     if(!ofile)
         cerr << "cannot open file" << endl;
@@ -365,7 +467,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     ofile.close();
     */
     
-    //gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(CuCmplx<T>),
+    //gpuErrchk(cudaMemcpy(dst.get_array_d(0), d_tmp_mat, src.get_nx() * My21 * sizeof(cmplx_t),
     //                     cudaMemcpyDeviceToDevice));
 
 
@@ -375,10 +477,10 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     switch(bctype_left)
     {
         case cuda::bc_t::bc_dirichlet:
-            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
             break;
         case cuda::bc_t::bc_neumann:
-            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
             break;
         case cuda::bc_t::bc_periodic:
             cerr << "Periodic boundary conditions not implemented yet." << endl;
@@ -389,10 +491,10 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     switch(bctype_right)
     {
         case cuda::bc_t::bc_dirichlet:
-            h_diag[Nx - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            h_diag[Nx - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
             break;
         case cuda::bc_t::bc_neumann:
-            h_diag[Nx - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<T>(My) / sl.get_Ly();
+            h_diag[Nx - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<value_t>(My) / sl.get_Ly();
             break;
         case cuda::bc_t::bc_periodic:
             cerr << "Periodic boundary conditions not implemented yet." << endl;
@@ -400,7 +502,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
             break;
     }
 
-    //gpuErrchk(cudaMemcpy(d_diag, h_diag, Nx * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+    //gpuErrchk(cudaMemcpy(d_diag, h_diag, Nx * sizeof(cmplx_t), cudaMemcpyHostToDevice));
 
     if((cusparse_status = cusparseZgtsvStridedBatch(cusparse_handle,
                                                     Nx_int,
@@ -435,30 +537,30 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     // 1.) Build the laplace matrix in csr form
     // Host data
     size_t nnz{Nx + 2 * (Nx - 1)};    // Main diagonal plus 2 side diagonals
-    CuCmplx<T>* csrValA_h = new CuCmplx<T>[nnz];  
+    cmplx_t* csrValA_h = new cmplx_t[nnz];  
     int* csrRowPtrA_h = new int[Nx + 1];
     int* csrColIndA_h = new int[nnz];
 
     // Input columns
-    CuCmplx<T>* h_inp_mat_col = new CuCmplx<T>[Nx];
+    cmplx_t* h_inp_mat_col = new cmplx_t[Nx];
     // Result columns
-    CuCmplx<T>* h_tmp_mat_col = new CuCmplx<T>[Nx];
+    cmplx_t* h_tmp_mat_col = new cmplx_t[Nx];
 
     // Device data
-    CuCmplx<T>* csrValA_d{nullptr};
+    cmplx_t* csrValA_d{nullptr};
     int* csrRowPtrA_d{nullptr}; 
     int* csrColIndA_d{nullptr};
 
-    CuCmplx<T>* d_inp_mat{nullptr};
+    cmplx_t* d_inp_mat{nullptr};
 
     // Some constants we need later on
-    //const T inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
-    const CuCmplx<T> inv_dx2_cmplx = CuCmplx<T>(inv_dx2);
+    //const value_t inv_dx2 = 1.0 / (sl.delta_x * sl.delta_x);
+    const cmplx_t inv_dx2_cmplx = cmplx_t(inv_dx2);
 
-    gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(cmplx_t)));
     gpuErrchk(cudaMalloc((void**) &csrRowPtrA_d, (Nx + 1) * sizeof(int)));
     gpuErrchk(cudaMalloc((void**) &csrColIndA_d, nnz * sizeof(int)));
-    gpuErrchk(cudaMalloc((void**) &d_inp_mat, Nx * My21 * sizeof(CuCmplx<T>)));
+    gpuErrchk(cudaMalloc((void**) &d_inp_mat, Nx * My21 * sizeof(cmplx_t)));
 
     // Build Laplace matrix structure: ColIndA and RowPtrA
     // Matrix values on main diagonal are updated individually lateron for each ky mode.
@@ -487,7 +589,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     csrRowPtrA_h[Nx - 1] = static_cast<int>(nnz - 2);
     csrRowPtrA_h[Nx] = static_cast<int>(nnz);
 
-    csrValA_h[nnz - 2] = CuCmplx<T>(inv_dx2);
+    csrValA_h[nnz - 2] = cmplx_t(inv_dx2);
 
     gpuErrchk(cudaMemcpy(csrRowPtrA_d, csrRowPtrA_h, (Nx + 1) * sizeof(int), cudaMemcpyHostToDevice)); 
     gpuErrchk(cudaMemcpy(csrColIndA_d, csrColIndA_h, nnz * sizeof(int), cudaMemcpyHostToDevice));
@@ -523,11 +625,11 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
 
     // Pointers to current row in d_inp_mat (the result we check against) and
     //                            d_tmp_mat (the input for Dcsrmv)
-    CuCmplx<T>* row_ptr_d_inp{nullptr};
-    CuCmplx<T>* row_ptr_d_tmp{nullptr};
+    cmplx_t* row_ptr_d_inp{nullptr};
+    cmplx_t* row_ptr_d_tmp{nullptr};
 
-    T ky2{0.0};
-    const T Ly{static_cast<T>(sl.My) * sl.delta_y};
+    value_t ky2{0.0};
+    const value_t Ly{static_cast<value_t>(sl.My) * sl.delta_y};
     for(size_t m = 0; m < My21; m++)
     //for(size_t m = 0; m < 2; m++)
     {
@@ -536,7 +638,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
 
         // Copy reference data in d_inp_mat
         // These are fourier coefficients for ky=0 mode at various xn positions
-        gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, Nx * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
         //for(size_t n = 0; n < Nx; n++)
         //{
         //    cout << n << ":\t h_inp_mat_col = " << h_inp_mat_col[n] << endl;
@@ -544,13 +646,13 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
 
         // Update values of csrValA_h
         // Assume Dirichlet=0 boundary conditions for now
-        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
-        csrValA_h[0] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
+        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
+        csrValA_h[0] = cmplx_t(-3.0 * inv_dx2 - ky2);
         for(size_t n = 2; n < nnz - 3; n += 3)
         {
-            csrValA_h[n + 1] = CuCmplx<T>(-2.0 * inv_dx2 - ky2);
+            csrValA_h[n + 1] = cmplx_t(-2.0 * inv_dx2 - ky2);
         }
-        csrValA_h[nnz - 1] = CuCmplx<T>(-3.0 * inv_dx2 - ky2);
+        csrValA_h[nnz - 1] = cmplx_t(-3.0 * inv_dx2 - ky2);
 
         //for(size_t n = 0; n < nnz; n++)
         //{
@@ -561,7 +663,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         //}
         //cout << "===========================================================================================" << endl;
 
-        gpuErrchk(cudaMemcpy(csrValA_d, csrValA_h, nnz * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+        gpuErrchk(cudaMemcpy(csrValA_d, csrValA_h, nnz * sizeof(cmplx_t), cudaMemcpyHostToDevice));
         
         // Apply Laplace matrix to every column in d_tmp_mat.
         // Overwrite the current column in d_inp_mat
@@ -581,7 +683,7 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
             throw cusparse_err(cusparse_status);
         }
 
-        gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, Nx * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, Nx * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
         //if(m > 4 && m < 7)
         //{
         //    for(size_t n = 0; n < Nx; n++)
@@ -591,12 +693,12 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
         //}
 
         // Compute L2 distance between h_inp_mat and h_tmp_mat
-        T L2_norm{0.0};
+        value_t L2_norm{0.0};
         for(size_t n = 0; n < Nx; n++)
         {
             L2_norm += ((h_inp_mat_col[n] - h_tmp_mat_col[n]) * (h_inp_mat_col[n] - h_tmp_mat_col[n])).abs();
         }
-        L2_norm = sqrt(L2_norm / static_cast<T>(Nx));
+        L2_norm = sqrt(L2_norm / static_cast<value_t>(Nx));
         cout << m << ": ky = " << sqrt(ky2) << "\t L2 = " << L2_norm << endl;
     }
     row_ptr_d_inp = nullptr;
@@ -617,82 +719,6 @@ void derivs<T> :: invert_laplace(cuda_array_bc_nogp<T>& dst, cuda_array_bc_nogp<
     delete [] csrValA_h;
 #endif
 }
-
-
-//
-//template <typename T>
-//class derivs
-//{
-//    public:
-//        derivs(const cuda::slab_layout_t);
-//        ~derivs();
-//
-//        /// @brief Compute first order x- and y-derivatives
-//        /// @detailed Allocates memory for Fourier coefficients.
-//        /// @detailed If spectral representation is available, use
-//        /// @d_dx1_dy1 where they are passed as arguments instead
-//        void d_dx1_dy1(cuda_array<T>&, cuda_array<T>&, cuda_array<T>&);
-//        void d_dx1_dy1(const cuda_array<CuCmplx<T> >&,  cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-//        void d_dx1_dy1(const cuda_array<CuCmplx<T> >*,  cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
-//        /// @brief Compute second order x- and y-derivatives
-//        void d_dx2_dy2(cuda_array<T>&, cuda_array<T>&, cuda_array<T>&);
-//        void d_dx2_dy2(cuda_array<CuCmplx<T> >&,  cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-//        /// @brief Compute Laplacian
-//        void d_laplace(cuda_array<T>&, cuda_array<T>&, const uint);
-//        void d_laplace(cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-//        void d_laplace(cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
-//        /// @brief Invert Laplace equation
-//        void inv_laplace(cuda_array<T>&, cuda_array<T>&, const uint);
-//        void inv_laplace(cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-//        void inv_laplace(cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
-//
-//        void dft_r2c(T* in, CuCmplx<T>* out);
-//        void dft_c2r(CuCmplx<T>* in, T* out);
-//
-//    private:
-//        const unsigned int Nx;
-//        const unsigned int My;
-//        const T Lx;
-//        const T Ly;
-//        const T dx;
-//        const T dy;
-//
-//        dim3 grid_my_nx21;
-//        dim3 block_my_nx21;
-//
-//        cuda_array<CuCmplx<T> > kmap_dx1_dy1;
-//        cuda_array<CuCmplx<T> > kmap_dx2_dy2;
-//
-//        cufftHandle plan_r2c;
-//        cufftHandle plan_c2r;
-//
-//        void init_dft();
-//};
-//
-//
-//#ifdef __CUDACC__
-//
-//template <typename T>
-//derivs<T> :: derivs(const cuda::slab_layout_t sl) :
-//    Nx(sl.Nx), My(sl.My),
-//    Lx(T(sl.Nx) * T(sl.delta_x)),
-//    Ly(T(sl.My) * T(sl.delta_y)),
-//    dx(T(sl.delta_x)), dy(T(sl.delta_y)),
-//    kmap_dx1_dy1(1, My, Nx / 2 + 1),
-//    kmap_dx2_dy2(1, My, Nx / 2 + 1)
-//{
-//    init_dft();
-//    // Generate first and second derivative map;
-//    gen_kmap_dx1_dy1<<<kmap_dx1_dy1.get_grid(), kmap_dx1_dy1.get_block()>>>(kmap_dx1_dy1.get_array_d(), cuda::TWOPI / Lx,
-//                                                                            cuda::TWOPI / Ly, My, Nx / 2 + 1);
-//    gen_kmap_dx2_dy2<<<kmap_dx2_dy2.get_grid(), kmap_dx2_dy2.get_block()>>>(kmap_dx2_dy2.get_array_d(), cuda::TWOPI / Lx,
-//                                                                            cuda::TWOPI / Ly, My, Nx / 2 + 1);
-//    //ostream of;
-//    //of.open("k2map.dat");
-//    //of << kmap_dx2_dy2 << endl;
-//    //of.close()
-//    gpuStatus();
-//}
 
 
 #endif //DERIVATIVES_H

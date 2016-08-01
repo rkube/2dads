@@ -45,11 +45,12 @@
 #include <sstream>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
+#include <memory>
 #include "bounds.h"
 #include "error.h"
 #include "cuda_types.h"
+#include "allocator_device.h"
 
-using namespace std;
 
 typedef unsigned int uint;
 typedef double real_t;
@@ -60,7 +61,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line)
 {
     if (code != cudaSuccess)
     {
-        stringstream err_str;
+        std::stringstream err_str;
         err_str << "GPUassert: " << cudaGetErrorString(code) << "\t file: " << file << ", line: " << line << "\n";
         throw gpu_error(err_str.str());
     }
@@ -75,7 +76,7 @@ inline void gpuVerifyLaunch(const char* file, int line)
      cudaError_t error = cudaGetLastError();
      if(error != cudaSuccess)
      {
-        stringstream err_str;
+         std::stringstream err_str;
         err_str << "GPUassert: " << cudaGetErrorString(error) << "\t file: " << file << ", line: " << line << "\n";
         throw gpu_error(err_str.str());
      }
@@ -183,25 +184,34 @@ void d_evaluate_2(T* array_d_t, O d_op_fun, const cuda::slab_layout_t geom)
 
 #endif // __CUDACC_
 
-template <typename T>
+
+template <typename allocator>
 class cuda_array_bc_nogp{
 public:
-	cuda_array_bc_nogp(const cuda::slab_layout_t, const cuda::bvals_t<T>, const size_t);
+
+    using allocator_t = typename my_allocator_traits<allocator> :: allocator_type;
+    using value_t = typename my_allocator_traits<allocator> :: value_type;
+    using deleter_t = typename my_allocator_traits<allocator> :: deleter_type;
+    using ptr_t = std::unique_ptr<value_t, deleter_t>;
+
+	cuda_array_bc_nogp(const cuda::slab_layout_t, const cuda::bvals_t<value_t>, const size_t);
 	~cuda_array_bc_nogp();
 
-	void evaluate(function<T (size_t, size_t)>, size_t);
-    void evaluate_device(size_t);
-    void init_inv_laplace();
-    void init_sine();
+    /// Apply a function to the data
+    template <typename F> void evaluate(F, const size_t);
+    /// Enumerate data elements (debug function)
 	void enumerate();
+    /// Initialize all elements to zero. Making this private results in compile error:
+    /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
+    void initialize();
 
-	inline T& operator() (const size_t n, const size_t m) {return(*(array_h + address(n, m)));};
-	inline T operator() (const size_t n, const size_t m) const {return(*(array_h + address(n, m)));}
+	inline value_t& operator() (const size_t n, const size_t m) {return(*(array_h + address(n, m)));};
+	inline value_t operator() (const size_t n, const size_t m) const {return(*(array_h + address(n, m)));}
 
-    inline T& operator() (const size_t t, const size_t n, const size_t m) {
+    inline value_t& operator() (const size_t t, const size_t n, const size_t m) {
         return(*(array_h_t[t] + address(n, m)));
     };
-    inline T operator() (const size_t t, const size_t n, const size_t m) const {
+    inline value_t operator() (const size_t t, const size_t n, const size_t m) const {
         return(*(array_h_t[t] + address(n, m)));
     };
 
@@ -231,7 +241,6 @@ public:
         return (os);
     }
 	
-	
     void dump_full() const;
 	
 	void normalize(const size_t);
@@ -239,17 +248,17 @@ public:
 	// Copy entire device data to host
 	void copy_device_to_host();
 	// Copy entire device data to external data pointer in host memory
-	//void copy_device_to_host(T*);
+	//void copy_device_to_host(value_T*);
 	// Copy device to host at specified time level
 	//void copy_device_to_host(const size_t);
 
 	// Copy deice data at specified time level to external pointer in device memory
-	void copy_device_to_device(const size_t, T*);
+	void copy_device_to_device(const size_t, value_t*);
 
 	// Transfer from host to device
 	void copy_host_to_device();
-	//void copy_host_to_device(const size_T);
-	//void copy_host_to_device(T*);
+	//void copy_host_to_device(const size_t);
+	//void copy_host_to_device(value_t*);
 
 	// Advance time levels
 	//void advance();
@@ -257,7 +266,7 @@ public:
 	///@brief Copy data from t_src to t_dst
 	//void copy(const size_t t_dst, const size_t t_src);
 	///@brief Copy data from src, t_src to t_dst
-	//void copy(const size_t t_dst, const cuda_array<T>& src, const size_t t_src);
+	//void copy(const size_t t_dst, const cuda_array<allocator>& src, const size_t t_src);
 	///@brief Move data from t_src to t_dst, zero out t_src
 	//void move(const size_t t_dst, const size_t t_src);
 	///@brief swap data in t1, t2
@@ -273,7 +282,7 @@ public:
 	inline size_t get_my() const {return(My);};
 	inline size_t get_tlevs() const {return(tlevs);};
     inline cuda::slab_layout_t get_geom() const {return(geom);};
-    inline cuda::bvals_t<T> get_bvals() const {return(boundaries);};
+    inline cuda::bvals_t<value_t> get_bvals() const {return(boundaries);};
 
 	inline size_t address(size_t n, size_t m) const {
         size_t retval = n * (geom.My + geom.pad_y) + m; 
@@ -284,15 +293,15 @@ public:
 
 	//bounds get_bounds() const {return check_bounds;};
 	// Pointer to host copy of device data
-	inline T* get_array_h() const {return array_h;};
-	inline T* get_array_h(size_t t) const {return array_h_t[t];};
+	inline value_t* get_array_h() const {return array_h;};
+	inline value_t* get_array_h(size_t t) const {return array_h_t[t];};
 
-	// Pointer to device data, entire array
-	inline T* get_array_d() const {return array_d;};
+	// smart pointer to device data, entire array
+	inline ptr_t get_array_d() const {return array_d();};
 	// Pointer to array of pointers, corresponding to time levels
-	inline T** get_array_d_t() const {return array_d_t;};
+	inline value_t** get_array_d_t() const {return array_d_t;};
 	// Pointer to device data at time level t
-	inline T* get_array_d(size_t t) const {return array_d_t_host[t];};
+	inline value_t* get_array_d(size_t t) const {return array_d_t_host[t];};
 
 	// Check bounds
 	inline void check_bounds(size_t t, size_t n, size_t m) const {array_bounds(t, n, m);};
@@ -305,9 +314,11 @@ private:
 	size_t tlevs;
 	size_t Nx;
 	size_t My;
-	cuda::bvals_t<T> boundaries;
+	cuda::bvals_t<value_t> boundaries;
     cuda::slab_layout_t geom;
 	bounds array_bounds;
+
+    allocator my_alloc;
 
 	// block and grid for access without ghost points, use these normally
 	dim3 block;
@@ -315,13 +326,13 @@ private:
 	
 	// Array data is on device
 	// Pointer to device data
-	T* array_d;
+	ptr_t array_d;
 	// Pointer to each time stage. Pointer to array of pointers on device
-	T** array_d_t;
+	value_t** array_d_t;
 	// Pointer to each time stage: Pointer to each time level on host
-	T** array_d_t_host;
-	T* array_h;
-	T** array_h_t;	
+	value_t** array_d_t_host;
+	value_t* array_h;
+	value_t** array_h_t;	
 	
 	// CuFFT related stuff
 	cufftHandle plan_fw;
@@ -336,51 +347,52 @@ const map<cuda::bc_t, string> bc_str_map
 	{cuda::bc_t::bc_periodic, "Periodic"}
 };
 
-template <typename T>
-cuda_array_bc_nogp<T> :: cuda_array_bc_nogp 
-        (const cuda::slab_layout_t _geom, const cuda::bvals_t<T> bvals, size_t _tlevs) : 
-		tlevs(_tlevs), Nx(_geom.Nx), My(_geom.My), boundaries(bvals), geom(_geom), array_bounds(tlevs, Nx, My),
+template < typename allocator>
+cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp 
+        (const cuda::slab_layout_t _geom, const cuda::bvals_t<value_t> bvals, size_t _tlevs) : 
+		tlevs(_tlevs), 
+        Nx(_geom.Nx), 
+        My(_geom.My), 
+        boundaries(bvals), 
+        geom(_geom), 
+        array_bounds(tlevs, Nx, My),
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((My + geom.pad_y) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((Nx + geom.pad_x) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
-		array_d(nullptr),
+        array_d(my_alloc.alloc(tlevs * get_nelem_per_t() * sizeof(value_t))),
 		array_d_t(nullptr),
-		array_d_t_host(new T*[tlevs]),
-		array_h(new T[tlevs * get_nelem_per_t()]),
-		array_h_t(new T*[tlevs])
+		array_d_t_host(new value_t*[tlevs]),
+		array_h(new value_t[tlevs * get_nelem_per_t()]),
+		array_h_t(new value_t*[tlevs])
 {
-	gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(T*)));
-	gpuErrchk(cudaMalloc( (void**) &array_d, tlevs * get_nelem_per_t() * sizeof(T)));
+	gpuErrchk(cudaMalloc( (void***) &array_d_t, tlevs * sizeof(value_t*)));
+	//gpuErrchk(cudaMalloc( (void**) &array_d, tlevs * get_nelem_per_t() * sizeof(value_t)));
 
-    //cout << "cuda_array_bc<T> ::cuda_array_bc<T>\t";
+    //cout << "cuda_array_bc<allocator> ::cuda_array_bc<allocator>\t";
     //cout << "Nx = " << Nx << ", pad_x = " << geom.pad_x << ", My = " << My << ", pad_y = " << geom.pad_y << endl;
     //cout << "block = ( " << block.x << ", " << block.y << ")" << endl;
     //cout << "grid = ( " << grid.x << ", " << grid.y << ")" << endl;
     cout << geom << endl;
 
-	d_alloc_array_d_t<<<1, 1>>>(array_d_t, array_d, geom, tlevs);
-	gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
+	d_alloc_array_d_t<<<1, 1>>>(array_d_t, array_d.get(), geom, tlevs);
+	gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(value_t*) * tlevs, cudaMemcpyDeviceToHost));
 
 	for(size_t t = 0; t < tlevs; t++)
     {
 		d_set_to_zero<<<grid, block>>>(array_d_t, geom, t);
         array_h_t[t] = &array_h[t * get_nelem_per_t()];
+        // Initialize array to zero
+        //evaluate(*this, [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+        //        {
+        //            return(value_t(0.0));
+        //        });
     }
-}
-
-
-template <typename T>
-void cuda_array_bc_nogp<T> :: evaluate(function<T (size_t, size_t)> op_fun, size_t tlev)
-{
-	cout << "evaluating..." << endl;
-	for(int n = 0; n < Nx; n++)
-		for (int m = 0; m < My; m++)
-			(*this)(tlev, n, m) = op_fun(n, m);
+    initialize();
 }
 
     
-template <typename T>
-void cuda_array_bc_nogp<T> :: enumerate()
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: enumerate()
 {
 	for(size_t t = 0; t < tlevs; t++)
 	{
@@ -390,77 +402,29 @@ void cuda_array_bc_nogp<T> :: enumerate()
 }
 
 
-/// Lambda function capture[=] does not capture Nx, My passed as parameters to the kernel.
-/// Solution: pass it to the lambda itself, last two arguments
-template <typename T>
-void cuda_array_bc_nogp<T> :: evaluate_device(size_t tlev)
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: initialize()
 {
-#ifdef DEBUG
-    cout << "evaluate_device..." << endl;
-	cout << "block: block.x = " << block.x << ", block.y = " << block.y << endl;
-    cout << "grid: grid.x = " << grid.x << ", grid.y = " << grid.y << endl;
-#endif //DEBUG
-    switch(boundaries.bc_left)
+    for(size_t t = 0; t < tlevs; t++)
     {
-        case cuda::bc_t::bc_dirichlet:
-            // Fall through:
-        case cuda::bc_t::bc_neumann:
-            // Evaluate the functor on a cell-centered grid
-            cout << "Cell center" << endl;
-            d_evaluate<<<grid, block>>>(get_array_d(tlev), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T 
-                {
-                    T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
-                    T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
-                    return(sin(cuda::TWOPI * x) + 0.0 * sin(cuda::TWOPI * y));
-                    //return(T(1000 * m + n));
-                }, 
-                geom);
-            break; 
-        case cuda::bc_t::bc_periodic:
-            // Evaluate the functor on a vertex-centered grid
-            cout << "Vertex center" << endl;
-            d_evaluate<<<grid, block>>>(get_array_d(tlev), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T 
-                {
-                    T x{geom.x_left + (T(n) + 0.0) * geom.delta_x};
-                    T y{geom.y_lo + (T(m) + 0.0) * geom.delta_y};
-                    return(sin(cuda::TWOPI * x) + 0.0 * sin(cuda::TWOPI * y));
-                    //return(T(1000 * m + n));
-                }, 
-                geom);
-            break; 
+        evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+                                 {
+                                    return(value_t(4.2));
+                                 }, t);
     }
 }
 
 
-template <typename T>
-void cuda_array_bc_nogp<T> :: init_inv_laplace()
+template <typename allocator>
+template <typename F>
+void cuda_array_bc_nogp<allocator> :: evaluate(F myfunc, const size_t tlev)
 {
-    d_evaluate<<<grid, block>>>(get_array_d(0), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T
-            {
-                T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
-                T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
-                //return(exp(-0.5 * (x * x + y * y)) * (x * x - 1.0) * (y * y - 1.0));
-                return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
-            },
-            geom);
+    d_evaluate<<<grid, block>>>(get_array_d(tlev), myfunc, geom);
 }
 
 
-template <typename T>
-void cuda_array_bc_nogp<T> :: init_sine()
-{
-    d_evaluate<<<grid, block>>>(get_array_d(0), [=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T
-            {
-                T x{geom.x_left + (T(n) + 0.5) * geom.delta_x};
-                T y{geom.y_lo + (T(m) + 0.5) * geom.delta_y};
-                //return(sin(2.0 * cuda::PI * y));
-                return(sin(cuda::TWOPI * y) + 0.0 * sin(cuda::TWOPI * x));
-            },
-            geom);
-}
-
-template <typename T>
-void cuda_array_bc_nogp<T> :: dump_full() const
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: dump_full() const
 {
 	for(size_t t = 0; t < tlevs; t++)
 	{
@@ -479,8 +443,8 @@ void cuda_array_bc_nogp<T> :: dump_full() const
 }
 
 
-template <typename T>
-void cuda_array_bc_nogp<T> :: normalize(const size_t tlev)
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: normalize(const size_t tlev)
 {
     // If we made a 1d DFT normalize by My. Otherwise nomalize by Nx * My
     switch (boundaries.bc_left)
@@ -488,47 +452,45 @@ void cuda_array_bc_nogp<T> :: normalize(const size_t tlev)
         case cuda::bc_t::bc_dirichlet:
             // fall through
         case cuda::bc_t::bc_neumann:
-            d_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom) -> T 
+            d_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
-                return(in / T(geom.My));
+                return(in / value_t(geom.My));
             }, geom);
             break;
 
         case cuda::bc_t::bc_periodic:
-            d_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom) -> T 
+            d_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
-                return(in / T(geom.Nx * geom.My));
+                return(in / value_t(geom.Nx * geom.My));
             }, geom);
             break;
     }
 }
 
 
-template <typename T>
-void cuda_array_bc_nogp<T>::copy_device_to_host()
+template <typename allocator>
+void cuda_array_bc_nogp<allocator>::copy_device_to_host()
 {
     for(size_t t = 0; t < tlevs; t++)
-        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(T) * get_nelem_per_t(), cudaMemcpyDeviceToHost));	
+        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(value_t) * get_nelem_per_t(), cudaMemcpyDeviceToHost));	
 }
 
 
-template <typename T>
-void cuda_array_bc_nogp<T> :: copy_host_to_device()
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: copy_host_to_device()
 { 
     for(size_t t = 0; t < tlevs; t++)
-        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(T) * get_nelem_per_t(), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(value_t) * get_nelem_per_t(), cudaMemcpyDeviceToHost));
 }
 
 
-template <typename T>
-cuda_array_bc_nogp<T> :: ~cuda_array_bc_nogp()
+template <typename allocator>
+cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
 {
 	if(array_h != nullptr)
 		delete [] array_h;
 	if(array_h_t != nullptr)
 		delete [] array_h_t;
-	if(array_d != nullptr)
-		cudaFree(array_d);
 	if(array_d_t != nullptr)
 		cudaFree(array_d_t);
 		

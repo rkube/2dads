@@ -12,8 +12,8 @@ using namespace std;
 
 
 int main(void){
-    constexpr size_t Nx{1024};
-    constexpr size_t My{1024};
+    constexpr size_t Nx{128};
+    constexpr size_t My{128};
 
     stringstream fname;
 
@@ -24,19 +24,19 @@ int main(void){
     slab_bc my_slab(my_geom, my_bvals);
 
     //cerr << "Initializing fields..." << endl;
-    my_slab.initialize_invlaplace(test_ns::field_t::arr1);
+    my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2);
     // Print input to inv_laplace routine into array arr1_nx.dat
-    fname << "test_laplace_arr1_" << Nx << ".dat";
+    fname << "test_arakawa_arr1_" << Nx << "_in.dat";
     my_slab.print_field(test_ns::field_t::arr1, fname.str());
 
-    my_slab.dft_r2c(test_ns::field_t::arr1, 0);
+    fname.str(string(""));
+    fname << "test_arakawa_arr2_" << Nx << "_in.dat";
+    my_slab.print_field(test_ns::field_t::arr2, fname.str());
 
-    my_slab.invert_laplace(test_ns::field_t::arr2, test_ns::field_t::arr1, size_t(0));
-    my_slab.dft_c2r(test_ns::field_t::arr2, size_t(0));
+    //my_slab.arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2, test_ns::field_t::arr3, size_t(0));
 
     fname.str(string(""));
-    fname << "test_laplace_arr2_" << Nx << ".dat";
-
+    fname << "test_arakawa_arr3_" << Nx << "_out.dat";
     my_slab.print_field(test_ns::field_t::arr2, fname.str());
     cudaDeviceReset();
 }

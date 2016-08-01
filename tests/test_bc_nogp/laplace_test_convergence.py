@@ -16,8 +16,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from codestash.num.fd import d2_dx2
 
-Nx_arr = np.array([64, 128, 256, 512, 1024, 2048, 4096], dtype='int')
-#Nx_arr = np.array([512], dtype='int')
+#Nx_arr = np.array([64, 128, 256, 512, 1024, 2048, 4096], dtype='int')
+Nx_arr = np.array([128], dtype='int')
 L2_arr = np.zeros(Nx_arr.shape[0], dtype='float64')
 L = 20.
 

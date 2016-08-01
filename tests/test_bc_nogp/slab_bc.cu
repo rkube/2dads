@@ -10,15 +10,18 @@ slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _b
     der(_sl),
     arr1(_sl, _bc, tlevs), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
     arr2(_sl, _bc, tlevs), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
+    arr3(_sl, _bc, tlevs), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
     get_field_by_name{ {test_ns::field_t::arr1,     &arr1},
                        {test_ns::field_t::arr1_x,   &arr1_x},
                        {test_ns::field_t::arr1_y,   &arr1_y},
                        {test_ns::field_t::arr2,     &arr2},
                        {test_ns::field_t::arr2_x,   &arr2_x},
-                       {test_ns::field_t::arr2_y,   &arr2_y}}
+                       {test_ns::field_t::arr2_y,   &arr2_y},
+                       {test_ns::field_t::arr3,     &arr3},
+                       {test_ns::field_t::arr3_x,   &arr3_x},
+                       {test_ns::field_t::arr3_y,   &arr3_y}}
 {
     cout << "Creating new slab" << endl;
-    arr1.evaluate_device(0);
     init_dft();
 }
 
@@ -202,14 +205,45 @@ void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
 void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
-    (*arr).init_inv_laplace();
+    (*arr).evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
+            }, 0);
 }
 
 
 void slab_bc :: initialize_sine(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
-    (*arr).init_sine();
+    (*arr).evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(sin(cuda::TWOPI * y) + 0.0 * sin(cuda::TWOPI * x));
+            }, 0);
+}
+
+
+void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns::field_t fname2)
+{
+    cuda_arr_real* arr1 = get_field_by_name.at(fname1);
+    cuda_arr_real* arr2 = get_field_by_name.at(fname2);
+    
+    (*arr1).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(sin(cuda::TWOPI * y) + (1.0 * sin(cuda::TWOPI * x)));
+            }, 0);
+
+    (*arr2).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(sin(cuda::TWOPI * y) + (1.0 * sin(cuda::TWOPI * x)));
+            }, 0);
 }
 
 

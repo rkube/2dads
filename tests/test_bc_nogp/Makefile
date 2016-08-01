@@ -10,7 +10,7 @@ test_dft: test_dft.cu
 	$(CUDACC) $(CUDACFLAGS) -o test_dft test_dft.cu $(INCLUDES) $(CUDALFLAGS)
 
 test_slab: slab_bc.cu slab_bc.h test_slab.cu
-	$(CUDACC) $(CUDACFLAGS) -o test_slab test_slab.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS)
+	$(CUDACC) $(CUDACFLAGS) -o test_slab test_slab.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
 
 test_derivs: slab_bc.cu slab_bc.h test_derivs.cu derivatives.h
 	$(CUDACC) $(CUDACFLAGS) -o test_derivs test_derivs.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS)
@@ -20,6 +20,9 @@ test_cusolve: test_cusolve.cu derivatives.h
 
 test_laplace: slab_bc.cu slab_bc.h derivatives.h test_laplace.cu
 	$(CUDACC) $(CUDACFLAGS) -o test_laplace test_laplace.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
+
+test_arakawa: slab_bc.cu slab_bc.h derivatives.h test_arakawa.cu
+	$(CUDACC) $(CUDACFLAGS) -o test_arakawa test_arakawa.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
 
 clean:
 	rm test_dtype test_dft
