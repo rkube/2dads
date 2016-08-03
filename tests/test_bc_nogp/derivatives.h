@@ -32,38 +32,6 @@ __device__ inline bool good_idx2(size_t row, size_t col, const cuda::slab_layout
 }  
 
 
-// Interpolates the value just outside the left domain border
-template <typename T>
-__device__ inline T interp_bv_left(const T u1, const T bval, const T delta_x, const cuda::bc_t bc)
-{
-    switch(bc)
-    {
-        case cuda::bc_t::bc_dirichlet:
-            return(2.0 * bval - u1);
-        case cuda::bc_t::bc_neumann:
-            return(u1 - delta_x * bval);
-        case cuda::bc_t::bc_periodic:
-            return(-1.0);
-    }
-}
-
-// Interpolates the value just outside the right domain border
-template <typename T>
-__device__ inline T interp_bv_right(const T uN, const T bval, const T delta_x, const cuda::bc_t bc)
-{
-    switch(bc)
-    {
-        case cuda::bc_t::bc_dirichlet:
-            return(2.0 * bval - uN);
-        case cuda::bc_t::bc_neumann:
-            return(uN + delta_x * bval);
-        case cuda::bc_t::bc_periodic:
-            return(-1.0);
-    }
-}
-
-
-
 // compute the first derivative in x-direction in rows 1..Nx-2
 // no interpolation needed
 template <typename T>
@@ -158,229 +126,236 @@ void kernel_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const c
 
 template <typename T>
 __global__
-void kernel_arakawa_center(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
+void kernel_arakawa_center(const T* u, const address<T> address_u, 
+                           const T* v, const address<T> address_v, 
+                           T* result, const cuda::slab_layout_t geom)
 {
-    const size_t col{d_get_col_2()};
-    const size_t row{d_get_row_2()};
-    const size_t index{row * (geom.My + geom.pad_y) + col}; 
+    const int col{static_cast<int>(d_get_col_2())};
+    const int row{static_cast<int>(d_get_row_2())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
 
-    const T inv_dx_dy{1.0 / (12.0 * geom.delta_x * geom.delta_y)};
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
     // This checks whether we are at an inside point when calling this kernel with a thread layout
     // that covers the entire grid
-    if(row > 0 && row < geom.Nx  - 1 && col > 0 && col < geom.My - 1)
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col > 0 && col < static_cast<int>(geom.get_my() - 1))
     {
-        result[index] =  
-        ((u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-          
+        //printf("threadIdx.x = %d, blockIdx.x = %d, blockDim.x = %d, threadIdx.y = %d, blockIdx.y = %d, blockDim.y = %d,row = %d, col = %d, Nx = %d, My = %d\n", 
+        //        threadIdx.x, blockIdx.x, blockDim.x, threadIdx.y, blockIdx.y, blockDim.y,
+        //        row, col, static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_my()));
+        result[index] = 
+        (((address_u.get_elem(u, row    , col - 1) + 
+           address_u.get_elem(u, row + 1, col - 1) - 
+           address_u.get_elem(u, row    , col + 1) - 
+           address_u.get_elem(u, row + 1, col + 1))
+          *
+          (address_v.get_elem(v, row + 1, col    ) + 
+           address_v.get_elem(v, row    , col    )))
          -
-         (u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-
+         ((address_u.get_elem(u, row - 1, col - 1) +
+           address_u.get_elem(u, row    , col - 1) -
+           address_u.get_elem(u, row - 1, col + 1) -
+           address_u.get_elem(u, row    , col + 1))
+          *
+          (address_v.get_elem(v, row    , col    ) +
+           address_v.get_elem(v, row - 1, col    )))
          +
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
+         ((address_u.get_elem(u, row + 1, col    ) +
+           address_u.get_elem(u, row + 1, col + 1) -
+           address_u.get_elem(u, row - 1, col    ) -
+           address_u.get_elem(u, row - 1, col + 1))
+          *
+          (address_v.get_elem(v, row    , col + 1) +
+           address_v.get_elem(v, row    , col    )))
          -
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
-
+         ((address_u.get_elem(u, row + 1, col - 1) +
+           address_u.get_elem(u, row + 1, col    ) -
+           address_u.get_elem(u, row - 1, col - 1) -
+           address_u.get_elem(u, row - 1, col    ))
+          *
+          (address_v.get_elem(v, row    , col    ) +
+           address_v.get_elem(v, row    , col - 1)))
          +
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
-         *
-         (v[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
-         -
-         (u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         *
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row - 1) * (geom.My + geom.pad_y) + (col - 1)])
+         ((address_u.get_elem(u, row + 1, col    ) -
+           address_u.get_elem(u, row    , col + 1))
+          *
+          (address_v.get_elem(v, row + 1, col + 1) +
+           address_v.get_elem(v, row    , col    )))
          
-         +
-         (u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         *
-         (v[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
          -
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
-         *
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row + 1) * (geom.My + geom.pad_y) + (col - 1)])
-         ) * inv_dx_dy;
+         ((address_u.get_elem(u, row    , col - 1) -
+           address_u.get_elem(u, row - 1, col    ))
+          *
+          (address_v.get_elem(v, row    , col    ) +
+           address_v.get_elem(v, row - 1, col - 1)))
+
+         +
+         ((address_u.get_elem(u, row    , col + 1) -
+           address_u.get_elem(u, row - 1, col    ))
+          *
+          (address_v.get_elem(v, row - 1, col + 1) +
+           address_v.get_elem(v, row    , col    )))
+         -
+         ((address_u.get_elem(u, row + 1, col    ) -
+           address_u.get_elem(u, row    , col - 1))
+          *
+          (address_v.get_elem(v, row    , col    ) +
+           address_v.get_elem(v, row + 1, col - 1)))
+         )
+         * inv_dx_dy;
     }
 };
 
 
-// Kernel operates on elements with n = 0, m = 0..My-1. Compute left ghost point of u and v on the fly
+// Kernel operates on elements with n = 0, m = 0..My-1. Extrapolate left ghost points (n = -1) of u and v on the fly
 template <typename T>
 __global__
-void kernel_arakawa_left(const T* u, const T bv_u_left, cuda::bc_t bc_u_left, 
-                         const T* v, const T bv_v_left, cuda::bc_t bc_v_left,
-                         T* result, const cuda::slab_layout_t geom)
+void kernel_arakawa_single_row(const T* u, address<T> address_u,
+                               const T* v, address<T> address_v,
+                               T* result, const cuda::slab_layout_t geom,
+                               const int row)
 {
-    const size_t col{d_get_col_2()};
-    const size_t row{0};
-    const size_t index{row * (geom.My + geom.pad_y) + col}; 
+    // Use int for col and row to pass them into address<T>::operator()
+    const int col{static_cast<int>(d_get_col_2())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
 
-    const T inv_dx_dy{1.0 / (12.0 * geom.delta_x * geom.delta_y)};
-    
-    // Compute the value of the left ghost point in the current column, offset_0
-    const T u_left_c0  = interp_bv_left(u[col], bv_u_left, geom.delta_x, bc_u_left);
-    T u_left_cp1{0.0};
-    T u_left_cm1{0.0};
+    const T inv_dx_dy{1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
 
-    const T v_left_c0 = interp_bc_left(u[col], bv_v_left, geom.delta_x, bc_v_left);
-    T v_left_cp1{0.0};
-    T v_left_cm1{0.0};
-
-    // Wrap around when accessing over the last element, using periodic boundary conditions in y
-    if (col < geom.My - 1)
-        u_left_cp1 = interp_bv_left(u[col + 1], bv_u_left, geom.delta_x, bc_u_left);
-    else if(col == geom.My - 1)
-        u_left_cp1 = interp_bv_left(u[0], bv_u_left, geom.delta_x, bc_u_left);
-
-    if (col < geom.My - 1)
-        v_left_cp1 = interp_bv_left(v[col + 1], bv_v_left, geom.delta_x, bc_v_left);
-    else if(col == geom.My - 1)
-        v_left_cp1 = interp_bv_left(v[0], bv_v_left, geom.delta_x, bc_v_left);
-
-
-    // Wrap around when accessing before the first element, using periodic boundary conditions in y
-    if(col > 0)
-        u_left_cm1 = interp_bv_left(u[col - 1], bv_u_left, geom.delta_x, bc_u_left);
-    else if(col == 0)
-        u_left_cm1 = interp_bc_left(u[geom.My - 1], bv_u_left, geom.delta_x, bc_u_left); 
-   
-    if(col > 0)
-        v_left_cm1 = interp_bv_left(v[col - 1], bv_v_left, geom.delta_x, bc_v_left);
-    else if(col == 0)
-        v_left_cm1 = interp_bc_left(v[geom.My - 1], bv_v_left, geom.delta_x, bc_v_left); 
-   
-
-    if(row < geom.My)
+    if(col < static_cast<int>(geom.get_my()))
     {
         result[index] =  
-        ((u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-          
-         -
-         (u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-
-         +
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col + 1)])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
-         -
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col - 1)] +
-          u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         * 
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
-
-         +
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col + 1)])
-         *
-         (v[(row + 1) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
-         -
-         (u[(row    ) * (geom.My + geom.pad_y) + (col - 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         *
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row - 1) * (geom.My + geom.pad_y) + (col - 1)])
-         
-         +
-         (u[(row    ) * (geom.My + geom.pad_y) + (col + 1)] -
-          u[(row - 1) * (geom.My + geom.pad_y) + (col    )])
-         *
-         (v[(row - 1) * (geom.My + geom.pad_y) + (col + 1)] +
-          v[(row    ) * (geom.My + geom.pad_y) + (col    )])
-
-         -
-         (u[(row + 1) * (geom.My + geom.pad_y) + (col    )] -
-          u[(row    ) * (geom.My + geom.pad_y) + (col - 1)])
-         *
-         (v[(row    ) * (geom.My + geom.pad_y) + (col    )] +
-          v[(row + 1) * (geom.My + geom.pad_y) + (col - 1)])
-         ) * inv_dx_dy;
+        (
+        ((address_u(u, row    , col - 1) + 
+          address_u(u, row + 1, col - 1) - 
+          address_u(u, row    , col + 1) - 
+          address_u(u, row + 1, col + 1))
+        *
+         (address_v(v, row + 1, col    ) + 
+          address_v(v, row    , col    ))
+        -
+        ((address_u(u, row - 1, col - 1) + 
+          address_u(u, row    , col - 1) - 
+          address_u(u, row - 1, col + 1) - 
+          address_u(u, row    , col + 1))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row - 1, col    )))
+        +
+        ((address_u(u, row + 1, col    ) + 
+          address_u(u, row + 1, col + 1) - 
+          address_u(u, row - 1, col    ) - 
+          address_u(u, row - 1, col + 1))
+        *
+        (address_v(v, row    , col + 1) + 
+         address_v(v, row    , col    )))
+        -
+        ((address_u(u, row + 1, col - 1) + 
+          address_u(u, row + 1, col    ) - 
+          address_u(u, row - 1, col - 1) - 
+          address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row    , col - 1)))
+        +
+        (address_u(u, row + 1, col    ) - 
+         address_u(u, row    , col + 1)) 
+        * 
+        (address_v(v, row + 1, col + 1) + 
+         address_v(v, row    , col    ))
+        -
+        (address_u(u, row    , col - 1) - 
+         address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row - 1, col - 1)) 
+        +
+        (address_u(u, row    , col + 1) - 
+         address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row - 1, col + 1) + 
+         address_v(v, row    , col    ))
+        -
+        (address_u(u, row + 1, col    ) - 
+         address_u(u, row    , col - 1))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
     }
 }
 
-
-// Kernel operates on elements with n = Nx - 1, m = 0..My-1. Computes right ghost points of u and v on the fly
-template <typename T>
-__global__
-void kernel_arakawa_right(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
-{
-    const size_t col{d_get_col_2()};
-    const size_t row{geom.Nx - 1};
-    const size_t index{row * (geom.My + geom.pad_y) + col}; 
-
-    if(col < geom.My)   
-    {
-        result[index] = -2.0; 
-    }
-
-}
 
 // Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
 template <typename T>
 __global__
-void kernel_arakawa_top(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
+void kernel_arakawa_single_col(const T* u, const address<T> address_u,
+                               const T* v, const address<T> address_v,
+                               T* result, const cuda::slab_layout_t geom, const int col)
 {
-    const size_t col{geom.My - 1};
-    const size_t row{d_get_row_2()};
-    const size_t index{row * (geom.My + geom.pad_y) + col};
+    const int row{static_cast<int>(d_get_row_2())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+    const real_t inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
 
-    if(row < geom.Nx)
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1))
     {
-        result[index] = -3.0;
+        result[index] = 
+        (
+        ((address_u(u, row    , col - 1) + 
+          address_u(u, row + 1, col - 1) - 
+          address_u(u, row    , col + 1) - 
+          address_u(u, row + 1, col + 1))
+        *
+         (address_v(v, row + 1, col    ) + 
+          address_v(v, row    , col    ))
+        -
+        ((address_u(u, row - 1, col - 1) + 
+          address_u(u, row    , col - 1) - 
+          address_u(u, row - 1, col + 1) - 
+          address_u(u, row    , col + 1))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row - 1, col    )))
+        +
+        ((address_u(u, row + 1, col    ) + 
+          address_u(u, row + 1, col + 1) - 
+          address_u(u, row - 1, col    ) - 
+          address_u(u, row - 1, col + 1))
+        *
+        (address_v(v, row    , col + 1) + 
+         address_v(v, row    , col    )))
+        -
+        ((address_u(u, row + 1, col - 1) + 
+          address_u(u, row + 1, col    ) - 
+          address_u(u, row - 1, col - 1) - 
+          address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row    , col - 1)))
+        +
+        (address_u(u, row + 1, col    ) - 
+         address_u(u, row    , col + 1)) 
+        * 
+        (address_v(v, row + 1, col + 1) + 
+         address_v(v, row    , col    ))
+        -
+        (address_u(u, row    , col - 1) - 
+         address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row - 1, col - 1)) 
+        +
+        (address_u(u, row    , col + 1) - 
+         address_u(u, row - 1, col    ))
+        *
+        (address_v(v, row - 1, col + 1) + 
+         address_v(v, row    , col    ))
+        -
+        (address_u(u, row + 1, col    ) - 
+         address_u(u, row    , col - 1))
+        *
+        (address_v(v, row    , col    ) + 
+         address_v(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
     }
 }
 
@@ -552,22 +527,36 @@ void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const 
                                   const size_t t_src, const size_t t_dst)
 {
     cout << "Computing arakawa bracket for u and v" << endl;
-    // Thread layout for accessing a single row (My = const, n = 0...Nx)
+    // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
     static dim3 block_single_row(cuda::blockdim_row, 1);
-    static dim3 grid_single_row(((Nx + geom.pad_x) + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+    static dim3 grid_single_row((Nx + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
 
-    // Thread layout for accessing a single column (m = 0...My, n = const)
+    // Thread layout for accessing a single column (m = 0, My - 1, n = 0...Nx-1)
     static dim3 block_single_col(1, cuda::blockdim_col);
-    static dim3 grid_single_col(1, ((My + geom.pad_y) + cuda::blockdim_col - 1) / cuda::blockdim_col);
+    static dim3 grid_single_col(1, (My + cuda::blockdim_col - 1) / cuda::blockdim_col);
 
-    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
-    kernel_arakawa_left<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_bvals().get_bv_left(), u.get_bvals().get_bc_left(),
-                                                               v.get_array_d(t_src), v.get_bvals().get_bv_left(), v.get_bvals().get_bc_left(),
-                                                               res.get_array_d(t_dst), geom);
-    kernel_arakawa_right<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
-    kernel_arakawa_top<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
-    kernel_arakawa_bottom<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), v.get_array_d(t_src), res.get_array_d(t_dst), geom);
-    cout << "done" << endl;
+    // Create address objects to access ghost points
+
+    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
+                                                           v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()), 
+                                                           res.get_array_d(t_dst), geom);
+
+    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
+                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+                                                                     res.get_array_d(t_dst), geom, 0);
+
+    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
+                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+                                                                     res.get_array_d(t_dst), geom, Nx - 1);
+
+    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
+                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+                                                                     res.get_array_d(t_dst), geom, 0);
+
+    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
+                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+                                                                     res.get_array_d(t_dst), geom, My - 1);
+    //cout << "done" << endl;
 }
 
 

@@ -29,7 +29,7 @@ slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _b
 void slab_bc :: print_field(const test_ns::field_t fname) const
 {
     get_field_by_name.at(fname) -> copy_device_to_host();
-    get_field_by_name.at(fname) -> dump_full();
+    get_field_by_name.at(fname) -> print();
 }
 
 
@@ -44,6 +44,12 @@ void slab_bc :: print_field(const test_ns::field_t fname, const string file_name
 }
 
 
+//cuda_arr_real* slab_bc :: get_array_ptr(const test_ns::field_t fname) const
+//{
+//    return(get_field_by_name.at(fname));
+//}
+
+
 void slab_bc :: init_dft()
 {
     cout << "init_dft()" << endl;
@@ -55,7 +61,7 @@ void slab_bc :: init_dft()
     int dist_cplx{0};               // Distance between two complex input vectors for iDFT, in units of (2 * double)
     int istride{1};                 // Distance between two successive input and output elements in the least significant (that is, the innermost) dimension
     int ostride{1};
-    switch(boundaries.bc_left)
+    switch(boundaries.get_bc_left())
     {
         case cuda::bc_t::bc_dirichlet:
             // fall through
@@ -230,19 +236,21 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
 {
     cuda_arr_real* arr1 = get_field_by_name.at(fname1);
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
-    
+  
+    // arr1 =-sin^2(2 pi y) sin^2(2 pi x). Dirichlet bc, f(-1, y) = f(1, y) = 0.0
     (*arr1).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
                 value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
                 value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
-                return(x - 1.0 * sin(cuda::TWOPI * y));
+                return(-1.0 * sin(cuda::TWOPI * y) * sin(cuda::TWOPI * y) * sin(cuda::TWOPI * x) * sin(cuda::TWOPI * x));
             }, 0);
 
+    // arr2 = sin(pi x) sin (pi y). Dirichlet BC: g(-1, y) = g(1, y) = 0.0
     (*arr2).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
                 value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
                 value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
-                return(sin(cuda::TWOPI * x) + y);
+                return(sin(cuda::PI * x) * sin(cuda::PI * y));
             }, 0);
 }
 
@@ -281,8 +289,8 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
     cuda_arr_real* in_arr = get_field_by_name.at(in);
     cuda_arr_real* out_arr = get_field_by_name.at(out);
     der.invert_laplace((*in_arr), (*out_arr), 
-                       in_arr -> get_bvals().bc_left, in_arr -> get_bvals().bval_left,
-                       in_arr -> get_bvals().bc_right, in_arr -> get_bvals().bval_right,
+                       in_arr -> get_bvals().get_bc_left(), in_arr -> get_bvals().get_bv_left(),
+                       in_arr -> get_bvals().get_bc_right(), in_arr -> get_bvals().get_bv_right(),
                        t_src, t_dst);
 }
 

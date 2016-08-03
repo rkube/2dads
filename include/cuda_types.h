@@ -27,6 +27,11 @@ const std::map<cufftResult, std::string> cufftGetErrorString
 
 #endif
 
+#ifdef __CUDACC__
+#define CUDAMEMBER __host__ __device__
+#else
+#define CUDAMEMBER
+#endif
 
 namespace cuda
 {
@@ -82,34 +87,21 @@ namespace cuda
         const size_t My;
         const size_t pad_y;
 
-        real_t get_xleft() const {return(x_left);};
-        real_t get_deltax() const {return(delta_x);};
-        real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * delta_x);};
-        real_t get_Lx() const {return(static_cast<real_t>(Nx) * delta_x);};
+        CUDAMEMBER inline real_t get_xleft() const {return(x_left);};
+        CUDAMEMBER inline real_t get_deltax() const {return(delta_x);};
+        CUDAMEMBER inline real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * delta_x);};
+        CUDAMEMBER inline real_t get_Lx() const {return(static_cast<real_t>(Nx) * delta_x);};
         
-        real_t get_ylo() const {return(y_lo);};
-        real_t get_deltay() const {return(delta_y);};
-        real_t get_yup() const {return(y_lo + static_cast<real_t>(My) * delta_y);};
-        real_t get_Ly() const {return(static_cast<real_t>(My) * delta_y);};
+        CUDAMEMBER inline real_t get_ylo() const {return(y_lo);};
+        CUDAMEMBER inline real_t get_deltay() const {return(delta_y);};
+        CUDAMEMBER inline real_t get_yup() const {return(y_lo + static_cast<real_t>(My) * delta_y);};
+        CUDAMEMBER inline real_t get_Ly() const {return(static_cast<real_t>(My) * delta_y);};
 
-        size_t get_nx() const {return(Nx);};
-        size_t get_pad_x() const {return(pad_x);};
+        CUDAMEMBER inline size_t get_nx() const {return(Nx);};
+        CUDAMEMBER inline size_t get_pad_x() const {return(pad_x);};
 
-        size_t get_my() const {return(My);};
-        size_t get_pad_y() const {return(pad_y);};
-
-        friend std::ostream& operator<<(std::ostream& os, const slab_layout_t s)
-        {
-            os << "x_left = " << s.x_left << "\t";
-            os << "delta_x = " << s.delta_x << "\t";
-            os << "y_lo = " << s.y_lo << "\t";
-            os << "delta_y = " << s.delta_y << "\t";
-            os << "Nx = " << s.Nx << "\t";
-            os << "pad_x = " << s.pad_x << "\t";
-            os << "My = " << s.My << "\t";
-            os << "pad_y = " << s.pad_y << "\n";
-            return os;
-        }
+        CUDAMEMBER inline size_t get_my() const {return(My);};
+        CUDAMEMBER inline size_t get_pad_y() const {return(pad_y);};
     } __attribute__ ((aligned (8)));
 
     /// Class to store initialization parameters, up to 6 doubles
@@ -141,21 +133,21 @@ namespace cuda
     class bvals_t
     {
         public:
-            bvals_t(bc_t _bc_left, bc_t _bc_right, bc_t _bc_top, bc_t _bc_bottom, T _bv_l, T _bv_r, T _bv_t, T _bv_b)
-                : bc_left(_bc_left), bc_right(_bc_right), bc_top(_bc_top), bc_bottom(_bc_bottom),
-                bval_left(_bv_l), bval_right(_bv_r), bval_top(_bv_t), bval_bottom(_bv_b) {};
+            CUDAMEMBER bvals_t(bc_t _bc_left, bc_t _bc_right, bc_t _bc_top, bc_t _bc_bottom, T _bv_l, T _bv_r, T _bv_t, T _bv_b)
+                               : bc_left(_bc_left), bc_right(_bc_right), bc_top(_bc_top), bc_bottom(_bc_bottom),
+                                 bval_left(_bv_l), bval_right(_bv_r), bval_top(_bv_t), bval_bottom(_bv_b) {};
 
-            bc_t get_bc_left() const {return(bc_left);};
-            bc_t get_bc_right() const {return(bc_right);};
-            bc_t get_bc_top() const {return(bc_top);};
-            bc_t get_bc_bottom() const {return(bc_bottom);};
+            CUDAMEMBER inline bc_t get_bc_left() const {return(bc_left);};
+            CUDAMEMBER inline bc_t get_bc_right() const {return(bc_right);};
+            CUDAMEMBER inline bc_t get_bc_top() const {return(bc_top);};
+            CUDAMEMBER inline bc_t get_bc_bottom() const {return(bc_bottom);};
 
-            T get_bv_left() const {return(bval_left);};
-            T get_bv_right() const {return(bval_right);};
-            T get_bv_top() const {return(bval_top);};
-            T get_bv_bottom() const {return(bval_bottom);};
+            CUDAMEMBER inline T get_bv_left() const {return(bval_left);};
+            CUDAMEMBER inline T get_bv_right() const {return(bval_right);};
+            CUDAMEMBER inline T get_bv_top() const {return(bval_top);};
+            CUDAMEMBER inline T get_bv_bottom() const {return(bval_bottom);};
 
-            bool operator==(const bvals_t rhs) const
+            CUDAMEMBER inline bool operator==(const bvals_t rhs) const
             {
                 if((bc_left  == rhs.bc_left) 
                    && (bc_right == rhs.bc_right)
@@ -171,22 +163,23 @@ namespace cuda
                 return (false);
             }
 
-            bool operator!=(const bvals_t rhs) const
+            CUDAMEMBER inline bool operator!=(const bvals_t rhs) const
             {
                 return(!(*this == rhs));
             }
 
-        // The boundary conditions on the domain border
-        bc_t bc_left;
-        bc_t bc_right;
-        bc_t bc_top;
-        bc_t bc_bottom;
+        private: 
+            // The boundary conditions on the domain border
+            const bc_t bc_left;
+            const bc_t bc_right;
+            const bc_t bc_top;
+            const bc_t bc_bottom;
 
-        // The boundary values on the domain border
-        T bval_left;
-        T bval_right;
-        T bval_top;
-        T bval_bottom;
+            // The boundary values on the domain border
+            const T bval_left;
+            const T bval_right;
+            const T bval_top;
+            const T bval_bottom;
     };
 
 
@@ -204,19 +197,6 @@ namespace cuda
         const size_t My;
         const size_t Nx21;
         const size_t level;
-        friend std::ostream& operator<<(std::ostream& os, const stiff_params_t s)
-        {
-            os << "delta_t = " << s.delta_t << "\t";
-            os << "length_x = " << s.length_x << "\t";
-            os << "length_y = " << s.length_y << "\t";
-            os << "diff = " << s.diff << "\t";
-            os << "hv = " << s.hv << "\t";
-            os << "My = " << s.My << "\t";
-            os << "Nx21 = " << s.Nx21 << "\t";
-            os << "level = " << s.level << "\n";
-            return os;
-        }
-
     } __attribute__ ((aligned (8)));
 
     //constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration

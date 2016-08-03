@@ -172,4 +172,18 @@ class assert_error : public exception
         string error;
 };
 
+/// things not implemented yet
+class not_implemented_error : public exception
+{
+    public:
+        not_implemented_error(const string err) : error(err) {};
+        ~not_implemented_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+        private:
+            string error;
+
+};
+
+
 #endif //__ERROR_H
