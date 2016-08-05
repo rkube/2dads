@@ -17,9 +17,9 @@ class my_deleter_host
     public:
         void operator()(T* p)
         {
-            std::cout << "deleter_host :: operator()" << std::endl;
+            //std::cout << "deleter_host :: operator()" << std::endl;
             delete [] p;
-            std::cerr << "...memory deleted" << std::endl;
+            //std::cerr << "...memory deleted" << std::endl;
         }
 };
 
@@ -30,13 +30,13 @@ class my_deleter_device
     public:
         void operator() (T* p)
         {
-            std::cerr << "deleter_device :: operator()" << ", freeing at: " << p << std::endl;
+            //std::cerr << "deleter_device :: operator()" << ", freeing at: " << p << std::endl;
             cudaError_t res;
             if ((res = cudaFree(static_cast<void*>(p))) != cudaSuccess)
             {
                 throw gpu_error(cudaGetErrorString(res));
             }
-            std::cerr << "deleter_device :: freed memory" << std::endl;
+            //std::cerr << "deleter_device :: freed memory" << std::endl;
         }
 };
 
@@ -52,10 +52,10 @@ struct my_allocator_device
         // Delete the pointer using the deleter_device<U> class
         static void free(ptr_type ptr)
         {
-            std::cerr << "allocator_device :: free. Freeing at " << ptr.get() << std::endl;
+            //std::cerr << "allocator_device :: free. Freeing at " << ptr.get() << std::endl;
             my_deleter_device<U> del;
             del(ptr.get());
-            std::cerr << "allocator_device :: free ... done" << std::endl;
+            //std::cerr << "allocator_device :: free ... done" << std::endl;
         }
 
         // Allocate s * sizeof(U) bytes using cudaMalloc
@@ -63,13 +63,13 @@ struct my_allocator_device
         {  
             void* ptr{nullptr};
             cudaError_t res;
-            std::cerr << "allocator_device :: alloc" << std::endl;
+            //std::cerr << "allocator_device :: alloc" << std::endl;
             if((res = cudaMalloc(&ptr, s * sizeof(U))) != cudaSuccess)
             {
                 std::cerr << "Error allocating " << s * sizeof(U) << " bytes: " << cudaGetErrorString(res) << std::endl;
                 throw;
             }
-            std::cerr << "allocated at " << ptr <<  std::endl;
+            //std::cerr << "allocated at " << ptr <<  std::endl;
             return ptr_type(static_cast<U*>(ptr));
         }
 
@@ -97,16 +97,16 @@ class my_allocator_host
         // Delete the pointer using deleter_host<U>
         static void free(ptr_type ptr) 
         { 
-            std::cerr << "allocator_host :: free" << std::endl;
+            //std::cerr << "allocator_host :: free" << std::endl;
             my_deleter_host<U> del;
             del(ptr.get());
-            std::cerr << "allocator_host :: free ... done" << std::endl;
+            //std::cerr << "allocator_host :: free ... done" << std::endl;
         }
 
         // Allocate s * sizeof(U) bytes
         static ptr_type alloc (size_t s) 
         { 
-            std::cerr << "allocator_host :: alloc" << std::endl;
+            //std::cerr << "allocator_host :: alloc" << std::endl;
             ptr_type ptr{new U[s]};
             return(ptr);
         } 

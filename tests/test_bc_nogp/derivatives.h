@@ -569,9 +569,7 @@ derivs<allocator> :: ~derivs()
     cudaFree(d_tmp_mat);
 
     delete [] h_diag;
-    cerr << "Deleting cublas handle" << endl;
     cublasDestroy(cublas_handle);
-    cerr << "Deleting cusparse handle" << endl;
     cusparseDestroy(cusparse_handle);
 }
 
@@ -585,7 +583,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     const int My_int{static_cast<int>(src.get_my())};
     const int My21_int{static_cast<int>((src.get_my() + src.get_geom().pad_y) / 2)};
     const int Nx_int{static_cast<int>(src.get_nx())};
-    const value_t inv_dx2{1.0 / (geom.delta_x * geom.delta_x)};
+    const value_t inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
 
     const cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex beta = make_cuDoubleComplex(0.0, 0.0);

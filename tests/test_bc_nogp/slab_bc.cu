@@ -35,19 +35,12 @@ void slab_bc :: print_field(const test_ns::field_t fname) const
 
 void slab_bc :: print_field(const test_ns::field_t fname, const string file_name) const
 {
-    get_field_by_name.at(fname) -> copy_device_to_host();
-
+    //get_field_by_name.at(fname) -> copy_device_to_host();
     ofstream output_file;
     output_file.open(file_name.data());
     output_file << *get_field_by_name.at(fname) << endl;
     output_file.close();
 }
-
-
-//cuda_arr_real* slab_bc :: get_array_ptr(const test_ns::field_t fname) const
-//{
-//    return(get_field_by_name.at(fname));
-//}
 
 
 void slab_bc :: init_dft()

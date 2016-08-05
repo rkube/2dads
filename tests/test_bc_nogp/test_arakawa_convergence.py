@@ -38,9 +38,8 @@ L2_arr = np.zeros(Nx_arr.shape[0], dtype='float64')
 L = 2.0
 
 for idx, Nx in enumerate(Nx_arr):
-    arr1 = np.loadtxt("test_arakawa_arr1_%d_in.dat" % (Nx))[:Nx, :Nx]
-    arr2 = np.loadtxt("test_arakawa_arr2_%d_in.dat" % (Nx))[:Nx, :Nx]
-    arr3 = np.loadtxt("test_arakawa_arr3_%d_out.dat" % (Nx))[:Nx, :Nx]
+    solnum = np.loadtxt("test_arakawa_solnum_%d_out.dat" % (Nx))[:Nx, :Nx]
+    solan = np.loadtxt("test_arakawa_solan_%d_out.dat" % (Nx))[:Nx, :Nx]
 
     dx = L / float(Nx)
     xrg = -0.5 * L + (np.arange(Nx) + 0.5) * dx
@@ -48,16 +47,29 @@ for idx, Nx in enumerate(Nx_arr):
 
     xx, yy = np.meshgrid(xrg, yrg)
 
-    res = (fout_an(xx, yy) - arr3)
+    res = (solnum - solan)
     L2_arr[idx] = np.sqrt((res * res).sum() / float(res.size))
 
+    maxval = max(solnum.max(), solan.max())
+    minval = min(solnum.min(), solan.min())
+    cvals = np.linspace(minval, maxval, 32)
+
+    plt.figure()
+    plt.title('Nx = %d' % Nx)
+    plt.plot(solnum[:, 3 * Nx / 8], label='num')
+    plt.plot(solan[:, 3 * Nx / 8], label='an')
+    plt.plot(res[:, 3 * Nx / 8], label='diff')
+    plt.legend()
+
     #plt.figure()
-    #plt.contourf(fout_an(xx, yy))
+    #plt.title('Nx = %d' % Nx)
+    #plt.contourf(solan, cvals)
     #plt.colorbar()
     #plt.title('Analytic solution')
 
-    #plt.figure();
-    #plt.contourf(arr3)
+    #plt.figure()
+    #plt.title('Nx = %d' % Nx)
+    #plt.contourf(solnum, cvals)
     #plt.colorbar()
     #plt.title('Numerical solution')
 

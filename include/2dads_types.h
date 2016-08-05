@@ -5,10 +5,16 @@
 #ifndef TWODADS_TYPES
 #define TWODADS_TYPES
 
+#ifdef __CUDACC__
+#define CUDAMEMBER __host__ __device__
+#else
+#define CUDAMEMBER
+#endif
+
+
 namespace twodads {
-    //using real_t = double;
-    //using m_cmplx = std::complex<twodads::real_t>;
-    typedef double real_t;
+    using real_t = double;
+    using cmplx_t = std::complex<twodads::real_t>;
     //typedef std::complex<twodads::real_t> cmplx_t;
 
     // Use PI from math.h

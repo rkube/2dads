@@ -27,8 +27,6 @@ class slab_bc
 
         using cuda_arr_real = cuda_array_bc_nogp<my_allocator_device<cuda::real_t>>;
         using cuda_arr_cmpl = cuda_array_bc_nogp<my_allocator_device<cuda::cmplx_t>>;
-        //typedef cuda_array_bc_nogp<my_allocator_device<cuda::cmplx_t>> cuda_arr_cmpl;
-        //typedef cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> cuda_arr_real;
 
         slab_bc(const cuda::slab_layout_t, const cuda::bvals_t<real_t>);
         ~slab_bc();
