@@ -31,9 +31,9 @@ using namespace std;
 int main(void){
     size_t Nx{128};
     size_t My{128};
-    cout << "Enter Nx";
+    cout << "Enter Nx: ";
     cin >> Nx;
-    cout << "Enter My";
+    cout << "Enter My: ";
     cin >> My;
 
     stringstream fname;
@@ -48,10 +48,11 @@ int main(void){
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
         sol_an.evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
                 {
-                cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
-                cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
-                return(16.0 * cuda::PI * cuda::PI * cos(cuda::PI * x) * cos(cuda::PI * y) * (cos(cuda::TWOPI * x) - cos(cuda::TWOPI * y)) * sin(cuda::PI * x) * sin(cuda::PI * x) * sin(cuda::PI * y) * sin(cuda::PI * y));
-                }, 0);
+                    cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
+                    cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
+                    return(16.0 * cuda::PI * cuda::PI * cos(cuda::PI * x) * cos(cuda::PI * y) * (cos(cuda::TWOPI * x) - cos(cuda::TWOPI * y)) * sin(cuda::PI * x) * sin(cuda::PI * x) * sin(cuda::PI * y) * sin(cuda::PI * y));
+                }, 
+                0);
 
         fname.str(string(""));
         fname << "test_arakawa_solan_" << Nx << "_out.dat";

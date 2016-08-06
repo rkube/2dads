@@ -33,6 +33,9 @@
  * dimGrid = (My + pad_y) / blocksize_row, (My + pad_y) / blocksize_col
  *
  * Ghost points are to be computed on the fly, not stored in memory
+ * They can be access by the address object
+ *
+ *
  */
 
 #ifndef cuda_array_bc_H_
@@ -47,6 +50,7 @@
 #include <cuda_runtime_api.h>
 #include <memory>
 #include "bounds.h"
+#include "address.h"
 #include "error.h"
 #include "cuda_types.h"
 #include "allocators.h"
@@ -159,6 +163,28 @@ void kernel_op1_arr(T* lhs, T* rhs, O op_func, const cuda::slab_layout_t geom)
 }
 
 
+/// For accessing elements in GPU kernels and interpolating ghost points
+template <typename T>
+__global__
+void kernel_init_address(address_t<T>** my_address, 
+        T* data, 
+        const cuda::slab_layout_t geom, 
+        const cuda::bvals_t<T> bvals)
+{
+    *my_address = new address_t<T>(geom, bvals);
+    //printf("kernel_init_address: address_t at %p. Value: %f\n", *my_address, (*(*my_address))(data, -1, 0));
+}
+
+
+template <typename T>
+__global__
+void kernel_free_address(address_t<T>** my_address)
+{
+    //printf("kernel_free_address: address_t at %p\n", *my_address);
+    delete *my_address;
+}
+
+
 /// Reduction kernel, taken from cuda_darray.h
 // Perform reduction of in_data, stored in column-major order
 // Use stride_size = 1, offset_size = Nx for row-wise reduction (threads in one block reduce one row, i.e. consecutive elements of in_data)
@@ -186,9 +212,7 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
 	const size_t idx_out = blockIdx.y;
 	if(idx_data < Nx * My)
 	{
-		// original line: sdata[tid] = in_data[idx_data];
         sdata[tid] = in_data[idx_data];
-		//sdata[tid] = 1.0;
 	    // reduction in shared memory
         __syncthreads();
 	    for(size_t s = 1; s < blockDim.x; s *= 2)
@@ -196,9 +220,6 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
 	        if(tid % (2*s) == 0)
 	        {
 	            sdata[tid] = op_func(sdata[tid], sdata[tid + s]);
-	        	//sdata[tid] = op_func(sdata[tid], sdata[tid + s]);
-                //sdata[tid] += 1.0;
-                //sdata[tid] += sdata[tid + s];
 	        }
 	        __syncthreads();
 	    }
@@ -212,119 +233,7 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
 }
 
 
-
 #endif // __CUDACC_
-
-
-#ifdef __CUDACC__
-#define CUDA_MEMBER __host__ __device__
-#else
-#define CUDA_MEMBER
-#endif
-
-// Gives a functor object to access data and, if necessary, compute ghost points
-template <typename T>
-class address
-{
-    public:
-        CUDA_MEMBER address(const cuda::slab_layout_t _sl, const cuda::bvals_t<T> _bv) : Nx(_sl.get_nx()), 
-                                                                                         My(_sl.get_my()), 
-                                                                                         pad_My(_sl.get_pad_y()), 
-                                                                                         dx(_sl.get_deltax()), 
-                                                                                         dy(_sl.get_deltay()), 
-                                                                                         bv(_bv) {};
-        // Direct element access, no wrapping / ghost points
-        CUDA_MEMBER T get_elem(const T* data, const int n, const int m) const
-        {
-            //assert(n > -1);
-            //assert(n < static_cast<int>(get_Nx()));
-            //assert(m > -1);
-            //assert(m < static_cast<int>(get_My()));
-            return(data[n * static_cast<int>(get_My() + get_pad_My()) + m]);
-        }
-
-        // Wraps around indices and computes ghost points.
-        CUDA_MEMBER T operator()(const T* data, const int n, const int m) const
-        {
-            // Wrap m around My for periodic boundary conditions
-            // 
-            // m        m_wrapped
-            // -2       My - 1
-            // -1       My
-            // 0        0
-            // 1        1
-            // ...
-            // My - 1   My - 1
-            // My       0
-            // My + 1   1
-            // My + 2   2
-            
-            const int m_wrapped = (m + static_cast<int>(get_My())) % static_cast<int>(get_My());
-            //if(m < 0)
-            //    printf("threadIdx.x = %d, blockIdx.x = %d: m = %d, My = %d, m_wrapped = %d\n", threadIdx.x, blockIdx.x, m, static_cast<int>(get_My()), m_wrapped);
-            //if(m >= static_cast<int>(get_My()))
-            //    printf("threadIdx.x = %d, blockIdx.x = %d: m = %d, My = %d, m_wrapped = %d\n", threadIdx.x, blockIdx.x, m, static_cast<int>(get_My()), m_wrapped);
-            //assert(m_wrapped >= 0);
-            //assert(m_wrapped < static_cast<int>(get_My()));
-            T ret_val{0.0};
-
-            if(n > -1 && n < static_cast<int>(get_Nx()))
-            {
-                ret_val = data[n * static_cast<int>(get_My() + get_pad_My()) + m_wrapped];
-            }
-            else if(n == -1)
-            {
-                switch(bv.get_bc_left())
-                {
-                    case cuda::bc_t::bc_dirichlet:
-                        ret_val = 2.0 * bv.get_bv_left() - this -> get_elem(data, 0, m_wrapped);
-                        break;
-                    case cuda::bc_t::bc_neumann:
-                        ret_val = this -> get_elem(data, 0, m_wrapped) - get_dx() * bv.get_bv_left();
-                        break;
-                    //case cuda::bc_t::bc_periodic:
-                    //    // fall through
-                    //default:
-                    //    ret_val = T(-10000.0);
-                    //    break;
-                }   
-            }
-            else if (n == static_cast<int>(get_Nx()))
-            {
-                switch(bv.get_bc_right())
-                {
-                    case cuda::bc_t::bc_dirichlet:
-                        ret_val = 2.0 * bv.get_bv_right() - this -> get_elem(data, static_cast<int>(get_Nx() - 1), m_wrapped);
-                        break;
-                    case cuda::bc_t::bc_neumann:
-                        ret_val = this -> get_elem(data, static_cast<int>(get_Nx() - 1), m_wrapped) + get_dx() * bv.get_bv_right();
-                        break;
-                    //case cuda::bc_t::bc_periodic:
-                    //    // fall through
-                    //default:
-                    //    ret_val = T(-10000.0);
-                    //    break;
-                }   
-            }
-            return(ret_val);
-        }        
-
-        CUDA_MEMBER inline size_t get_Nx() const {return(Nx);};
-        CUDA_MEMBER inline size_t get_My() const {return(My);};
-        CUDA_MEMBER inline size_t get_pad_My() const {return(pad_My);};
-
-        CUDA_MEMBER inline T get_dx() const {return(dx);};
-        CUDA_MEMBER inline T get_dy() const {return(dy);};
-
-    private:
-        const size_t Nx;
-        const size_t My;
-        const size_t pad_My;
-        const T dx;
-        const T dy;
-        const cuda::bvals_t<T> bv;
-};
-
 
 
 template <typename allocator>
@@ -352,14 +261,18 @@ public:
     void initialize();
     void initialize(const size_t);
 
-	inline value_t& operator() (const size_t n, const size_t m) {return(*(array_h + address(n, m)));};
-	inline value_t operator() (const size_t n, const size_t m) const {return(*(array_h + address(n, m)));}
+	inline value_t& operator() (const size_t n, const size_t m) {
+        return(*(array_h + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
+    };
+	inline value_t operator() (const size_t n, const size_t m) const {
+        return(*(array_h + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
+    }
 
     inline value_t& operator() (const size_t t, const size_t n, const size_t m) {
-        return(*(array_h_t[t] + address(n, m)));
+        return(*(array_h_t[t] + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
     };
     inline value_t operator() (const size_t t, const size_t n, const size_t m) const {
-        return(*(array_h_t[t] + address(n, m)));
+        return(*(array_h_t[t] + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
     };
 
     cuda_array_bc_nogp<allocator>& operator+=(const cuda_array_bc_nogp<allocator>&);
@@ -443,11 +356,8 @@ public:
 	inline size_t get_tlevs() const {return(tlevs);};
     inline cuda::slab_layout_t get_geom() const {return(geom);};
     inline cuda::bvals_t<value_t> get_bvals() const {return(boundaries);};
+    inline address_t<value_t>** get_address() const {return(d_address);};
 
-	inline size_t address(size_t n, size_t m) const {
-        size_t retval = n * (geom.My + geom.pad_y) + m; 
-        return(retval);
-    };
 	inline dim3 get_grid() const {return grid;};
 	inline dim3 get_block() const {return block;};
 
@@ -479,6 +389,7 @@ private:
     const cuda::slab_layout_t geom;
 
     allocator my_alloc;
+    address_t<value_t>** d_address;
 
 	// block and grid for access without ghost points, use these normally
 	const dim3 block;
@@ -495,19 +406,8 @@ private:
 	value_t** array_d_t_host;
 	value_t* array_h;
 	value_t** array_h_t;	
-	
-	// CuFFT related stuff
-	//cufftHandle plan_fw;
-	//cufftHandle plan_bw;
 };
 
-
-const map<cuda::bc_t, string> bc_str_map
-{
-	{cuda::bc_t::bc_dirichlet, "Dirichlet"},
-	{cuda::bc_t::bc_neumann, "Neumann"},
-	{cuda::bc_t::bc_periodic, "Periodic"}
-};
 
 template < typename allocator>
 cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp 
@@ -518,6 +418,7 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp
         array_bounds(get_tlevs(), get_nx(), get_my()),
         boundaries(bvals), 
         geom(_geom), 
+        d_address{nullptr},
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + geom.get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((get_nx() + geom.get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
@@ -529,7 +430,6 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp
 		array_h_t(new value_t*[get_tlevs()])
 {
 	gpuErrchk(cudaMalloc( (void***) &array_d_t, get_tlevs() * sizeof(value_t*)));
-	//gpuErrchk(cudaMalloc( (void**) &array_d, tlevs * get_nelem_per_t() * sizeof(value_t)));
 
     //cout << "cuda_array_bc<allocator> ::cuda_array_bc<allocator>\t";
     //cout << "Nx = " << Nx << ", pad_x = " << geom.pad_x << ", My = " << My << ", pad_y = " << geom.pad_y << endl;
@@ -545,6 +445,10 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp
         array_h_t[t] = &array_h[t * get_nelem_per_t()];
     }
     initialize();
+
+    gpuErrchk(cudaMalloc(&d_address, sizeof(address_t<value_t>**)));
+
+    kernel_init_address<<<1, 1>>>(get_address(), get_array_d(0), get_geom(), get_bvals());
 }
 
 
@@ -571,6 +475,20 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<all
                          cudaMemcpyDeviceToDevice));
 };
 
+
+template <typename allocator>
+cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
+{
+	if(array_h != nullptr)
+		delete [] array_h;
+	if(array_h_t != nullptr)
+		delete [] array_h_t;
+	if(array_d_t != nullptr)
+		cudaFree(array_d_t);
+
+    kernel_free_address<<<1, 1>>>(get_address());
+}
+    
 
 template <typename allocator>
 void cuda_array_bc_nogp<allocator> :: enumerate(const size_t tlev)
@@ -849,14 +767,5 @@ void cuda_array_bc_nogp<allocator> :: copy_host_to_device()
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
-{
-	if(array_h != nullptr)
-		delete [] array_h;
-	if(array_h_t != nullptr)
-		delete [] array_h_t;
-	if(array_d_t != nullptr)
-		cudaFree(array_d_t);
-}
+
 #endif /* cuda_array_bc_H_ */

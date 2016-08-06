@@ -124,10 +124,14 @@ void kernel_dx1_boundary_right(T* in, T* out, const cuda::bvals_t<T> bc, const c
 }
 
 
+
+/// T* u is the data pointed to by a cuda_array u, address_u its address object
+/// T* u is the data pointed to by a cuda_array v, address_v its address object
+/// Assume that u and v have the same geometry
 template <typename T>
 __global__
-void kernel_arakawa_center(const T* u, const address<T> address_u, 
-                           const T* v, const address<T> address_v, 
+void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
+                           const T* v, address_t<T>** address_v, 
                            T* result, const cuda::slab_layout_t geom)
 {
     const int col{static_cast<int>(d_get_col_2())};
@@ -144,63 +148,63 @@ void kernel_arakawa_center(const T* u, const address<T> address_u,
         //        threadIdx.x, blockIdx.x, blockDim.x, threadIdx.y, blockIdx.y, blockDim.y,
         //        row, col, static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_my()));
         result[index] = 
-        (((address_u.get_elem(u, row    , col - 1) + 
-           address_u.get_elem(u, row + 1, col - 1) - 
-           address_u.get_elem(u, row    , col + 1) - 
-           address_u.get_elem(u, row + 1, col + 1))
+        ((((**address_u).get_elem(u, row    , col - 1) + 
+           (**address_u).get_elem(u, row + 1, col - 1) - 
+           (**address_u).get_elem(u, row    , col + 1) - 
+           (**address_u).get_elem(u, row + 1, col + 1))
           *
-          (address_v.get_elem(v, row + 1, col    ) + 
-           address_v.get_elem(v, row    , col    )))
+          ((**address_v).get_elem(v, row + 1, col    ) + 
+           (**address_v).get_elem(v, row    , col    )))
          -
-         ((address_u.get_elem(u, row - 1, col - 1) +
-           address_u.get_elem(u, row    , col - 1) -
-           address_u.get_elem(u, row - 1, col + 1) -
-           address_u.get_elem(u, row    , col + 1))
+         (((**address_u).get_elem(u, row - 1, col - 1) +
+           (**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col + 1) -
+           (**address_u).get_elem(u, row    , col + 1))
           *
-          (address_v.get_elem(v, row    , col    ) +
-           address_v.get_elem(v, row - 1, col    )))
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col    )))
          +
-         ((address_u.get_elem(u, row + 1, col    ) +
-           address_u.get_elem(u, row + 1, col + 1) -
-           address_u.get_elem(u, row - 1, col    ) -
-           address_u.get_elem(u, row - 1, col + 1))
+         (((**address_u).get_elem(u, row + 1, col    ) +
+           (**address_u).get_elem(u, row + 1, col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col + 1))
           *
-          (address_v.get_elem(v, row    , col + 1) +
-           address_v.get_elem(v, row    , col    )))
+          ((**address_v).get_elem(v, row    , col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
          -
-         ((address_u.get_elem(u, row + 1, col - 1) +
-           address_u.get_elem(u, row + 1, col    ) -
-           address_u.get_elem(u, row - 1, col - 1) -
-           address_u.get_elem(u, row - 1, col    ))
+         (((**address_u).get_elem(u, row + 1, col - 1) +
+           (**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
           *
-          (address_v.get_elem(v, row    , col    ) +
-           address_v.get_elem(v, row    , col - 1)))
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row    , col - 1)))
          +
-         ((address_u.get_elem(u, row + 1, col    ) -
-           address_u.get_elem(u, row    , col + 1))
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col + 1))
           *
-          (address_v.get_elem(v, row + 1, col + 1) +
-           address_v.get_elem(v, row    , col    )))
+          ((**address_v).get_elem(v, row + 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
          
          -
-         ((address_u.get_elem(u, row    , col - 1) -
-           address_u.get_elem(u, row - 1, col    ))
+         (((**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
           *
-          (address_v.get_elem(v, row    , col    ) +
-           address_v.get_elem(v, row - 1, col - 1)))
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col - 1)))
 
          +
-         ((address_u.get_elem(u, row    , col + 1) -
-           address_u.get_elem(u, row - 1, col    ))
+         (((**address_u).get_elem(u, row    , col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
           *
-          (address_v.get_elem(v, row - 1, col + 1) +
-           address_v.get_elem(v, row    , col    )))
+          ((**address_v).get_elem(v, row - 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
          -
-         ((address_u.get_elem(u, row + 1, col    ) -
-           address_u.get_elem(u, row    , col - 1))
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col - 1))
           *
-          (address_v.get_elem(v, row    , col    ) +
-           address_v.get_elem(v, row + 1, col - 1)))
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row + 1, col - 1)))
          )
          * inv_dx_dy;
     }
@@ -208,10 +212,12 @@ void kernel_arakawa_center(const T* u, const address<T> address_u,
 
 
 // Kernel operates on elements with n = 0, m = 0..My-1. Extrapolate left ghost points (n = -1) of u and v on the fly
-template <typename T>
+// address_u and address_v provide operator() which wrap the index and interpolate to ghost points
+// when n = -1 or n = Nx.
+template <typename T> 
 __global__
-void kernel_arakawa_single_row(const T* u, address<T> address_u,
-                               const T* v, address<T> address_v,
+void kernel_arakawa_single_row(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
                                T* result, const cuda::slab_layout_t geom,
                                const int row)
 {
@@ -225,61 +231,61 @@ void kernel_arakawa_single_row(const T* u, address<T> address_u,
     {
         result[index] =  
         (
-        ((address_u(u, row    , col - 1) + 
-          address_u(u, row + 1, col - 1) - 
-          address_u(u, row    , col + 1) - 
-          address_u(u, row + 1, col + 1))
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
         *
-         (address_v(v, row + 1, col    ) + 
-          address_v(v, row    , col    ))
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
         -
-        ((address_u(u, row - 1, col - 1) + 
-          address_u(u, row    , col - 1) - 
-          address_u(u, row - 1, col + 1) - 
-          address_u(u, row    , col + 1))
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row - 1, col    )))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
         +
-        ((address_u(u, row + 1, col    ) + 
-          address_u(u, row + 1, col + 1) - 
-          address_u(u, row - 1, col    ) - 
-          address_u(u, row - 1, col + 1))
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
         *
-        (address_v(v, row    , col + 1) + 
-         address_v(v, row    , col    )))
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
         -
-        ((address_u(u, row + 1, col - 1) + 
-          address_u(u, row + 1, col    ) - 
-          address_u(u, row - 1, col - 1) - 
-          address_u(u, row - 1, col    ))
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row    , col - 1)))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
         +
-        (address_u(u, row + 1, col    ) - 
-         address_u(u, row    , col + 1)) 
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
         * 
-        (address_v(v, row + 1, col + 1) + 
-         address_v(v, row    , col    ))
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
         -
-        (address_u(u, row    , col - 1) - 
-         address_u(u, row - 1, col    ))
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row - 1, col - 1)) 
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
         +
-        (address_u(u, row    , col + 1) - 
-         address_u(u, row - 1, col    ))
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row - 1, col + 1) + 
-         address_v(v, row    , col    ))
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
         -
-        (address_u(u, row + 1, col    ) - 
-         address_u(u, row    , col - 1))
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row + 1, col - 1)))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
         ) * inv_dx_dy;
     }
 }
@@ -288,8 +294,8 @@ void kernel_arakawa_single_row(const T* u, address<T> address_u,
 // Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
 template <typename T>
 __global__
-void kernel_arakawa_single_col(const T* u, const address<T> address_u,
-                               const T* v, const address<T> address_v,
+void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
                                T* result, const cuda::slab_layout_t geom, const int col)
 {
     const int row{static_cast<int>(d_get_row_2())};
@@ -300,80 +306,65 @@ void kernel_arakawa_single_col(const T* u, const address<T> address_u,
     {
         result[index] = 
         (
-        ((address_u(u, row    , col - 1) + 
-          address_u(u, row + 1, col - 1) - 
-          address_u(u, row    , col + 1) - 
-          address_u(u, row + 1, col + 1))
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
         *
-         (address_v(v, row + 1, col    ) + 
-          address_v(v, row    , col    ))
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
         -
-        ((address_u(u, row - 1, col - 1) + 
-          address_u(u, row    , col - 1) - 
-          address_u(u, row - 1, col + 1) - 
-          address_u(u, row    , col + 1))
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row - 1, col    )))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
         +
-        ((address_u(u, row + 1, col    ) + 
-          address_u(u, row + 1, col + 1) - 
-          address_u(u, row - 1, col    ) - 
-          address_u(u, row - 1, col + 1))
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
         *
-        (address_v(v, row    , col + 1) + 
-         address_v(v, row    , col    )))
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
         -
-        ((address_u(u, row + 1, col - 1) + 
-          address_u(u, row + 1, col    ) - 
-          address_u(u, row - 1, col - 1) - 
-          address_u(u, row - 1, col    ))
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row    , col - 1)))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
         +
-        (address_u(u, row + 1, col    ) - 
-         address_u(u, row    , col + 1)) 
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
         * 
-        (address_v(v, row + 1, col + 1) + 
-         address_v(v, row    , col    ))
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
         -
-        (address_u(u, row    , col - 1) - 
-         address_u(u, row - 1, col    ))
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row - 1, col - 1)) 
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
         +
-        (address_u(u, row    , col + 1) - 
-         address_u(u, row - 1, col    ))
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
         *
-        (address_v(v, row - 1, col + 1) + 
-         address_v(v, row    , col    ))
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
         -
-        (address_u(u, row + 1, col    ) - 
-         address_u(u, row    , col - 1))
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
         *
-        (address_v(v, row    , col    ) + 
-         address_v(v, row + 1, col - 1)))
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
         ) * inv_dx_dy;
     }
 }
 
-
-// Kernel operates on elements with n = 0..Nx-1, m = 0. Computes bottom ghost points of u and v on the fly
-template <typename T>
-__global__
-void kernel_arakawa_bottom(const T* u, const T* v, T* result, const cuda::slab_layout_t geom)
-{
-    const size_t col{0};
-    const size_t row{d_get_row_2()};
-    const size_t index{row * (geom.My + geom.pad_y) + col};
-
-    if(row < geom.Nx)
-    {
-        result[index] = -4.0;
-    }
-}
 
 #endif //__CUDACC__
 
@@ -406,13 +397,34 @@ class derivs
         derivs(const cuda::slab_layout_t);
         ~derivs();
 
+        // Compute first derivative in x-direction
+        void dx_1(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+                  const size_t, const size_t);
+
+        // Compute second derivative in x-direction
+        //void dx_2(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+        //          const size_t, const size_t);
+
+        // Compute first derivative in y-direction
+        //void dy_1(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+        //          const size_t, const size_t);
+
+        // Compute second derivative in y-direction
+        //void dy_2(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+        //          const size_t, const size_t);
+
+        // Invert laplace equation
         void invert_laplace(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
                             const cuda::bc_t, const value_t,
                             const cuda::bc_t, const value_t,
                             const size_t, const size_t);
-        
-        void arakawa(const cuda_array_bc_nogp<allocator>&, const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, const size_t, const size_t);
-
+       
+        // Compute arakawa bracket 
+        void arakawa(const cuda_array_bc_nogp<allocator>&, 
+                     const cuda_array_bc_nogp<allocator>&, 
+                     cuda_array_bc_nogp<allocator>&, 
+                     const size_t, const size_t);
+    
     private:
         const size_t Nx;
         const size_t My;
@@ -523,6 +535,20 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
 
 
 template <typename allocator>
+void derivs<allocator> :: dx_1(const cuda_array_bc_nogp<allocator>& in,
+                               cuda_array_bc_nogp<allocator>& out,
+                               const size_t t_src, const size_t t_dst)
+{
+    cout << "Computing d/dx" << endl;
+    //static dim3 block_single_row(cuda::blockdim_row, 1);
+    //static dim3 grid_single_row((Nx + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+    //kernel_derivx_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), u.get_address(),
+    //                                                      res.get_array_d(t_dst), u.get_geom());
+}
+
+
+template <typename allocator>
 void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res,
                                   const size_t t_src, const size_t t_dst)
 {
@@ -535,28 +561,27 @@ void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const 
     static dim3 block_single_col(1, cuda::blockdim_col);
     static dim3 grid_single_col(1, (My + cuda::blockdim_col - 1) / cuda::blockdim_col);
 
-    // Create address objects to access ghost points
-
-    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
-                                                           v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()), 
-                                                           res.get_array_d(t_dst), geom);
-
-    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
-                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), u.get_address(),
+                                                           v.get_array_d(t_src), v.get_address(),
+                                                           res.get_array_d(t_dst), u.get_geom());
+    
+    // Create address objects to access ghost points 
+    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
+                                                                     v.get_array_d(t_src), v.get_address(),
                                                                      res.get_array_d(t_dst), geom, 0);
 
-    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
-                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
+                                                                     v.get_array_d(t_src), v.get_address(),
                                                                      res.get_array_d(t_dst), geom, Nx - 1);
 
-    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
-                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
+                                                                     v.get_array_d(t_src), v.get_address(),
                                                                      res.get_array_d(t_dst), geom, 0);
 
-    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), address<value_t>(u.get_geom(), u.get_bvals()),
-                                                                     v.get_array_d(t_src), address<value_t>(v.get_geom(), v.get_bvals()),
+    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
+                                                                     v.get_array_d(t_src), v.get_address(),
                                                                      res.get_array_d(t_dst), geom, My - 1);
-    //cout << "done" << endl;
+    cout << "done" << endl;
 }
 
 

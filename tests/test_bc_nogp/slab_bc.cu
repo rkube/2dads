@@ -248,12 +248,37 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
 }
 
 
-// Compute spatial derivatives in x and y direction
-void slab_bc :: d_dx_dy(const size_t tlev)
+void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test_ns::field_t fname2)
 {
-    //dft_r2c(0);
-    //d_dy1(arr1, arr1_y);
-    //dft_c2r(0);
+    cuda_arr_real* arr1 = get_field_by_name.at(fname1);
+    cuda_arr_real* arr2 = get_field_by_name.at(fname2);
+
+    (*arr1).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {       
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(sin(cuda::TWOPI * x));
+            }, 0);
+
+    (*arr2).evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {       
+                value_t x{geom.x_left + (value_t(n) + 0.5) * geom.delta_x};
+                value_t y{geom.y_lo + (value_t(m) + 0.5) * geom.delta_y};
+                return(cos(cuda::TWOPI * x));
+            }, 0);
+}
+
+
+
+// Compute x-derivative
+void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
+                     const int d, const size_t t_src, const size_t t_dst)
+{
+    cuda_arr_real* arr_src = get_field_by_name.at(fname_src);
+    cuda_arr_real* arr_dst = get_field_by_name.at(fname_dst);
+
+    if(d == 1)
+        der.dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
 }
 
 
