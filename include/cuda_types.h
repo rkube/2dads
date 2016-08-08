@@ -64,8 +64,13 @@ namespace cuda
     constexpr size_t io_w{16}; //width of fields used in cout
     constexpr size_t io_p{10}; //precision when printing with cout
 
+    // Boundary conditions: Dirichlet, Neumann, periodic
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};
+    // vertex centered: x = x_left + n * delta_x
+    // cell centered: x = x_left + (n + 1/2) * delta_x
     enum class grid_t {vertex_centered, cell_centered};
+    // 1d DFT (in last dimension), 2d DFT
+    enum class dft_t {dft_1d, dft_2d};
 
     /// Align slab_layout_t at 8 byte boundaries(as for real_t)
     /// Do this, otherwise you get differently aligned structures when
@@ -74,7 +79,6 @@ namespace cuda
     class slab_layout_t
     {
     public:
-        // Provide standard ctor for pre-C++11
         slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y) :
             x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y) {};
 

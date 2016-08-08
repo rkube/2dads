@@ -31,26 +31,28 @@ class slab_bc
         slab_bc(const cuda::slab_layout_t, const cuda::bvals_t<real_t>);
         ~slab_bc();
 
-        void init_dft();
+        //void init_dft();
         void dft_r2c(const test_ns::field_t, const size_t);
         void dft_c2r(const test_ns::field_t, const size_t);
-        void finish_dft();
+        //void finish_dft();
 
         void initialize_invlaplace(const test_ns::field_t);
         void initialize_sine(const test_ns::field_t);
         void initialize_arakawa(const test_ns::field_t, const test_ns::field_t);
         void initialize_derivatives(const test_ns::field_t, const test_ns::field_t);
+        void initialize_dfttest(const test_ns::field_t);
 
         void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
         //void d_dx_dy(const size_t);
-        void d_dx(const test_ns::field_t, const test_ns::field_t, const int, const size_t, const size_t);
+        void d_dx(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t, const size_t);
+        void d_dy(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t, const size_t);
         void arakawa(const test_ns::field_t, const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
         void print_field(const test_ns::field_t) const;
         void print_field(const test_ns::field_t, const string) const;
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
-
+        inline cuda::slab_layout_t get_geom() const {return(geom);};
     private:
         const size_t Nx;
         const size_t My;
@@ -60,6 +62,7 @@ class slab_bc
         const cuda::slab_layout_t geom;
 
         derivs<my_allocator_device<cuda::real_t>> der;
+        dft_object_t<cuda::real_t> myfft;
 
         cuda_arr_real arr1;
         cuda_arr_real arr1_x;
@@ -73,12 +76,12 @@ class slab_bc
         cuda_arr_real arr3_x;
         cuda_arr_real arr3_y;
 
-        cufftHandle plan_r2c;
-        cufftHandle plan_c2r;
+        //cufftHandle plan_r2c;
+        //cufftHandle plan_c2r;
 
         const std::map<test_ns::field_t, cuda_arr_real*> get_field_by_name;
 
-        bool dft_is_initialized;
+        //bool dft_is_initialized;
 };
 
 #endif // SLAB_BC_H

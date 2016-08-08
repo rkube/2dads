@@ -275,6 +275,8 @@ public:
         return(*(array_h_t[t] + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
     };
 
+    cuda_array_bc_nogp<allocator>& operator=(const cuda_array_bc_nogp<allocator>&);
+
     cuda_array_bc_nogp<allocator>& operator+=(const cuda_array_bc_nogp<allocator>&);
     cuda_array_bc_nogp<allocator>& operator-=(const cuda_array_bc_nogp<allocator>&);
     cuda_array_bc_nogp<allocator>& operator*=(const cuda_array_bc_nogp<allocator>&);
@@ -380,6 +382,14 @@ public:
 	// Number of elements
 	inline size_t get_nelem_per_t() const {return ((geom.Nx + geom.pad_x) * (geom.My + geom.pad_y));};
 
+    // Set true if transformed
+    inline bool is_transformed() const {return(transformed);};
+    inline bool set_transformed(bool val) 
+    {
+        transformed = val; 
+        return(transformed);
+    };
+
 private:
 	const size_t tlevs;
 	const size_t Nx;
@@ -387,6 +397,7 @@ private:
     const bounds array_bounds;
 	const cuda::bvals_t<value_t> boundaries;
     const cuda::slab_layout_t geom;
+    bool transformed;
 
     allocator my_alloc;
     address_t<value_t>** d_address;
@@ -418,6 +429,7 @@ cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp
         array_bounds(get_tlevs(), get_nx(), get_my()),
         boundaries(bvals), 
         geom(_geom), 
+        transformed{false},
         d_address{nullptr},
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + geom.get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
@@ -495,7 +507,7 @@ void cuda_array_bc_nogp<allocator> :: enumerate(const size_t tlev)
 {
         evaluate([=] __device__ (const size_t n, const size_t m, cuda::slab_layout_t geom) -> value_t
                                  {
-                                     return(n * (geom.My + geom.pad_y) + m);
+                                     return(n * (geom.get_my() + geom.get_pad_y()) + m);
                                  }, tlev);
 }
 
@@ -527,6 +539,20 @@ void cuda_array_bc_nogp<allocator> :: initialize()
     }
 }
 
+
+template <typename allocator>
+cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator= (const cuda_array_bc_nogp<allocator>& rhs)
+{
+    // Check for self-assignment
+    if(this == &rhs)
+        return(*this);
+
+    check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+    gpuErrchk(cudaMemcpy(get_array_d(0),
+                         rhs.get_array_d(0),
+                         get_nelem_per_t() * sizeof(value_t), cudaMemcpyDeviceToDevice));
+    return (*this);
+}
 
 template <typename allocator>
 cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator+=(const cuda_array_bc_nogp<allocator>& rhs) 
@@ -630,9 +656,9 @@ void cuda_array_bc_nogp<allocator> :: print() const
 	for(size_t t = 0; t < tlevs; t++)
 	{
         cout << "print = " << t << endl;
-		for (size_t n = 0; n < geom.Nx + geom.pad_x; n++)
+		for (size_t n = 0; n < get_geom().get_nx() + get_geom().get_pad_x(); n++)
 		{
-			for(size_t m = 0; m < geom.My + geom.pad_y; m++)
+			for(size_t m = 0; m < get_geom().get_my() + get_geom().get_pad_y(); m++)
 			{
 				cout << std::setw(8) << std::setprecision(5) << (*this)(t, n, m) << "\t";
                 //cout << std::setw(7) << std::setprecision(5) << *(array_h_t[t] + n * (geom.My + geom.pad_y) + m) << "\t";
@@ -653,17 +679,19 @@ void cuda_array_bc_nogp<allocator> :: normalize(const size_t tlev)
         case cuda::bc_t::bc_dirichlet:
             // fall through
         case cuda::bc_t::bc_neumann:
+            cout << " Normalizing for 1d" << endl;
             kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
-                return(in / value_t(geom.My));
-            }, geom);
+                return(in / value_t(geom.get_my()));
+            }, get_geom());
             break;
 
         case cuda::bc_t::bc_periodic:
+            cout << " Normalizing for 2d" << endl;
             kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
             {
-                return(in / value_t(geom.Nx * geom.My));
-            }, geom);
+                return(in / value_t(geom.get_nx() * geom.get_my()));
+            }, get_geom());
             break;
     }
 }
