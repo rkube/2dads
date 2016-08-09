@@ -253,11 +253,9 @@ public:
 
     /// Apply a function to the data
     template <typename F> void evaluate(F, const size_t);
-    /// Enumerate data elements (debug function)
-	void enumerate();
-    void enumerate(const size_t);
     /// Initialize all elements to zero. Making this private results in compile error:
-    /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
+    /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
+    //cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
     void initialize();
     void initialize(const size_t);
 
@@ -336,17 +334,14 @@ public:
 	//void copy_host_to_device(value_t*);
 
 	// Advance time levels
-	//void advance();
+	void advance();
 
 	///@brief Copy data from t_src to t_dst
-	//void copy(const size_t t_dst, const size_t t_src);
+	void copy(const size_t t_dst, const size_t t_src);
 	///@brief Copy data from src, t_src to t_dst
-	//void copy(const size_t t_dst, const cuda_array<allocator>& src, const size_t t_src);
+	void copy(const size_t t_dst, const cuda_array_bc_nogp<allocator>& src, const size_t t_src);
 	///@brief Move data from t_src to t_dst, zero out t_src
-	//void move(const size_t t_dst, const size_t t_src);
-	///@brief swap data in t1, t2
-	//void swap(const size_t t1, const size_t t2);
-	//void normalize();
+	void move(const size_t t_dst, const size_t t_src);
 
 	//void kill_kx0();
 	//void kill_ky0();
@@ -363,7 +358,6 @@ public:
 	inline dim3 get_grid() const {return grid;};
 	inline dim3 get_block() const {return block;};
 
-	//bounds get_bounds() const {return check_bounds;};
 	// Pointer to host copy of device data
 	inline value_t* get_array_h() const {return array_h;};
 	inline value_t* get_array_h(size_t t) const {return array_h_t[t];};
@@ -501,25 +495,6 @@ cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
     kernel_free_address<<<1, 1>>>(get_address());
 }
     
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: enumerate(const size_t tlev)
-{
-        evaluate([=] __device__ (const size_t n, const size_t m, cuda::slab_layout_t geom) -> value_t
-                                 {
-                                     return(n * (geom.get_my() + geom.get_pad_y()) + m);
-                                 }, tlev);
-}
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: enumerate()
-{
-	for(size_t t = 0; t < tlevs; t++)
-	{
-        enumerate(t);
-    }
-}
-
 
 template <typename allocator>
 void cuda_array_bc_nogp<allocator> :: initialize(const size_t tlev)
@@ -725,7 +700,7 @@ cuda_array_bc_nogp<allocator>::value_t cuda_array_bc_nogp<allocator> :: L2(const
         ptr_t device_copy(my_alloc.alloc(get_nx() * get_my() * sizeof(value_t)));
         // Geometry of the temporary array, no padding
         cuda::slab_layout_t tmp_geom{get_geom().get_xleft(), get_geom().get_deltax(), get_geom().get_ylo(), get_geom().get_deltay(),
-                                     get_geom().get_nx(), 0, get_geom().get_my(), 0};
+                                     get_geom().get_nx(), 0, get_geom().get_my(), 0, get_geom().get_grid()};
         for(size_t n = 0; n < get_nx(); n++)
         {
             gpuErrchk(cudaMemcpy((void*) (device_copy.get() + n * get_my()),

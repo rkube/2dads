@@ -36,7 +36,7 @@ int main(void)
     ofstream of;
 
     cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic, 0.0, 0.0, 0.0, 0.0};
-    cuda::slab_layout_t my_geom(0.0, 1.0 / double(Nx), 0.0, 1.0 / double(My), Nx, 0, My, 2);
+    cuda::slab_layout_t my_geom(0.0, 1.0 / double(Nx), 0.0, 1.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
 
     {
         slab_bc my_slab(my_geom, my_bvals);
@@ -46,9 +46,7 @@ int main(void)
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
         sol_an.evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
             {
-                cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
-                //cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
-                return(cuda::TWOPI * cos(cuda::TWOPI * x));
+                return(cuda::TWOPI * cos(cuda::TWOPI * geom.get_x(n)));
             }, 0);
 
         // Write analytic solution to file
@@ -73,8 +71,7 @@ int main(void)
         // Initialize analytic solution for second derivative
         sol_an.evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
             {
-                cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
-                return(-1.0 * cuda::TWOPI * cuda::TWOPI * sin(cuda::TWOPI * x));
+                return(-1.0 * cuda::TWOPI * cuda::TWOPI * sin(cuda::TWOPI * geom.get_x(n)));
             }, 0);
 
         // Write analytic solution to file
@@ -100,8 +97,7 @@ int main(void)
         // g_y = -100 * (y - 0.5) * exp(-50 * (y - 0.5) * (y - 0.5))
         sol_an.evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
             {
-                //cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
-                cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
+                cuda::real_t y{geom.get_y(m)};
                 return(-100 * (y - 0.5) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
             }, 0);
 
@@ -127,7 +123,7 @@ int main(void)
         // g_yy = 10000 * (0.24 - y + y^2) * exp(-50 * (y - 0.5) * (y - 0.5))
         sol_an.evaluate([=] __device__(size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
             {
-                cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
+                cuda::real_t y{geom.get_y(m)};
                 return(10000 * (0.24 - y + y * y) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
             }, 0);
 

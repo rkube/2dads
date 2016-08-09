@@ -24,5 +24,9 @@ test_laplace: slab_bc.cu slab_bc.h derivatives.h test_laplace.cu
 test_arakawa: slab_bc.cu slab_bc.h derivatives.h test_arakawa.cu
 	$(CUDACC) $(CUDACFLAGS) -o test_arakawa test_arakawa.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
 
+test_stiff: slab_bc.cu slab_bc.h test_stiff.cu
+	$(CUDACC) $(CUDACFLAGS) -o test_stiff test_stiff.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse
+
+
 clean:
 	rm test_dtype test_dft

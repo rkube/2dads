@@ -37,8 +37,6 @@ namespace cuda
 {
     typedef double real_t;
     typedef CuCmplx<real_t> cmplx_t;
-    //constexpr unsigned int blockdim_nx{32}; ///< Block dimension in radial (x) direction, columns
-    //constexpr unsigned int blockdim_my{1};  ///< Block dimension in poloidal(y) direction, rows
     constexpr unsigned int blockdim_col{4}; ///< Block dimension for consecutive elements (y-direction)
     constexpr unsigned int blockdim_row{4}; ///< Block dimension for non-consecutive elements (x-direction)
 
@@ -47,11 +45,6 @@ namespace cuda
 
     constexpr unsigned int griddim_nx_max{1024};
     constexpr unsigned int griddim_my_max{1024};
-
-    //constexpr unsigned int num_gp_x{4};                 ///< Number of stored ghost-points in x-direction
-    //constexpr unsigned int gp_offset_x{num_gp_x / 2};   ///< Offset for cell values in x-direction
-    //constexpr unsigned int num_gp_y{4};                 ///< Number of stored ghost-points in y-direction
-    //constexpr unsigned int gp_offset_y{num_gp_y / 2};   ///< Offset for cell values in y-direction
 
     constexpr size_t num_pad_y{2};                      ///< Number of rows to pad for in-place DFT
 
@@ -79,8 +72,14 @@ namespace cuda
     class slab_layout_t
     {
     public:
-        slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y) :
-            x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y) {};
+        slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, 
+                      size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y,
+                      cuda::grid_t _grid) :
+            x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), 
+            Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y),
+            grid(_grid), 
+            cellshift(grid == cuda::grid_t::vertex_centered ? 0.0 : 0.5) 
+            {};
 
         const real_t x_left;
         const real_t delta_x;
@@ -90,11 +89,15 @@ namespace cuda
         const size_t pad_x;
         const size_t My;
         const size_t pad_y;
+        const cuda::grid_t grid;
+        const real_t cellshift;
 
         CUDAMEMBER inline real_t get_xleft() const {return(x_left);};
         CUDAMEMBER inline real_t get_deltax() const {return(delta_x);};
-        CUDAMEMBER inline real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * delta_x);};
-        CUDAMEMBER inline real_t get_Lx() const {return(static_cast<real_t>(Nx) * delta_x);};
+        CUDAMEMBER inline real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * get_deltax());};
+        CUDAMEMBER inline real_t get_Lx() const {return(static_cast<real_t>(Nx) * get_deltax());};
+        CUDAMEMBER inline real_t get_x(size_t n) const {return(get_xleft() + (static_cast<real_t>(n) + get_cellshift()) * get_deltax());};
+        CUDAMEMBER inline real_t get_y(size_t m) const {return(get_ylo() + (static_cast<real_t>(m) + get_cellshift()) * get_deltay());};
         
         CUDAMEMBER inline real_t get_ylo() const {return(y_lo);};
         CUDAMEMBER inline real_t get_deltay() const {return(delta_y);};
@@ -106,6 +109,9 @@ namespace cuda
 
         CUDAMEMBER inline size_t get_my() const {return(My);};
         CUDAMEMBER inline size_t get_pad_y() const {return(pad_y);};
+        
+        CUDAMEMBER inline cuda::grid_t get_grid() const {return(grid);};
+        CUDAMEMBER inline real_t get_cellshift() const {return(cellshift);};
     } __attribute__ ((aligned (8)));
 
     /// Class to store initialization parameters, up to 6 doubles

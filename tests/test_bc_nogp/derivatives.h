@@ -488,7 +488,7 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
     kernel_gen_coeffs<<<grid_my21, block_my21>>>(get_coeffs_dy1(), get_coeffs_dy2(), 
                                                  cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
                                                                      get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                     get_geom().get_nx(), 0, My21, 0));
+                                                                     get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
 
     // Host copy of main and lower diagonal
     h_diag = new cmplx_t[get_geom().get_nx()];
@@ -680,7 +680,7 @@ void derivs<allocator> :: dy_1(cuda_array_bc_nogp<allocator>& in,
                                                    },
                                                    cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
                                                                        get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                       get_geom().get_nx(), 0, My21, 0));
+                                                                       get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
 
     myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
     out.set_transformed(false);
@@ -715,7 +715,7 @@ void derivs<allocator> :: dy_2(cuda_array_bc_nogp<allocator>& in,
                                                    },
                                                    cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
                                                                        get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                       get_geom().get_nx(), 0, My21, 0));
+                                                                       get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
 
     myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
     out.set_transformed(false);
@@ -727,7 +727,6 @@ template <typename allocator>
 void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res,
                                   const size_t t_src, const size_t t_dst)
 {
-    cout << "Computing arakawa bracket for u and v" << endl;
     // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
     static dim3 block_single_row(cuda::blockdim_row, 1);
     static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
@@ -928,7 +927,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
         cout << cublas_status << endl;
         throw cublas_err(cublas_status);
     }
-
+    dst.set_transformed(true);
 
 #ifdef DEBUG
     // Test the precision of the solution

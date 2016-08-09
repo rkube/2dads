@@ -14,6 +14,7 @@
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
 #include "derivatives.h"
+#include "integrators.h"
 
 
 namespace test_ns{
@@ -53,6 +54,7 @@ class slab_bc
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
         inline cuda::slab_layout_t get_geom() const {return(geom);};
+        inline cuda::bvals_t<cuda::real_t> get_bvals() const {return(boundaries);};
     private:
         const size_t Nx;
         const size_t My;
@@ -63,6 +65,7 @@ class slab_bc
 
         derivs<my_allocator_device<cuda::real_t>> der;
         dft_object_t<cuda::real_t> myfft;
+        integrator<my_allocator_device<cuda::real_t>>* tint;
 
         cuda_arr_real arr1;
         cuda_arr_real arr1_x;
@@ -76,12 +79,7 @@ class slab_bc
         cuda_arr_real arr3_x;
         cuda_arr_real arr3_y;
 
-        //cufftHandle plan_r2c;
-        //cufftHandle plan_c2r;
-
         const std::map<test_ns::field_t, cuda_arr_real*> get_field_by_name;
-
-        //bool dft_is_initialized;
 };
 
 #endif // SLAB_BC_H

@@ -39,7 +39,7 @@ int main(void){
     stringstream fname;
     ofstream of;
 
-    cuda::slab_layout_t my_geom(-1.0, 2.0 / double(Nx), -1.0, 2.0 / double(My), Nx, 0, My, 2);
+    cuda::slab_layout_t my_geom(-1.0, 2.0 / double(Nx), -1.0, 2.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
     cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
         0.0, 0.0, 0.0, 0.0};
 
@@ -48,8 +48,8 @@ int main(void){
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
         sol_an.evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
                 {
-                    cuda::real_t x{geom.get_xleft() + (cuda::real_t(n) + 0.5) * geom.get_deltax()};
-                    cuda::real_t y{geom.get_ylo() + (cuda::real_t(m) + 0.5) * geom.get_deltay()};
+                    cuda::real_t x{geom.get_x(n)};
+                    cuda::real_t y{geom.get_y(m)};
                     return(16.0 * cuda::PI * cuda::PI * cos(cuda::PI * x) * cos(cuda::PI * y) * (cos(cuda::TWOPI * x) - cos(cuda::TWOPI * y)) * sin(cuda::PI * x) * sin(cuda::PI * x) * sin(cuda::PI * y) * sin(cuda::PI * y));
                 }, 
                 0);
@@ -91,3 +91,4 @@ int main(void){
     cudaDeviceReset();
 }
 
+// End of file test_arakawa.cu
