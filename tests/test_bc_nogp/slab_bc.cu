@@ -4,22 +4,13 @@
 
 #include "slab_bc.h"
 
-slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _bc) :
+slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _bc, const cuda::stiff_params_t _sp) :
     Nx(_sl.Nx), My(_sl.My), tlevs(1), 
     boundaries(_bc), geom(_sl), 
-    der(_sl),
+    der(_sl), 
     myfft(get_geom(), cuda::dft_t::dft_1d),
     tint(new integrator_karniadakis<my_allocator_device<cuda::real_t>>
-            (get_geom(), get_bvals(), 
-              cuda::stiff_params_t(0.001, 
-                                   get_geom().get_Lx(), 
-                                   get_geom().get_Lx(), 
-                                   0.001, 
-                                   0.0, 
-                                   get_geom().get_my(),
-                                   get_geom().get_nx() / 2 + 1, 
-                                   1)
-              )),
+            (get_geom(), get_bvals(),  _sp)),
     arr1(_sl, _bc, tlevs), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
     arr2(_sl, _bc, tlevs), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
     arr3(_sl, _bc, tlevs), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
@@ -33,6 +24,7 @@ slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _b
                        {test_ns::field_t::arr3_x,   &arr3_x},
                        {test_ns::field_t::arr3_y,   &arr3_y}}
 {
+    cout << "slab_bc :: slab_bc: cublas_handle = " << solvers::cublas_handle_t::get_handle() << endl;
 }
 
 
@@ -227,8 +219,8 @@ void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field
 // Invert the laplace equation
 void slab_bc :: invert_laplace(const test_ns::field_t out, const test_ns::field_t in, const size_t t_src, const size_t t_dst)
 {
-    cuda_arr_real* in_arr = get_field_by_name.at(in);
-    cuda_arr_real* out_arr = get_field_by_name.at(out);
+    cuda_arr_real* in_arr{get_field_by_name.at(in)};
+    cuda_arr_real* out_arr{get_field_by_name.at(out)};
     der.invert_laplace((*out_arr), (*in_arr), 
                        in_arr -> get_bvals().get_bc_left(), in_arr -> get_bvals().get_bv_left(),
                        in_arr -> get_bvals().get_bc_right(), in_arr -> get_bvals().get_bv_right(),
@@ -236,9 +228,15 @@ void slab_bc :: invert_laplace(const test_ns::field_t out, const test_ns::field_
 }
 
 
-void slab_bc :: initialize_tint()
+void slab_bc :: initialize_tint(const test_ns::field_t fname)
 {
-    //(*tint).update_field(in_arr);
+    cuda_arr_real* in_arr{get_field_by_name.at(fname)};
+    if(!((*in_arr).is_transformed()))
+    {
+        dft_r2c(fname, 0);
+    }
+    (*tint).initialize_field(get_field_by_name.at(fname), 0);
+    dft_c2r(fname, 0);
 }
 
 // Integrate the field in time

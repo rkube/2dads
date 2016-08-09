@@ -10,6 +10,7 @@
 #include "cucmplx.h"
 #include "error.h"
 #include "dft_type.h"
+#include "solvers.h"
 #include <cusolverSp.h>
 #include <cublas_v2.h>
 #include <cassert>
@@ -441,13 +442,9 @@ class derivs
         const size_t My21;
         const cuda::slab_layout_t geom;
         // Handles for cusparse library
-        cusparseHandle_t cusparse_handle;
-        cusparseMatDescr_t cusparse_descr;
+        //cusparseMatDescr_t cusparse_descr;
 
         dft_object_t<cuda::real_t> myfft;
-
-        // Handles for cuBLAS library
-        cublasHandle_t cublas_handle;
 
         // Coefficient storage for spectral derivation
         cmplx_t* d_coeffs_dy1;
@@ -465,7 +462,7 @@ class derivs
 
 
 template <typename allocator>
-derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
+derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) : 
     My21(static_cast<int>(_geom.get_my()) / 2 + 1), 
     geom(_geom),
     myfft(geom, cuda::dft_t::dft_1d),
@@ -492,27 +489,15 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
     cmplx_t* h_diag_u = new cmplx_t[get_geom().get_nx()];
     cmplx_t* h_diag_l = new cmplx_t[get_geom().get_nx()];
 
-    // Initialize cublas
-    cublasStatus_t cublas_status;
-    if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
-    {
-        throw cublas_err(cublas_status);
-    }
-
     // Initialize cusparse
-    cusparseStatus_t cusparse_status;
-    if((cusparse_status = cusparseCreate(&cusparse_handle)) != CUSPARSE_STATUS_SUCCESS)
-    {
-        throw cusparse_err(cusparse_status);
-    }
-
-    if((cusparse_status = cusparseCreateMatDescr(&cusparse_descr)) != CUSPARSE_STATUS_SUCCESS)
-    {
-        throw cusparse_err(cusparse_status);
-    }
-    
-    cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
-    cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO);
+    //cusparseStatus_t cusparse_status;
+    //if((cusparse_status = cusparseCreateMatDescr(&cusparse_descr)) != CUSPARSE_STATUS_SUCCESS)
+    //{
+    //    throw cusparse_err(cusparse_status);
+    //}
+    //
+    //cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
+    //cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO);
 
     // Allocate memory for temporary matrix storage
     gpuErrchk(cudaMalloc((void**) &d_tmp_mat, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
@@ -769,8 +754,6 @@ derivs<allocator> :: ~derivs()
 
     cudaFree(d_coeffs_dy1);
     cudaFree(d_coeffs_dy2);
-    cublasDestroy(cublas_handle);
-    cusparseDestroy(cusparse_handle);
 }
 
 template <typename allocator>
@@ -835,7 +818,8 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
      *
      */
 
-    if((cublas_status = cublasZgeam(cublas_handle,
+    if((cublas_status = cublasZgeam(//cublas_handle,
+                                    solvers::cublas_handle_t::get_handle(),
                                     CUBLAS_OP_T, CUBLAS_OP_N,
                                     Nx_int, My21_int,
                                     &alpha,
@@ -905,7 +889,8 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
 
     gpuErrchk(cudaMemcpy(d_diag, h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
 
-    if((cusparse_status = cusparseZgtsvStridedBatch(cusparse_handle,
+    if((cusparse_status = cusparseZgtsvStridedBatch(//cusparse_handle,
+                                                    solvers::cusparse_handle_t::get_handle(),
                                                     Nx_int,
                                                     (cuDoubleComplex*)(d_diag_l),
                                                     (cuDoubleComplex*)(d_diag),
@@ -917,7 +902,8 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
         throw cusparse_err(cusparse_status);
     }
     // Convert d_tmp_mat from column-major to row-major order
-    if((cublas_status = cublasZgeam(cublas_handle,
+    if((cublas_status = cublasZgeam(//cublas_handle,
+                                    solvers::cublas_handle_t::get_handle(),
                                     CUBLAS_OP_T, CUBLAS_OP_N,
                                     My21_int, Nx_int,
                                     &alpha,
@@ -1010,7 +996,8 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     //        * Apply Laplace matrix to d_tmp_mat, column-wise
     //        * Compute ||(A * d_tmp_mat - d_inp_mat)||_2
     
-    if((cublas_status = cublasZgeam(cublas_handle,
+    if((cublas_status = cublasZgeam(//cublas_handle,
+                                    solvers::cublas_handle_t::get_handle(),
                                     CUBLAS_OP_T, CUBLAS_OP_N,
                                     Nx_int, My21_int,
                                     &alpha, // 1.0 + 0.0i
@@ -1069,7 +1056,9 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
         // Apply Laplace matrix to every column in d_tmp_mat.
         // Overwrite the current column in d_inp_mat
         // Store result in h_tmp_mat
-        if((cusparse_status = cusparseZcsrmv(cusparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,   
+        if((cusparse_status = cusparseZcsrmv(//cusparse_handle, 
+                                             solvers::cusparse_handle_t::get_handle(),
+                                             CUSPARSE_OPERATION_NON_TRANSPOSE,   
                                              static_cast<int>(get_geom().get_nx()), static_cast<int>(get_geom().get_nx()), static_cast<int>(nnz),
                                              &alpha, mat_type,
                                              (cuDoubleComplex*) csrValA_d,

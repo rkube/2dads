@@ -33,8 +33,9 @@ int main(void){
     cuda::slab_layout_t my_geom(-10.0, 20.0 / double(Nx), -10.0, 20.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
     cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
+    cuda::stiff_params_t params(0.001, 20.0, 20.0, 0.001, 0.0, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, 1);
     {
-        slab_bc my_slab(my_geom, my_bvals);
+        slab_bc my_slab(my_geom, my_bvals, params);
         my_slab.initialize_invlaplace(test_ns::field_t::arr1);
 
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
@@ -63,5 +64,5 @@ int main(void){
         cout << "Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
 
     } // Let managed memory go out of scope before calling cudaDeviceReset()
-    cudaDeviceReset();
+    //cudaDeviceReset();
 }

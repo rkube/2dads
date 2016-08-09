@@ -25,20 +25,20 @@ int main(void)
                                    cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
     cuda::slab_layout_t my_geom(-10.0, 20.0 / double(Nx), -10.0, 20.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
-    cuda::stiff_params_t stiff_params(0.001, 20.0, 20.0, 0.001, 0.0, My, Nx / 2 + 1, 1);
+    cuda::stiff_params_t stiff_params(0.001, 20.0, 20.0, 0.001, 0.0, My, Nx / 2 + 1, 2);
     {
-        slab_bc my_slab(my_geom, my_bvals);
+        slab_bc my_slab(my_geom, my_bvals, stiff_params);
         my_slab.initialize_gaussian(test_ns::field_t::arr1);
-        my_slab.initialize_tint();
+        my_slab.initialize_tint(test_ns::field_t::arr1);
 
-        size_t t{0};
-        for(t = 0; t < num_tsteps; t++)
-        {
-            my_slab.integrate(test_ns::field_t::arr1);
-        }
+        //size_t t{0};
+        //for(t = 0; t < num_tsteps; t++)
+        //{
+        //    my_slab.integrate(test_ns::field_t::arr1);
+        //}
 
-        fname.str(string(""));
-        fname << "test_diffusion_Nx" << Nx << "_t" << t << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr1, fname.str());
+        //fname.str(string(""));
+        //fname << "test_diffusion_Nx" << Nx << "_t" << t << "_out.dat";
+        //my_slab.print_field(test_ns::field_t::arr1, fname.str());
     }
 }

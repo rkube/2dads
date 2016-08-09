@@ -11,6 +11,7 @@
 #include <string>
 #include <map>
 #include <cufft.h>
+#include "solvers.h"
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
 #include "derivatives.h"
@@ -29,7 +30,7 @@ class slab_bc
         using cuda_arr_real = cuda_array_bc_nogp<my_allocator_device<cuda::real_t>>;
         using cuda_arr_cmpl = cuda_array_bc_nogp<my_allocator_device<cuda::cmplx_t>>;
 
-        slab_bc(const cuda::slab_layout_t, const cuda::bvals_t<real_t>);
+        slab_bc(const cuda::slab_layout_t, const cuda::bvals_t<real_t>, const cuda::stiff_params_t);
         ~slab_bc();
 
         void dft_r2c(const test_ns::field_t, const size_t);
@@ -51,7 +52,7 @@ class slab_bc
         void print_field(const test_ns::field_t) const;
         void print_field(const test_ns::field_t, const string) const;
 
-        void initialize_tint();
+        void initialize_tint(const test_ns::field_t);
         void integrate(const test_ns::field_t);
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
@@ -64,6 +65,9 @@ class slab_bc
 
         const cuda::bvals_t<cuda::real_t> boundaries;
         const cuda::slab_layout_t geom;
+
+        //solvers::cublas_handle_t cublas_handle;
+        //solvers::cusparse_handle_t cusparse_handle;
 
         derivs<my_allocator_device<cuda::real_t>> der;
         dft_object_t<cuda::real_t> myfft;

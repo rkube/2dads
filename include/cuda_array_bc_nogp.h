@@ -299,12 +299,15 @@ public:
         os << "\n";
         for(size_t t = 0; t < tl; t++)
         {
-            for(size_t n = 0; n < nx + pad_x; n++)
+            os << t << endl << endl;
+            //for(size_t n = 0; n < nx + pad_x; n++)
+            for(size_t n = 0; n < nx; n++)
             {
-                for(size_t m = 0; m < my + pad_y; m++)
+                //for(size_t m = 0; m < my + pad_y; m++)
+                for(size_t m = 0; m < my; m++)
                 {
                     // Remember to also set precision routines in CuCmplx :: operator<<
-                	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(n, m) << "\t";
+                	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(t, n, m) << "\t";
                 }
                 os << endl;
             }
@@ -318,6 +321,11 @@ public:
 	void normalize(const size_t);
     value_t L2(const size_t);
 
+	///@brief Copy data from t_src to t_dst
+	void copy(const size_t t_dst, const size_t t_src);
+	///@brief Move data from t_src to t_dst, zero out t_src
+	void move(const size_t t_dst, const size_t t_src);
+
 	// Copy entire device data to host
 	void copy_device_to_host();
 	// Copy entire device data to external data pointer in host memory
@@ -325,9 +333,11 @@ public:
 	// Copy device to host at specified time level
 	//void copy_device_to_host(const size_t);
 
-	// Copy deice data at specified time level to external pointer in device memory
-	void copy_device_to_device(const size_t, value_t*);
+	// Copy device data at specified time level to external pointer in device memory
+	//void copy_device_to_device(const size_t, value_t*);
 
+	///@brief Copy data from src, t_src to t_dst
+    void copy(size_t t_dst, const cuda_array_bc_nogp<allocator>& src, size_t t_src);
 	// Transfer from host to device
 	void copy_host_to_device();
 	//void copy_host_to_device(const size_t);
@@ -336,16 +346,6 @@ public:
 	// Advance time levels
 	void advance();
 
-	///@brief Copy data from t_src to t_dst
-	void copy(const size_t t_dst, const size_t t_src);
-	///@brief Copy data from src, t_src to t_dst
-	void copy(const size_t t_dst, const cuda_array_bc_nogp<allocator>& src, const size_t t_src);
-	///@brief Move data from t_src to t_dst, zero out t_src
-	void move(const size_t t_dst, const size_t t_src);
-
-	//void kill_kx0();
-	//void kill_ky0();
-	//void kill_k0();
 
 	// Access to private members
 	inline size_t get_nx() const {return(Nx);};
@@ -501,7 +501,7 @@ void cuda_array_bc_nogp<allocator> :: initialize(const size_t tlev)
 {
         evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
                                  {
-                                    return(value_t(4.2));
+                                    return(value_t(0.0));
                                  }, tlev);
 }
 
@@ -528,6 +528,7 @@ cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator= (const
                          get_nelem_per_t() * sizeof(value_t), cudaMemcpyDeviceToDevice));
     return (*this);
 }
+
 
 template <typename allocator>
 cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator+=(const cuda_array_bc_nogp<allocator>& rhs) 
@@ -758,7 +759,10 @@ template <typename allocator>
 void cuda_array_bc_nogp<allocator>::copy_device_to_host()
 {
     for(size_t t = 0; t < tlevs; t++)
+    {
+        cout << "copy_device_to_host() t = " << t << endl;
         gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(value_t) * get_nelem_per_t(), cudaMemcpyDeviceToHost));	
+    }
 }
 
 
@@ -770,5 +774,14 @@ void cuda_array_bc_nogp<allocator> :: copy_host_to_device()
 }
 
 
+template <typename allocator>
+void cuda_array_bc_nogp<allocator> :: copy(const size_t t_dst, const cuda_array_bc_nogp<allocator>& src,const size_t t_src)
+{
+    check_bounds(src.get_tlevs(), src.get_nx(), src.get_my());
+    cout << "copying array data t_dst = " << t_dst << ", t_src = " << t_src << endl;
+    gpuErrchk(cudaMemcpy(get_array_d(t_dst),
+                         src.get_array_d(t_src),
+                         get_nelem_per_t() * sizeof(value_t), cudaMemcpyDeviceToDevice));
+}
 
 #endif /* cuda_array_bc_H_ */
