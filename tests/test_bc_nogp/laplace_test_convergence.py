@@ -17,16 +17,16 @@ import matplotlib.pyplot as plt
 from codestash.num.fd import d2_dx2
 
 #Nx_arr = np.array([64, 128, 256, 512, 1024, 2048, 4096], dtype='int')
-Nx_arr = np.array([128], dtype='int')
+Nx_arr = np.array([256, 512, 1024], dtype='int')
 L2_arr = np.zeros(Nx_arr.shape[0], dtype='float64')
 L = 20.
 
 def sol_an(x, y):
-    return (np.exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y))
+    #return (np.exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y))
+    return(np.exp(-0.5 * (x * x + y * y)))
 
 
 for idx, Nx in enumerate(Nx_arr):
-    arr1 = np.loadtxt("test_laplace_arr1_%d.dat" % (Nx))[:Nx, :Nx]
     sol_num = np.loadtxt("test_laplace_solnum_%d.dat" % (Nx))[:Nx, :Nx]
 
     dx = L / float(Nx)
@@ -39,15 +39,15 @@ for idx, Nx in enumerate(Nx_arr):
 
     L2_arr[idx] = np.sqrt((res * res).sum() / float(res.shape[0] * res.shape[1]))
 
-    plt.figure()
-    plt.contourf(arr1)
-    plt.colorbar()
-    plt.title('sol_in')
+    #plt.figure()
+    #plt.contourf(sol_an(xx, yy))
+    #plt.colorbar()
+    #plt.title('sol_an: %d' % Nx)
 
-    plt.figure()
-    plt.contourf(sol_num)
-    plt.colorbar()
-    plt.title('sol_num')
+    #plt.figure()
+    #plt.contourf(sol_num)
+    #plt.colorbar()
+    #plt.title('sol_num: %d' % Nx)
 
     title_str = r"result, Nx = %d, max = %e, min = %e, L2 = %e" % (Nx, res.max(), res.min(), L2_arr[idx])
     plt.figure()

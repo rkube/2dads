@@ -195,18 +195,27 @@ namespace cuda
 
     class stiff_params_t
     {
-    public:
-        // Provide a standard constructor for pre-C++11
-        stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, size_t my, size_t nx21, size_t l) :
-        delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx21(nx21), level(l) {};
-        const real_t delta_t;
-        const real_t length_x;
-        const real_t length_y;
-        const real_t diff;
-        const real_t hv;
-        const size_t My;
-        const size_t Nx21;
-        const size_t level;
+        public:
+            // Provide a standard constructor for pre-C++11
+            CUDAMEMBER stiff_params_t(real_t dt, real_t lx, real_t ly, real_t d, real_t h, size_t my, size_t nx21, size_t l) :
+                delta_t(dt), length_x(lx), length_y(ly), diff(d), hv(h), My(my), Nx21(nx21), level(l) {};
+            CUDAMEMBER real_t get_deltat() const {return(delta_t);};
+            CUDAMEMBER real_t get_lengthx() const {return(length_x);};
+            CUDAMEMBER real_t get_lengthy() const {return(length_y);};
+            CUDAMEMBER real_t get_diff() const {return(diff);};
+            CUDAMEMBER real_t get_hv() const {return(hv);};
+            CUDAMEMBER size_t get_my() const {return(My);};
+            CUDAMEMBER size_t get_nx21() const {return(Nx21);};
+            CUDAMEMBER size_t get_tlevs() const {return(level);};
+        private:
+            const real_t delta_t;
+            const real_t length_x;
+            const real_t length_y;
+            const real_t diff;
+            const real_t hv;
+            const size_t My;
+            const size_t Nx21;
+            const size_t level;
     } __attribute__ ((aligned (8)));
 
     //constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration

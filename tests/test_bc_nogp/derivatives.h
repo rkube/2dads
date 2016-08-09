@@ -29,7 +29,7 @@ __device__ inline size_t d_get_row_2(){
 
 
 __device__ inline bool good_idx2(size_t row, size_t col, const cuda::slab_layout_t geom){
-    return((row < geom.Nx) && (col < geom.My));
+    return((row < geom.get_nx()) && (col < geom.get_my()));
 }  
 
 
@@ -482,9 +482,6 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
             (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
                          
 
-    //cout << "block_my21 = (" << block_my21.x << ", " << block_my21.y << ")" << endl;
-    //cout << "grid_my21 = (" << grid_my21.x << ", " << grid_my21.y << ")" << endl;
-    //cout << grid_my21;
     kernel_gen_coeffs<<<grid_my21, block_my21>>>(get_coeffs_dy1(), get_coeffs_dy2(), 
                                                  cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
                                                                      get_geom().get_ylo(), get_geom().get_deltay(), 
@@ -541,6 +538,7 @@ derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) :
         }
         h_diag[0] = h_diag[0] - inv_dx2;
         h_diag[get_geom().get_nx() - 1] = h_diag[get_geom().get_nx() - 1] - inv_dx2;
+
         gpuErrchk(cudaMemcpy(d_diag + m * get_geom().get_nx(), h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
     }
 
@@ -869,9 +867,14 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     //                     cudaMemcpyDeviceToDevice));
 
 
+
     // Next step: Solve the tridiagonal system
-    // 1.) Update the first and last element of the main diagonal for ky=0 mode with the boundary values
+    // 1.) Update the main diagonal for ky=0 mode with the boundary values
     //     Add the Fourier coefficient for mode m=0 of f(0.0, y) = u: hat(u) = My * u
+    for(size_t n = 0; n < get_geom().get_nx(); n++)
+    {
+        h_diag[n] = -2.0 * inv_dx2; // -ky2(=0) 
+    }
     switch(bctype_left)
     {
         case cuda::bc_t::bc_dirichlet:
@@ -900,7 +903,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
             break;
     }
 
-    //gpuErrchk(cudaMemcpy(d_diag, h_diag, Nx * sizeof(cmplx_t), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_diag, h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
 
     if((cusparse_status = cusparseZgtsvStridedBatch(cusparse_handle,
                                                     Nx_int,
@@ -934,15 +937,15 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
 
     // 1.) Build the laplace matrix in csr form
     // Host data
-    size_t nnz{geom.get_nx() + 2 * (geom.get_nx() - 1)};    // Main diagonal plus 2 side diagonals
+    size_t nnz{get_geom().get_nx() + 2 * (get_geom().get_nx() - 1)};    // Main diagonal plus 2 side diagonals
     cmplx_t* csrValA_h = new cmplx_t[nnz];  
-    int* csrRowPtrA_h = new int[geom.get_nx() + 1];
+    int* csrRowPtrA_h = new int[get_geom().get_nx() + 1];
     int* csrColIndA_h = new int[nnz];
 
     // Input columns
-    cmplx_t* h_inp_mat_col = new cmplx_t[geom.get_nx()];
+    cmplx_t* h_inp_mat_col = new cmplx_t[get_geom().get_nx()];
     // Result columns
-    cmplx_t* h_tmp_mat_col = new cmplx_t[geom.get_nx()];
+    cmplx_t* h_tmp_mat_col = new cmplx_t[get_geom().get_nx()];
 
     // Device data
     cmplx_t* csrValA_d{nullptr};
@@ -952,13 +955,13 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     cmplx_t* d_inp_mat{nullptr};
 
     // Some constants we need later on
-    //const value_t inv_dx2 = 1.0 / (geom.delta_x * geom.delta_x);
+    //const value_t inv_dx2 = 1.0 / (get_geom().get_deltax() * get_geom().get_deltax());
     const cmplx_t inv_dx2_cmplx = cmplx_t(inv_dx2);
 
     gpuErrchk(cudaMalloc((void**) &csrValA_d, nnz * sizeof(cmplx_t)));
-    gpuErrchk(cudaMalloc((void**) &csrRowPtrA_d, (geom.get_nx() + 1) * sizeof(int)));
+    gpuErrchk(cudaMalloc((void**) &csrRowPtrA_d, (get_geom().get_nx() + 1) * sizeof(int)));
     gpuErrchk(cudaMalloc((void**) &csrColIndA_d, nnz * sizeof(int)));
-    gpuErrchk(cudaMalloc((void**) &d_inp_mat, geom.get_nx() * My21 * sizeof(cmplx_t)));
+    gpuErrchk(cudaMalloc((void**) &d_inp_mat, get_geom().get_nx() * My21 * sizeof(cmplx_t)));
 
     // Build Laplace matrix structure: ColIndA and RowPtrA
     // Matrix values on main diagonal are updated individually lateron for each ky mode.
@@ -981,15 +984,15 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
         csrValA_h[n + 2] = inv_dx2_cmplx;
     }   
 
-    csrColIndA_h[nnz - 2] = static_cast<int>(geom.get_nx() - 2);
-    csrColIndA_h[nnz - 1] = static_cast<int>(geom.get_nx() - 1);  
+    csrColIndA_h[nnz - 2] = static_cast<int>(get_geom().get_nx() - 2);
+    csrColIndA_h[nnz - 1] = static_cast<int>(get_geom().get_nx() - 1);  
 
-    csrRowPtrA_h[geom.get_nx() - 1] = static_cast<int>(nnz - 2);
-    csrRowPtrA_h[geom.get_nx()] = static_cast<int>(nnz);
+    csrRowPtrA_h[get_geom().get_nx() - 1] = static_cast<int>(nnz - 2);
+    csrRowPtrA_h[get_geom().get_nx()] = static_cast<int>(nnz);
 
     csrValA_h[nnz - 2] = cmplx_t(inv_dx2);
 
-    gpuErrchk(cudaMemcpy(csrRowPtrA_d, csrRowPtrA_h, (geom.get_nx() + 1) * sizeof(int), cudaMemcpyHostToDevice)); 
+    gpuErrchk(cudaMemcpy(csrRowPtrA_d, csrRowPtrA_h, (get_geom().get_nx() + 1) * sizeof(int), cudaMemcpyHostToDevice)); 
     gpuErrchk(cudaMemcpy(csrColIndA_d, csrColIndA_h, nnz * sizeof(int), cudaMemcpyHostToDevice));
 
     cusparseMatDescr_t mat_type;
@@ -1027,16 +1030,16 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
     cmplx_t* row_ptr_d_tmp{nullptr};
 
     value_t ky2{0.0};
-    const value_t Ly{static_cast<value_t>(geom.My) * geom.delta_y};
+    const value_t Ly{static_cast<value_t>(get_geom().get_my()) * get_geom().get_deltay()};
     for(size_t m = 0; m < My21; m++)
     //for(size_t m = 0; m < 2; m++)
     {
-        row_ptr_d_inp = d_inp_mat + m * geom.get_nx();
-        row_ptr_d_tmp = d_tmp_mat + m * geom.get_nx();
+        row_ptr_d_inp = d_inp_mat + m * get_geom().get_nx();
+        row_ptr_d_tmp = d_tmp_mat + m * get_geom().get_nx();
 
         // Copy reference data in d_inp_mat
         // These are fourier coefficients for ky=0 mode at various xn positions
-        gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, geom.get_nx() * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(h_inp_mat_col, row_ptr_d_inp, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
         //for(size_t n = 0; n < Nx; n++)
         //{
         //    cout << n << ":\t h_inp_mat_col = " << h_inp_mat_col[n] << endl;
@@ -1067,7 +1070,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
         // Overwrite the current column in d_inp_mat
         // Store result in h_tmp_mat
         if((cusparse_status = cusparseZcsrmv(cusparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,   
-                                             static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_nx()), static_cast<int>(nnz),
+                                             static_cast<int>(get_geom().get_nx()), static_cast<int>(get_geom().get_nx()), static_cast<int>(nnz),
                                              &alpha, mat_type,
                                              (cuDoubleComplex*) csrValA_d,
                                              csrRowPtrA_d,
@@ -1081,7 +1084,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
             throw cusparse_err(cusparse_status);
         }
 
-        gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, geom.get_nx() * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(h_tmp_mat_col, row_ptr_d_inp, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyDeviceToHost));
         //if(m > 4 && m < 7)
         //{
         //    for(size_t n = 0; n < Nx; n++)
@@ -1092,11 +1095,11 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
 
         // Compute L2 distance between h_inp_mat and h_tmp_mat
         value_t L2_norm{0.0};
-        for(size_t n = 0; n < geom.get_nx(); n++)
+        for(size_t n = 0; n < get_geom().get_nx(); n++)
         {
             L2_norm += ((h_inp_mat_col[n] - h_tmp_mat_col[n]) * (h_inp_mat_col[n] - h_tmp_mat_col[n])).abs();
         }
-        L2_norm = sqrt(L2_norm / static_cast<value_t>(geom.get_nx()));
+        L2_norm = sqrt(L2_norm / static_cast<value_t>(get_geom().get_nx()));
         cout << m << ": ky = " << sqrt(ky2) << "\t L2 = " << L2_norm << endl;
     }
     row_ptr_d_inp = nullptr;

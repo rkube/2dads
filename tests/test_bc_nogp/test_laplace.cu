@@ -40,9 +40,7 @@ int main(void){
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
         sol_an.evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
                 {
-                    const cuda::real_t x{geom.get_x(n)};
-                    const cuda::real_t y{geom.get_y(m)};
-                    return((-2.0 + x * x + y * y) * exp(-0.5 * (x * x + y * y)));
+                    return(exp(-0.5 * (geom.get_x(n) * geom.get_x(n) + geom.get_y(m) * geom.get_y(m))));
                 },
             0);
 

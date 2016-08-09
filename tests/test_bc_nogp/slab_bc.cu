@@ -9,7 +9,17 @@ slab_bc :: slab_bc(const cuda::slab_layout_t _sl, const cuda::bvals_t<real_t> _b
     boundaries(_bc), geom(_sl), 
     der(_sl),
     myfft(get_geom(), cuda::dft_t::dft_1d),
-    tint(new integrator_karniadakis<my_allocator_device<cuda::real_t>>(get_geom(), get_bvals(), 3)),
+    tint(new integrator_karniadakis<my_allocator_device<cuda::real_t>>
+            (get_geom(), get_bvals(), 
+              cuda::stiff_params_t(0.001, 
+                                   get_geom().get_Lx(), 
+                                   get_geom().get_Lx(), 
+                                   0.001, 
+                                   0.0, 
+                                   get_geom().get_my(),
+                                   get_geom().get_nx() / 2 + 1, 
+                                   1)
+              )),
     arr1(_sl, _bc, tlevs), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
     arr2(_sl, _bc, tlevs), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
     arr3(_sl, _bc, tlevs), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
@@ -146,6 +156,16 @@ void slab_bc :: initialize_dfttest(const test_ns::field_t fname)
 }
 
 
+void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    (*arr).evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
+            {
+                return(exp(-0.5 * (geom.get_x(n) * geom.get_x(n) + geom.get_y(m) * geom.get_y(m)) ) );
+            }, 0);
+}
+
+
 // Compute x-derivative
 void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
                      const size_t d, const size_t t_src, const size_t t_dst)
@@ -213,6 +233,20 @@ void slab_bc :: invert_laplace(const test_ns::field_t out, const test_ns::field_
                        in_arr -> get_bvals().get_bc_left(), in_arr -> get_bvals().get_bv_left(),
                        in_arr -> get_bvals().get_bc_right(), in_arr -> get_bvals().get_bv_right(),
                        t_src, t_dst);
+}
+
+
+void slab_bc :: initialize_tint()
+{
+    //(*tint).update_field(in_arr);
+}
+
+// Integrate the field in time
+void slab_bc :: integrate(const test_ns::field_t fname)
+{
+    //cuda_arr_real* in_arr = get_field_by_name.at(in);
+    //(*tint).integrate();
+    //(*tint).update_field(in_arr);
 }
 
 
