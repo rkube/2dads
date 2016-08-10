@@ -24,7 +24,6 @@
 #include "bounds.h"
 #include "error.h"
 #include "cuda_types.h"
-using namespace std;
 
 typedef unsigned int uint;
 typedef double real_t;

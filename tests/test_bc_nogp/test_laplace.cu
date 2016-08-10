@@ -62,7 +62,6 @@ int main(void){
         cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr2));
         sol_num -= sol_an;
         cout << "Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
-
     } // Let managed memory go out of scope before calling cudaDeviceReset()
     //cudaDeviceReset();
 }

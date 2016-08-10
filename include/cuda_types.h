@@ -69,14 +69,14 @@ namespace cuda
     /// Do this, otherwise you get differently aligned structures when
     /// compiling in g++ and nvcc. Also, don't forget the -maligned-double flag
     /// in g++
-    class slab_layout_t
+    struct slab_layout_t
     {
-    public:
         slab_layout_t(real_t _xl, real_t _dx, real_t _yl, real_t _dy, 
-                      size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y,
-                      cuda::grid_t _grid) :
+                size_t _nx, size_t _pad_x, size_t _my, size_t _pad_y, size_t _tlevs,
+                cuda::grid_t _grid) :
             x_left(_xl), delta_x(_dx), y_lo(_yl), delta_y(_dy), 
             Nx(_nx), pad_x(_pad_x), My(_my), pad_y(_pad_y),
+            tlevs(_tlevs),
             grid(_grid), 
             cellshift(grid == cuda::grid_t::vertex_centered ? 0.0 : 0.5) 
             {};
@@ -89,6 +89,7 @@ namespace cuda
         const size_t pad_x;
         const size_t My;
         const size_t pad_y;
+        const size_t tlevs;
         const cuda::grid_t grid;
         const real_t cellshift;
 
@@ -98,7 +99,7 @@ namespace cuda
         CUDAMEMBER inline real_t get_Lx() const {return(static_cast<real_t>(Nx) * get_deltax());};
         CUDAMEMBER inline real_t get_x(size_t n) const {return(get_xleft() + (static_cast<real_t>(n) + get_cellshift()) * get_deltax());};
         CUDAMEMBER inline real_t get_y(size_t m) const {return(get_ylo() + (static_cast<real_t>(m) + get_cellshift()) * get_deltay());};
-        
+
         CUDAMEMBER inline real_t get_ylo() const {return(y_lo);};
         CUDAMEMBER inline real_t get_deltay() const {return(delta_y);};
         CUDAMEMBER inline real_t get_yup() const {return(y_lo + static_cast<real_t>(My) * delta_y);};
@@ -109,7 +110,10 @@ namespace cuda
 
         CUDAMEMBER inline size_t get_my() const {return(My);};
         CUDAMEMBER inline size_t get_pad_y() const {return(pad_y);};
-        
+
+        CUDAMEMBER inline size_t get_tlevs() const {return(tlevs);};
+
+        CUDAMEMBER inline size_t get_nelem_per_t() const {return((Nx + pad_x) * (My + pad_y));};
         CUDAMEMBER inline cuda::grid_t get_grid() const {return(grid);};
         CUDAMEMBER inline real_t get_cellshift() const {return(cellshift);};
     } __attribute__ ((aligned (8)));

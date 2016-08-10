@@ -9,16 +9,32 @@ using namespace std;
 
 int main(void)
 {
-    constexpr size_t Nx{128};
-    constexpr size_t My{32};
+    using value_t = double;
 
-    cuda::slab_layout_t my_geom(0.0, 1.0 / cuda::real_t(Nx), 0.0, 1.0 / cuda::real_t(My), Nx, 0, My, 2);
-    cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
+    size_t Nx{128};
+    size_t My{32};
+    const size_t tlevs{4};
+    cout << "Enter Nx: " << endl;
+    cin >> Nx;
+    cout << "Enter My: " << endl;
+    cin >> My;
+
+    cuda::slab_layout_t my_geom(0.0, 1.0 / cuda::real_t(Nx), 0.0, 1.0 / cuda::real_t(My), Nx, 0, My, 2, tlevs, cuda::grid_t::cell_centered);
+    cuda::bvals_t<value_t> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
-    cuda_array_bc_nogp<my_allocator_device<double> > my_ca(my_geom, my_bvals, size_t(1));
-    cout << "exiting main()" << endl;
-    my_ca.evaluate([=] __device__ (const size_t n, const size_t m, const cuda::slab_layout_t geom) -> cuda::real_t {return(3.2);}, 0);
-    //my_ca.enumerate();
-    my_ca.copy_device_to_host();
-    my_ca.dump_full();
+    cout << "Entering scopy" << endl;
+    {
+        cuda_array_bc_nogp<value_t, allocator_device> vd (my_geom, my_bvals);
+        vd.evaluate([=] __device__ (const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 0);
+        //vh.evaluate([=] (const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 0);
+
+        // Create a host copy and print the device data
+        //cuda_array_bc_nogp<value_t, allocator_host> vh = utility :: create_host_vector(vd);
+        //for(size_t t = 0; t < tlevs; t++)
+        //{
+        //    //vh.print(t);
+        //} 
+    }
+    cout << "Leaving scope and exiting" << endl;
+    cudaDeviceReset();
 }

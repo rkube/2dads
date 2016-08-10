@@ -19,14 +19,14 @@ class bounds{
         {
             if (my > My)
             {
-            	stringstream err_str;
+                std::stringstream err_str;
                 err_str << "bounds::operator()    ";
             	err_str << "Out of bounds:" << my << ">=" << My << "\n";
             	throw out_of_bounds_err(err_str.str());
             }
             if (nx > Nx)
             {
-            	stringstream err_str;
+                std::stringstream err_str;
                 err_str << "bounds::operator()    ";
             	err_str << "Out of bounds:" << nx << ">=" << Nx << "\n";
             	throw out_of_bounds_err(err_str.str());
@@ -38,7 +38,7 @@ class bounds{
         	operator()(my, nx);
             if (t > tlevs)
             {
-            	stringstream err_str;
+                std::stringstream err_str;
                 err_str << "bounds::operator()    ";
             	err_str << "Out of bounds:" << t << ">" << tlevs << "\n";
             	throw out_of_bounds_err(err_str.str());

@@ -10,6 +10,7 @@
 #ifndef DIAG_ARRAY_H
 #define DIAG_ARRAY_H
 
+#warning REMOVED "using namespace std in this file. Todo: fix :)"
 // Define periodic so array_base uses index wrapping
 #define PERIODIC
 

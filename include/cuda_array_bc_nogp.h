@@ -56,9 +56,6 @@
 #include "allocators.h"
 
 
-typedef unsigned int uint;
-typedef double real_t;
-
 // Error checking macro for cuda calls
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line)
@@ -109,11 +106,12 @@ __device__ inline bool good_idx(size_t row, size_t col, const cuda::slab_layout_
 
 template <typename T>
 __global__
-void kernel_alloc_array_d_t(T** array_d_t, T* array, const cuda::slab_layout_t geom, const size_t tlevs)
+void kernel_set_tlev_ptr(T* data, T** tlev_ptr, const cuda::slab_layout_t geom)
 {
-    for(size_t t = 0; t < tlevs; t++)
+    for(size_t t = 0; t < geom.get_tlevs(); t++)
     {
-        array_d_t[t] = &array[t * (geom.get_nx() + geom.get_pad_x()) * (geom.get_my() + geom.get_pad_y())];
+        tlev_ptr[t] = &data[t * geom.get_nelem_per_t()];
+        printf("I am kernel set_tlev_ptr: tlev_ptr[%u] at %p\n", t, tlev_ptr[t]);
     }
 }
 
@@ -164,24 +162,43 @@ void kernel_op1_arr(T* lhs, T* rhs, O op_func, const cuda::slab_layout_t geom)
 
 
 /// For accessing elements in GPU kernels and interpolating ghost points
+//template <typename T>
+//__global__
+//void kernel_init_address(address_t<T>** my_address, 
+//        const cuda::slab_layout_t geom, 
+//        const cuda::bvals_t<T> bvals)
+//{
+//    *my_address = new address_t<T>(geom, bvals);
+//    printf("kernel_init_address: address_t at %p\n", *my_address);
+//}
+//
+//
+//template <typename T>
+//__global__
+//void kernel_free_address(address_t<T>** my_address)
+//{
+//    printf("kernel_free_address: address_t at %p\n", *my_address);
+//    delete *my_address;
+//}
+
+// For accessing elements in GPU kernels and interpolating ghost points
 template <typename T>
 __global__
-void kernel_init_address(address_t<T>** my_address, 
-        T* data, 
+void kernel_init_address(address_t<T>* my_address, 
         const cuda::slab_layout_t geom, 
         const cuda::bvals_t<T> bvals)
 {
-    *my_address = new address_t<T>(geom, bvals);
-    //printf("kernel_init_address: address_t at %p. Value: %f\n", *my_address, (*(*my_address))(data, -1, 0));
+    my_address = new address_t<T>(geom, bvals);
+    printf("kernel_init_address: address_t at %p\n", my_address);
 }
 
 
 template <typename T>
 __global__
-void kernel_free_address(address_t<T>** my_address)
+void kernel_free_address(address_t<T>* my_address)
 {
-    //printf("kernel_free_address: address_t at %p\n", *my_address);
-    delete *my_address;
+    printf("kernel_free_address: *address_t at %p\n", *my_address);
+    delete (my_address);
 }
 
 
@@ -235,146 +252,255 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
 
 #endif // __CUDACC_
 
+template <typename T, template <typename> class allocator> class cuda_array_bc_nogp;
 
-template <typename allocator>
+namespace utility
+{
+    template <typename T>
+    cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>& src)
+    {
+        cuda_array_bc_nogp<T, allocator_host> res (src.get_geom(), src.get_bvals());
+        gpuErrchk(cudaMemcpy(res.get_data(), src.get_data(), src.get_geom().get_tlevs() * src.get_geom().get_nelem_per_t(), cudaMemcpyDeviceToHost));
+
+        std::cout << "Creating host vector\n";
+        return(res);
+    }
+}
+
+
+namespace detail 
+{
+    
+    /// Initialize data_tlev_ptr:
+    /// data_tlev_ptr[0] = data[0]
+    /// data_tlev_ptr[1] = data[0] + nelem 
+    /// ...
+    template <typename T>
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const cuda::slab_layout_t sl, allocator_device<T>)
+    {
+        kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, sl);
+    }
+
+
+    template <typename T>
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const cuda::slab_layout_t sl, allocator_host<T>)
+    {
+        for(size_t t = 0; t < sl.get_tlevs(); t++)
+        {
+            data_tlev_ptr[t] = data + t * sl.get_nelem_per_t();
+            std::cout << "data_tlev_ptr[" << t << "] at " << data_tlev_ptr[t] << std::endl;
+        }
+    }
+
+
+    // Initialize ghost point interpolator
+    template <typename T>
+    inline address_t<T>* impl_init_address(address_t<T>** address_2ptr, address_t<T>* address_ptr, const cuda::slab_layout_t geom, const cuda::bvals_t<T> bvals, allocator_device<T>)
+    {
+        gpuErrchk(cudaMalloc(&address_ptr, sizeof(address_t<T>*)));
+        kernel_init_address<<<1, 1>>>(address_ptr, geom, bvals);
+        std::cout << "impl_init_address: address_ptr = " << address_ptr << std::endl;
+        return(address_ptr);
+    }
+
+
+    template <typename T>
+    inline void impl_delete_address(address_t<T>** address_2ptr, address_t<T>* address_ptr, allocator_device<T>)
+    {
+        kernel_free_address<<<1, 1>>>(address_ptr);
+    }
+
+    
+    template <typename T>
+    inline address_t<T>* impl_init_address(address_t<T>** dummy, address_t<T>* address_ptr, const cuda::slab_layout_t geom, const cuda::bvals_t<T> bvals, allocator_host<T>)
+    {
+        return (new address_t<T>(geom, bvals));
+    }
+
+    template <typename T>
+    inline void impl_delete_address(address_t<T>** dummy, address_t<T>* address_ptr, allocator_host<T>)
+    {
+        std::cerr << "impl_delete_address: address_ptr -> " << address_ptr << std::endl;
+        delete address_ptr;        
+    }
+
+
+    // Get data_tlev_ptr for a given time level   
+    // Returns a device-pointer 
+    template <typename T>
+    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tlev, const size_t tlevs, allocator_device<T>)
+    {
+        T** data_tlev_ptr_hostcopy = new T*[tlevs];
+        gpuErrchk(cudaMemcpy(data_tlev_ptr_hostcopy, data_tlev_ptr, sizeof(T*) * tlevs, cudaMemcpyDeviceToHost));
+        return data_tlev_ptr_hostcopy[tlev];
+    }
+
+    template <typename T>
+    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tlev, const size_t tlevs, allocator_host<T>)
+    {
+        return(data_tlev_ptr[tlev]);
+    }
+
+
+    template <typename T>
+    void impl_initialize(cuda_array_bc_nogp<T, allocator_device>& obj, const size_t tlev, allocator_device<T>)
+    {
+        obj.evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> T
+                                     {
+                                       return(T(0.0));
+                                     }, tlev);
+    }
+
+
+    template <typename T>
+    void impl_initialize(cuda_array_bc_nogp<T, allocator_host>& obj, const size_t tlev, allocator_host<T>)
+    {
+        obj.evaluate([=](size_t n, size_t m, cuda::slab_layout_t geom) -> T 
+                         {
+                             return(T(0.0));
+                         }, tlev);
+    }
+
+
+    template <typename T, typename F>
+    void impl_evaluate(cuda_array_bc_nogp<T, allocator_device>& obj, F myfunc, const size_t tlev, allocator_device<T>)
+    {
+        kernel_evaluate<<<obj.get_grid(), obj.get_block()>>>(obj.get_tlev_ptr(tlev), myfunc, obj.get_geom());
+    }
+
+
+    template <typename T, typename F>
+    void impl_evaluate(cuda_array_bc_nogp<T, allocator_host>& obj, F myfunc, const size_t tlev, allocator_host<T>)
+    {
+        for(size_t n = 0; n < obj.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < obj.get_geom().get_my(); m++)
+            {
+                //obj(tlev, n, m) = myfunc(n,m, obj.get_geom());
+                (obj.get_data())[tlev * obj.get_geom().get_nelem_per_t() + n * (obj.get_geom().get_my() + obj.get_geom().get_pad_y()) + m] = myfunc(n, m, obj.get_geom());
+            }
+        }
+    }
+}
+
+
+
+template <typename T, template <typename> class allocator>
 class cuda_array_bc_nogp{
 public:
 
-    using allocator_t = typename my_allocator_traits<allocator> :: allocator_type;
-    using value_t = typename my_allocator_traits<allocator> :: value_type;
-    using deleter_t = typename my_allocator_traits<allocator> :: deleter_type;
-    using ptr_t = std::unique_ptr<value_t, deleter_t>;
+    // T* pointers
+    using allocator_type = typename my_allocator_traits<T, allocator> :: allocator_type;
+    using deleter_type = typename my_allocator_traits<T, allocator> :: deleter_type;
+    using ptr_type = std::unique_ptr<T, deleter_type>;
 
-	cuda_array_bc_nogp(const cuda::slab_layout_t, const cuda::bvals_t<value_t>, const size_t);
-    cuda_array_bc_nogp(const cuda_array_bc_nogp<allocator>* rhs);
-    cuda_array_bc_nogp(const cuda_array_bc_nogp<allocator>& rhs);
+    // T** pointers
+    using p_allocator_type = typename my_allocator_traits<T*, allocator> :: allocator_type;
+    using p_deleter_type = typename my_allocator_traits<T*, allocator> :: deleter_type;
+    using pptr_type = std::unique_ptr<T*, p_deleter_type>;
+
+	cuda_array_bc_nogp(const cuda::slab_layout_t, const cuda::bvals_t<T>);
+    cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>* rhs);
+    cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs);
 
 	~cuda_array_bc_nogp();
 
-    /// Apply a function to the data
+    /// Evaluate the function F on the grid
     template <typename F> void evaluate(F, const size_t);
+
     /// Initialize all elements to zero. Making this private results in compile error:
     /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
     //cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
     void initialize();
     void initialize(const size_t);
 
-	inline value_t& operator() (const size_t n, const size_t m) {
-        return(*(array_h + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
-    };
-	inline value_t operator() (const size_t n, const size_t m) const {
-        return(*(array_h + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
-    }
+    cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>&);
 
-    inline value_t& operator() (const size_t t, const size_t n, const size_t m) {
-        return(*(array_h_t[t] + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
-    };
-    inline value_t operator() (const size_t t, const size_t n, const size_t m) const {
-        return(*(array_h_t[t] + n * (get_geom().get_my() + get_geom().get_pad_y()) + m));
-    };
+    cuda_array_bc_nogp<T, allocator>& operator+=(const cuda_array_bc_nogp<T, allocator>&);
+    cuda_array_bc_nogp<T, allocator>& operator-=(const cuda_array_bc_nogp<T, allocator>&);
+    cuda_array_bc_nogp<T, allocator>& operator*=(const cuda_array_bc_nogp<T, allocator>&);
+    cuda_array_bc_nogp<T, allocator>& operator/=(const cuda_array_bc_nogp<T, allocator>&);
 
-    cuda_array_bc_nogp<allocator>& operator=(const cuda_array_bc_nogp<allocator>&);
-
-    cuda_array_bc_nogp<allocator>& operator+=(const cuda_array_bc_nogp<allocator>&);
-    cuda_array_bc_nogp<allocator>& operator-=(const cuda_array_bc_nogp<allocator>&);
-    cuda_array_bc_nogp<allocator>& operator*=(const cuda_array_bc_nogp<allocator>&);
-    cuda_array_bc_nogp<allocator>& operator/=(const cuda_array_bc_nogp<allocator>&);
-
-    cuda_array_bc_nogp<allocator> operator+(const cuda_array_bc_nogp<allocator>&) const;  
-    cuda_array_bc_nogp<allocator> operator-(const cuda_array_bc_nogp<allocator>&) const;  
-    cuda_array_bc_nogp<allocator> operator*(const cuda_array_bc_nogp<allocator>&) const;  
-    cuda_array_bc_nogp<allocator> operator/(const cuda_array_bc_nogp<allocator>&) const;  
+    cuda_array_bc_nogp<T, allocator> operator+(const cuda_array_bc_nogp<T, allocator>&) const;  
+    cuda_array_bc_nogp<T, allocator> operator-(const cuda_array_bc_nogp<T, allocator>&) const;  
+    cuda_array_bc_nogp<T, allocator> operator*(const cuda_array_bc_nogp<T, allocator>&) const;  
+    cuda_array_bc_nogp<T, allocator> operator/(const cuda_array_bc_nogp<T, allocator>&) const;  
 
     // Copy device memory to host and print to stdout
-    friend std::ostream& operator<<(std::ostream& os, cuda_array_bc_nogp& src)
-    {
-        const size_t tl{src.get_tlevs()};
-        const size_t my{src.get_my()};
-        const size_t nx{src.get_nx()};
-        const size_t pad_x{src.get_geom().pad_x};
-        const size_t pad_y{src.get_geom().pad_y};
+    //friend std::ostream& operator<<(std::ostream& os, cuda_array_bc_nogp& src)
+    //{
+    //    const size_t tl{src.get_tlevs()};
+    //    const size_t my{src.get_my()};
+    //    const size_t nx{src.get_nx()};
+    //    const size_t pad_x{src.get_geom().pad_x};
+    //    const size_t pad_y{src.get_geom().pad_y};
 
-        src.copy_device_to_host();
+    //    src.copy_device_to_host();
 
-        os << "\n";
-        for(size_t t = 0; t < tl; t++)
-        {
-            os << t << endl << endl;
-            //for(size_t n = 0; n < nx + pad_x; n++)
-            for(size_t n = 0; n < nx; n++)
-            {
-                //for(size_t m = 0; m < my + pad_y; m++)
-                for(size_t m = 0; m < my; m++)
-                {
-                    // Remember to also set precision routines in CuCmplx :: operator<<
-                	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(t, n, m) << "\t";
-                }
-                os << endl;
-            }
-            os << endl;
-        }
-        return (os);
-    }
+    //    os << "\n";
+    //    for(size_t t = 0; t < tl; t++)
+    //    {
+    //        os << t << endl << endl;
+    //        //for(size_t n = 0; n < nx + pad_x; n++)
+    //        for(size_t n = 0; n < nx; n++)
+    //        {
+    //            //for(size_t m = 0; m < my + pad_y; m++)
+    //            for(size_t m = 0; m < my; m++)
+    //            {
+    //                // Remember to also set precision routines in CuCmplx :: operator<<
+    //            	os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << src(t, n, m) << "\t";
+    //            }
+    //            os << endl;
+    //        }
+    //        os << endl;
+    //    }
+    //    return (os);
+    //}
 	
-    void print() const;
+    //void print() const;
 	
 	void normalize(const size_t);
-    value_t L2(const size_t);
+    T L2(const size_t);
 
 	///@brief Copy data from t_src to t_dst
 	void copy(const size_t t_dst, const size_t t_src);
 	///@brief Move data from t_src to t_dst, zero out t_src
 	void move(const size_t t_dst, const size_t t_src);
 
-	// Copy entire device data to host
-	void copy_device_to_host();
-	// Copy entire device data to external data pointer in host memory
-	//void copy_device_to_host(value_T*);
-	// Copy device to host at specified time level
-	//void copy_device_to_host(const size_t);
-
-	// Copy device data at specified time level to external pointer in device memory
-	//void copy_device_to_device(const size_t, value_t*);
-
 	///@brief Copy data from src, t_src to t_dst
-    void copy(size_t t_dst, const cuda_array_bc_nogp<allocator>& src, size_t t_src);
-	// Transfer from host to device
-	void copy_host_to_device();
-	//void copy_host_to_device(const size_t);
-	//void copy_host_to_device(value_t*);
+    void copy(size_t t_dst, const cuda_array_bc_nogp<T, allocator>& src, size_t t_src);
 
 	// Advance time levels
-	void advance();
+	//void advance();
 
 
 	// Access to private members
-	inline size_t get_nx() const {return(Nx);};
-	inline size_t get_my() const {return(My);};
-	inline size_t get_tlevs() const {return(tlevs);};
+	inline size_t get_nx() const {return(get_geom().get_nx());};
+	inline size_t get_my() const {return(get_geom().get_my());};
+	inline size_t get_tlevs() const {return(get_geom().get_tlevs());};
     inline cuda::slab_layout_t get_geom() const {return(geom);};
-    inline cuda::bvals_t<value_t> get_bvals() const {return(boundaries);};
-    inline address_t<value_t>** get_address() const {return(d_address);};
+    inline cuda::bvals_t<T> get_bvals() const {return(boundaries);};
+    // We are working with 2 pointer levels, since we instantiate an address object 
+    // in a cuda kernel in the constructor. That way, we can just pass this
+    // pointer to all cuda kernels that need an address object.
+    // Call a separate kernel in the destructor to delete it.
+    // Unfortunately, this means we have to use 2 pointer levels also in cpu functions.
+    inline address_t<T>** get_address_2ptr() const {return(address_2ptr);};
+    inline address_t<T>* get_address_ptr() const {return(address_ptr);};
 
 	inline dim3 get_grid() const {return grid;};
 	inline dim3 get_block() const {return block;};
 
-	// Pointer to host copy of device data
-	inline value_t* get_array_h() const {return array_h;};
-	inline value_t* get_array_h(size_t t) const {return array_h_t[t];};
-
 	// smart pointer to device data, entire array
-	inline ptr_t get_array_d() const {return array_d.get();};
+	inline T* get_data() const {return data.get();};
 	// Pointer to array of pointers, corresponding to time levels
-	inline value_t** get_array_d_t() const {return array_d_t;};
+	inline T** get_tlev_ptr() const {return data_tlev_ptr.get();};
 	// Pointer to device data at time level t
-	inline value_t* get_array_d(size_t t) const {return array_d_t_host[t];};
+    inline T* get_tlev_ptr(const size_t) const;
 
 	// Check bounds
 	inline void check_bounds(size_t t, size_t n, size_t m) const {array_bounds(t, n, m);};
 	inline void check_bounds(size_t n, size_t m) const {array_bounds(n, m);};
-
-	// Number of elements
-	inline size_t get_nelem_per_t() const {return ((geom.Nx + geom.pad_x) * (geom.My + geom.pad_y));};
 
     // Set true if transformed
     inline bool is_transformed() const {return(transformed);};
@@ -385,16 +511,18 @@ public:
     };
 
 private:
-	const size_t tlevs;
-	const size_t Nx;
-	const size_t My;
     const bounds array_bounds;
-	const cuda::bvals_t<value_t> boundaries;
+	const cuda::bvals_t<T> boundaries;
     const cuda::slab_layout_t geom;
     bool transformed;
 
-    allocator my_alloc;
-    address_t<value_t>** d_address;
+    allocator_type my_alloc;
+    p_allocator_type my_palloc;
+
+    // The cuda implementation uses this one. address_t is instantiated once on the device
+    address_t<T>** address_2ptr;
+    // The host implementation uses this one.
+    address_t<T>* address_ptr;
 
 	// block and grid for access without ghost points, use these normally
 	const dim3 block;
@@ -404,384 +532,374 @@ private:
     const size_t shmem_size_col;   
 	// Array data is on device
 	// Pointer to device data
-	ptr_t array_d;
+	ptr_type data;
 	// Pointer to each time stage. Pointer to array of pointers on device
-	value_t** array_d_t;
-	// Pointer to each time stage: Pointer to each time level on host
-	value_t** array_d_t_host;
-	value_t* array_h;
-	value_t** array_h_t;	
+	pptr_type data_tlev_ptr;
 };
 
 
-template < typename allocator>
-cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp 
-        (const cuda::slab_layout_t _geom, const cuda::bvals_t<value_t> bvals, size_t _tlevs) : 
-		tlevs(_tlevs), 
-        Nx(_geom.get_nx()), 
-        My(_geom.get_my()), 
+template <typename T, template<typename> class allocator>
+cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const cuda::slab_layout_t _geom, const cuda::bvals_t<T> bvals) : 
         array_bounds(get_tlevs(), get_nx(), get_my()),
         boundaries(bvals), 
         geom(_geom), 
         transformed{false},
-        d_address{nullptr},
+        address_2ptr{nullptr},
+        address_ptr{nullptr},
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + geom.get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((get_nx() + geom.get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
-        shmem_size_col(get_nx() * sizeof(value_t)),
-        array_d(my_alloc.alloc(get_tlevs() * get_nelem_per_t() * sizeof(value_t))),
-		array_d_t(nullptr),
-		array_d_t_host(new value_t*[get_tlevs()]),
-		array_h(new value_t[get_tlevs() * get_nelem_per_t()]),
-		array_h_t(new value_t*[get_tlevs()])
+        shmem_size_col(get_nx() * sizeof(T)),
+        data(my_alloc.allocate(get_tlevs() * get_geom().get_nelem_per_t())),
+		data_tlev_ptr(my_palloc.allocate(get_tlevs()))
 {
-	gpuErrchk(cudaMalloc( (void***) &array_d_t, get_tlevs() * sizeof(value_t*)));
 
+    // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
+    detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_geom(), allocator_type{});
+   
+    // Initialize the address object
+    address_ptr = detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
+    
     //cout << "cuda_array_bc<allocator> ::cuda_array_bc<allocator>\t";
     //cout << "Nx = " << Nx << ", pad_x = " << geom.pad_x << ", My = " << My << ", pad_y = " << geom.pad_y << endl;
     //cout << "block = ( " << block.x << ", " << block.y << ")" << endl;
     //cout << "grid = ( " << grid.x << ", " << grid.y << ")" << endl;
     //cout << geom << endl;
 
-	kernel_alloc_array_d_t<<<1, 1>>>(array_d_t, array_d.get(), get_geom(), get_tlevs());
-	gpuErrchk(cudaMemcpy(array_d_t_host, array_d_t, sizeof(value_t*) * get_tlevs(), cudaMemcpyDeviceToHost));
+    std::cout << "cuda_array_bc_nogp:: address_ptr -> " << address_ptr << std::endl;
+    //initialize();
 
-	for(size_t t = 0; t < tlevs; t++)
-    {
-        array_h_t[t] = &array_h[t * get_nelem_per_t()];
-    }
-    initialize();
-
-    gpuErrchk(cudaMalloc(&d_address, sizeof(address_t<value_t>**)));
-
-    kernel_init_address<<<1, 1>>>(get_address(), get_array_d(0), get_geom(), get_bvals());
+    //gpuErrchk(cudaMalloc(&d_address, sizeof(address_t<T>**)));
+    //kernel_init_address<<<1, 1>>>(get_address(), get_array_d(0), get_geom(), get_bvals());
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<allocator>* rhs) :
-    cuda_array_bc_nogp(rhs -> get_geom(), rhs -> get_bvals(), rhs -> get_tlevs()) 
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>* rhs) :
+//    cuda_array_bc_nogp(rhs -> get_geom(), rhs -> get_bvals(), rhs -> get_tlevs()) 
+//{
+//    check_bounds(rhs -> get_tlevs(), rhs -> get_nx(), rhs -> get_my());
+//    my_alloc.copy(get_array_d(), get_array_d() + get_tlevs() * get_nelem_per_t(), rhs -> get_array_d());
+//    my_palloc.copy(get_array_d_t(), get_array_d_t() + get_tlevs(), rhs -> get_array_d_t());
+//};
+//
+//
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs) :
+//    cuda_array_bc_nogp(rhs.get_geom(), rhs.get_bvals(), rhs.get_tlevs()) 
+//{
+//    check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+//    my_alloc.copy(get_array_d(), get_array_d() +  get_tlevs() * get_nelem_per_t(), rhs.get_array_d());
+//    my_palloc.copy(get_array_d_t(), get_array_d_t() + get_tlevs(), rhs.get_array_d_t());
+//};
+
+
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator> :: ~cuda_array_bc_nogp()
 {
-    check_bounds(rhs -> get_tlevs(), rhs -> get_nx(), rhs -> get_my());
-    gpuErrchk(cudaMemcpy(get_array_d(0),
-                         rhs -> get_array_d(0),
-                         sizeof(value_t) * get_tlevs() * get_nelem_per_t(), 
-                         cudaMemcpyDeviceToDevice));
-};
-
-
-template <typename allocator>
-cuda_array_bc_nogp<allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<allocator>& rhs) :
-    cuda_array_bc_nogp(rhs.get_geom(), rhs.get_bvals(), rhs.get_tlevs()) 
-{
-    check_bounds(rhs -> get_tlevs(), rhs -> get_nx(), rhs -> get_my());
-    gpuErrchk(cudaMemcpy(get_array_d(0),
-                         rhs.get_array_d(0),
-                         sizeof(value_t) * get_tlevs() * get_nelem_per_t(), 
-                         cudaMemcpyDeviceToDevice));
-};
-
-
-template <typename allocator>
-cuda_array_bc_nogp<allocator> :: ~cuda_array_bc_nogp()
-{
-	if(array_h != nullptr)
-		delete [] array_h;
-	if(array_h_t != nullptr)
-		delete [] array_h_t;
-	if(array_d_t != nullptr)
-		cudaFree(array_d_t);
-
-    kernel_free_address<<<1, 1>>>(get_address());
-}
-    
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: initialize(const size_t tlev)
-{
-        evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
-                                 {
-                                    return(value_t(0.0));
-                                 }, tlev);
+    std::cout << "~cuda_array: address_ptr = " << address_ptr << std::endl;
+    std::cout << "~cuda_array: address_2ptr = " << address_2ptr << std::endl;
+    detail :: impl_delete_address(address_2ptr, address_ptr, allocator_type{});
 }
 
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: initialize()
+
+template <typename T, template <typename> class allocator>
+inline T* cuda_array_bc_nogp<T, allocator> :: get_tlev_ptr(const size_t tlev) const
 {
-    for(size_t t = 0; t < tlevs; t++)
+    std::cout << "get_tlev_ptr(const size_t tlev) const : " << std::endl;
+    return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tlev, get_geom().get_tlevs(), allocator_type{}));
+}
+
+
+template <typename T, template <typename> class allocator>
+template <typename F>
+void cuda_array_bc_nogp<T, allocator> :: evaluate(F myfunc, const size_t tlev)
+{
+    detail :: impl_evaluate(*this, myfunc, tlev, allocator_type{});
+    //kernel_evaluate<<<grid, block>>>(get_array_d(tlev), myfunc, geom);
+}
+
+template <typename T, template <typename> class allocator>
+void cuda_array_bc_nogp<T, allocator> :: initialize(const size_t tlev)
+{
+    detail :: impl_initialize(*this, tlev, allocator_type{});
+}
+
+template <typename T, template <typename> class allocator>
+void cuda_array_bc_nogp<T, allocator> :: initialize()
+{
+    for(size_t t = 0; t < get_geom().get_tlevs(); t++)
     {
         initialize(t);
     }
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator= (const cuda_array_bc_nogp<allocator>& rhs)
+
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator>& cuda_array_bc_nogp<T, allocator> :: operator= (const cuda_array_bc_nogp<T, allocator>& rhs)
 {
     // Check for self-assignment
     if(this == &rhs)
         return(*this);
 
     check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-    gpuErrchk(cudaMemcpy(get_array_d(0),
-                         rhs.get_array_d(0),
-                         get_nelem_per_t() * sizeof(value_t), cudaMemcpyDeviceToDevice));
+    std::cerr << "Not implemented yet" << std::endl;
+    //gpuErrchk(cudaMemcpy(get_array_d(0),
+    //                     rhs.get_array_d(0),
+    //                     get_nelem_per_t() * sizeof(T), cudaMemcpyDeviceToDevice));
     return (*this);
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator+=(const cuda_array_bc_nogp<allocator>& rhs) 
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator>& cuda_array_bc_nogp<T, allocator> :: operator+=(const cuda_array_bc_nogp<T, allocator>& rhs) 
 {
     check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-    kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
-                                                [=] __device__ (value_t lhs, value_t rhs) -> value_t
-                                                {
-                                                    return(lhs + rhs);
-                                                }, get_geom());
+    std::cerr << "Not implemented yet" << std::endl;
+    //kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
+    //                                            [=] __device__ (T lhs,  rhs) -> T
+    //                                            {
+    //                                                return(lhs + rhs);
+    //                                            }, get_geom());
     return *this;
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator-=(const cuda_array_bc_nogp<allocator>& rhs) 
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator>& cuda_array_bc_nogp<T, allocator> :: operator-=(const cuda_array_bc_nogp<T, allocator>& rhs) 
 {
     check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-    kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
-                                                [=] __device__ (value_t lhs, value_t rhs) -> value_t
-                                                {
-                                                    return(lhs - rhs);
-                                                }, get_geom());
+    std::cerr << "Not implemented yet" << std::endl;
+    //kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
+    //                                            [=] __device__ (T lhs, T rhs) -> T  
+    //                                            {
+    //                                                return(lhs - rhs);
+    //                                            }, get_geom());
     return *this;
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator*=(const cuda_array_bc_nogp<allocator>& rhs) 
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator>& cuda_array_bc_nogp<T, allocator> :: operator*=(const cuda_array_bc_nogp<T, allocator>& rhs) 
 {
     check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-    kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
-                                                [=] __device__ (value_t lhs, value_t rhs) -> value_t
-                                                {
-                                                    return(lhs * rhs);
-                                                }, get_geom());
+    std::cerr << "Not implemented yet" << std::endl;
+    //kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
+    //                                            [=] __device__ (T lhs, T rhs) -> T
+    //                                            {
+    //                                                return(lhs * rhs);
+    //                                            }, get_geom());
     return *this;
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator>& cuda_array_bc_nogp<allocator> :: operator/=(const cuda_array_bc_nogp<allocator>& rhs) 
+template <typename T, template <typename> class allocator>
+cuda_array_bc_nogp<T, allocator>& cuda_array_bc_nogp<T, allocator> :: operator/=(const cuda_array_bc_nogp<T, allocator>& rhs) 
 {
     check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-    kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
-                                                [=] __device__ (value_t lhs, value_t rhs) -> value_t
-                                                {
-                                                    return(lhs / rhs);
-                                                }, get_geom());
+    std::cerr << "Not implemented yet" << std::endl;
+    //kernel_op1_arr<<<get_grid(), get_block()>>>(get_array_d(0), rhs.get_array_d(0),
+    //                                            [=] __device__ (T lhs, T rhs) -> T
+    //                                            {
+    //                                                return(lhs / rhs);
+    //                                            }, get_geom());
     return *this;
 }
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator> cuda_array_bc_nogp<allocator> :: operator+(const cuda_array_bc_nogp<allocator>& rhs) const
-{
-    cuda_array_bc_nogp<allocator> result(this);
-    result += rhs;
-    return(result);
-}
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> cuda_array_bc_nogp<T, allocator> :: operator+(const cuda_array_bc_nogp<T, allocator>& rhs) const
+//{
+//    cuda_array_bc_nogp<T, allocator> result(this);
+//    result += rhs;
+//    return(result);
+//}
+//
+//
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> cuda_array_bc_nogp<T, allocator> :: operator-(const cuda_array_bc_nogp<T, allocator>& rhs) const
+//{
+//    cuda_array_bc_nogp<T, allocator> result(this);
+//    result -= rhs;
+//    return(result);
+//}
+//
+//
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> cuda_array_bc_nogp<T, allocator> :: operator*(const cuda_array_bc_nogp<T, allocator>& rhs) const
+//{
+//    cuda_array_bc_nogp<T, allocator> result(this);
+//    result *= rhs;
+//    return(result);
+//}
+//
+//
+//template <typename T, template <typename> class allocator>
+//cuda_array_bc_nogp<T, allocator> cuda_array_bc_nogp<T, allocator> :: operator/(const cuda_array_bc_nogp<T, allocator>& rhs) const
+//{
+//    cuda_array_bc_nogp<T, allocator> result(this);
+//    result /= rhs;
+//    return(result);
+//}
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator> cuda_array_bc_nogp<allocator> :: operator-(const cuda_array_bc_nogp<allocator>& rhs) const
-{
-    cuda_array_bc_nogp<allocator> result(this);
-    result -= rhs;
-    return(result);
-}
+
+//template <typename allocator>
+//void cuda_array_bc_nogp<allocator> :: print() const
+//{
+//	for(size_t t = 0; t < tlevs; t++)
+//	{
+//        cout << "print = " << t << endl;
+//		for (size_t n = 0; n < get_geom().get_nx() + get_geom().get_pad_x(); n++)
+//		{
+//			for(size_t m = 0; m < get_geom().get_my() + get_geom().get_pad_y(); m++)
+//			{
+//				cout << std::setw(8) << std::setprecision(5) << (*this)(t, n, m) << "\t";
+//                //cout << std::setw(7) << std::setprecision(5) << *(array_h_t[t] + n * (geom.My + geom.pad_y) + m) << "\t";
+//			}
+//			cout << endl;
+//		}
+//        cout << endl << endl;
+//	}
+//}
 
 
-template <typename allocator>
-cuda_array_bc_nogp<allocator> cuda_array_bc_nogp<allocator> :: operator*(const cuda_array_bc_nogp<allocator>& rhs) const
-{
-    cuda_array_bc_nogp<allocator> result(this);
-    result *= rhs;
-    return(result);
-}
-
-
-template <typename allocator>
-cuda_array_bc_nogp<allocator> cuda_array_bc_nogp<allocator> :: operator/(const cuda_array_bc_nogp<allocator>& rhs) const
-{
-    cuda_array_bc_nogp<allocator> result(this);
-    result /= rhs;
-    return(result);
-}
-
-
-template <typename allocator>
-template <typename F>
-void cuda_array_bc_nogp<allocator> :: evaluate(F myfunc, const size_t tlev)
-{
-    kernel_evaluate<<<grid, block>>>(get_array_d(tlev), myfunc, geom);
-}
-
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: print() const
-{
-	for(size_t t = 0; t < tlevs; t++)
-	{
-        cout << "print = " << t << endl;
-		for (size_t n = 0; n < get_geom().get_nx() + get_geom().get_pad_x(); n++)
-		{
-			for(size_t m = 0; m < get_geom().get_my() + get_geom().get_pad_y(); m++)
-			{
-				cout << std::setw(8) << std::setprecision(5) << (*this)(t, n, m) << "\t";
-                //cout << std::setw(7) << std::setprecision(5) << *(array_h_t[t] + n * (geom.My + geom.pad_y) + m) << "\t";
-			}
-			cout << endl;
-		}
-        cout << endl << endl;
-	}
-}
-
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: normalize(const size_t tlev)
-{
-    // If we made a 1d DFT normalize by My. Otherwise nomalize by Nx * My
-    switch (boundaries.get_bc_left())
-    {
-        case cuda::bc_t::bc_dirichlet:
-            // fall through
-        case cuda::bc_t::bc_neumann:
-            cout << " Normalizing for 1d" << endl;
-            kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
-            {
-                return(in / value_t(geom.get_my()));
-            }, get_geom());
-            break;
-
-        case cuda::bc_t::bc_periodic:
-            cout << " Normalizing for 2d" << endl;
-            kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom) -> value_t
-            {
-                return(in / value_t(geom.get_nx() * geom.get_my()));
-            }, get_geom());
-            break;
-    }
-}
+//template <typename T, template <typename> class allocator>
+//void cuda_array_bc_nogp<T, allocator> :: normalize(const size_t tlev)
+//{
+//    // If we made a 1d DFT normalize by My. Otherwise nomalize by Nx * My
+//    switch (boundaries.get_bc_left())
+//    {
+//        case cuda::bc_t::bc_dirichlet:
+//            // fall through
+//        case cuda::bc_t::bc_neumann:
+//            cout << " Normalizing for 1d" << endl;
+//            kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom) -> T
+//            {
+//                return(in / T(geom.get_my()));
+//            }, get_geom());
+//            break;
+//
+//        case cuda::bc_t::bc_periodic:
+//            cout << " Normalizing for 2d" << endl;
+//            kernel_evaluate_2<<<grid, block>>>(get_array_d(tlev), [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom) -> T
+//            {
+//                return(in / T(geom.get_nx() * geom.get_my()));
+//            }, get_geom());
+//            break;
+//    }
+//}
 
 
 // Computes the L2 norm
-// Problem: when value_t is CuCmplx<T>, we return a CuCmplx<T>, when value_t is double, we return double.
-// Anyway, the Lambda calls abs(in), which does not give the correct result when value_t is CuCmplx<T>.
+// Problem: when T is CuCmplx<T>, we return a CuCmplx<T>, when T is double, we return double.
+// Anyway, the Lambda calls abs(in), which does not give the correct result when T is CuCmplx<T>.
 //
 // For now, just use this routine if we have doubles!
 //
-template <typename allocator>
-cuda_array_bc_nogp<allocator>::value_t cuda_array_bc_nogp<allocator> :: L2(const size_t tlev)
+//template <typename T, template <typename> class allocator> 
+//T cuda_array_bc_nogp<T, allocator> :: L2(const size_t tlev)
+//{
+//    // Configuration for reduction kernel
+//    const size_t shmem_size_row = get_nx() * sizeof(T);
+//    const dim3 blocksize_row(static_cast<int>(get_nx()), 1, 1);
+//    const dim3 gridsize_row(1, static_cast<int>(get_my()), 1);
+//
+//    // temporary value profile
+//    //T* h_tmp_profile(new T[Nx]);
+//    // return value
+//    ptr_t d_rval_ptr(my_alloc.alloc(sizeof(T)));
+//    T rval{0.0};
+//
+//    if(tlev < get_tlevs())
+//    {
+//        // Store result of 2d->1d reduction
+//        ptr_t d_tmp_profile(my_alloc.alloc(get_nx() * sizeof(T)));
+//        // Copy data to non-strided memory layout
+//        ptr_t device_copy(my_alloc.alloc(get_nx() * get_my() * sizeof(T)));
+//        // Geometry of the temporary array, no padding
+//        cuda::slab_layout_t tmp_geom{get_geom().get_xleft(), get_geom().get_deltax(), get_geom().get_ylo(), get_geom().get_deltay(),
+//                                     get_geom().get_nx(), 0, get_geom().get_my(), 0, get_geom().get_grid()};
+//        for(size_t n = 0; n < get_nx(); n++)
+//        {
+//            gpuErrchk(cudaMemcpy((void*) (device_copy.get() + n * get_my()),
+//                                 (void*) (get_array_d(tlev) + n * (get_my() + geom.get_pad_y())), 
+//                                 get_my() * sizeof(T), 
+//                                 cudaMemcpyDeviceToDevice));
+//        }
+//        // Take the square of the absolute value
+//        kernel_evaluate_2<<<get_grid(), get_block()>>>(device_copy.get(),
+//                                                       [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom ) -> T 
+//                                                       {
+//                                                           return(abs(in) * abs(in));
+//                                                           //return(in);
+//                                                       },
+//                                                       tmp_geom);
+//        //T* tmp_arr(new T[Nx * My]);
+//        //gpuErrchk(cudaMemcpy(tmp_arr, device_copy.get(), get_nx() * get_my() * sizeof(T), cudaMemcpyDeviceToHost));
+//        //for(size_t n = 0; n < get_nx(); n++)
+//        //{
+//        //    for(size_t m = 0; m < get_my(); m++)
+//        //    {
+//        //        cout << tmp_arr[n * get_my() + m] << "\t";
+//        //    }
+//        //    cout << endl;
+//        //}
+//        //delete [] tmp_arr;
+//        // Perform 2d -> 1d reduction
+//        kernel_reduce<<<gridsize_row, blocksize_row, shmem_size_row>>>(device_copy.get(), d_tmp_profile.get(), 
+//                                                                       [=] __device__ (T op1, T op2) -> T {return(op1 + op2);},
+//                                                                       1, get_nx(), get_nx(), get_my());
+//        //gpuErrchk(cudaMemcpy(h_tmp_profile, d_tmp_profile.get(), get_nx() * sizeof(T), cudaMemcpyDeviceToHost));
+//        //for(size_t n = 0; n < Nx; n++)
+//        //{
+//        //    cout << n << ": " << h_tmp_profile[n] << endl;
+//        //}
+//        // Perform 1d -> 0d reduction
+//        kernel_reduce<<<1, get_nx(), shmem_size_row>>>(d_tmp_profile.get(), d_rval_ptr.get(), 
+//                                                       [=] __device__ (T op1, T op2) -> T {return(op1 + op2);},
+//                                                       1, get_nx(), get_nx(), 1);
+//        gpuErrchk(cudaMemcpy(&rval, (void*) d_rval_ptr.get(), sizeof(T), cudaMemcpyDeviceToHost));
+//    }
+//    else
+//    {
+//        stringstream err_msg;
+//        err_msg << "cuda_array_bc_nogp<allocator> :: T cuda_array_bc_nogp<allocator> :: L2(const size_t tlev):    ";
+//        err_msg << "tlev = " << tlev << " is out of bounds: get_tlevs() = " << get_tlevs() << "\n";
+//        throw out_of_bounds_err(err_msg.str());
+//    }
+//
+//    //delete [] h_tmp_profile;
+//    return(sqrt(rval / static_cast<T>(get_nx() * get_my())));
+//}
+
+//template <typename allocator>
+//void cuda_array_bc_nogp<allocator>::copy_device_to_host()
+//{
+//    for(size_t t = 0; t < tlevs; t++)
+//    {
+//        cout << "copy_device_to_host() t = " << t << endl;
+//        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(T) * get_nelem_per_t(), cudaMemcpyDeviceToHost));	
+//    }
+//}
+//
+//
+//template <typename allocator>
+//void cuda_array_bc_nogp<allocator> :: copy_host_to_device()
+//{ 
+//    for(size_t t = 0; t < tlevs; t++)
+//        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(T) * get_nelem_per_t(), cudaMemcpyDeviceToHost));
+//}
+
+
+template <typename T, template <typename> class allocator>
+void cuda_array_bc_nogp<T, allocator> :: copy(const size_t t_dst, const cuda_array_bc_nogp<T, allocator>& src, const size_t t_src)
 {
-    // Configuration for reduction kernel
-    const size_t shmem_size_row = get_nx() * sizeof(value_t);
-    const dim3 blocksize_row(static_cast<int>(get_nx()), 1, 1);
-    const dim3 gridsize_row(1, static_cast<int>(get_my()), 1);
-
-    // temporary value profile
-    //value_t* h_tmp_profile(new value_t[Nx]);
-    // return value
-    ptr_t d_rval_ptr(my_alloc.alloc(sizeof(value_t)));
-    value_t rval{0.0};
-
-    if(tlev < get_tlevs())
-    {
-        // Store result of 2d->1d reduction
-        ptr_t d_tmp_profile(my_alloc.alloc(get_nx() * sizeof(value_t)));
-        // Copy data to non-strided memory layout
-        ptr_t device_copy(my_alloc.alloc(get_nx() * get_my() * sizeof(value_t)));
-        // Geometry of the temporary array, no padding
-        cuda::slab_layout_t tmp_geom{get_geom().get_xleft(), get_geom().get_deltax(), get_geom().get_ylo(), get_geom().get_deltay(),
-                                     get_geom().get_nx(), 0, get_geom().get_my(), 0, get_geom().get_grid()};
-        for(size_t n = 0; n < get_nx(); n++)
-        {
-            gpuErrchk(cudaMemcpy((void*) (device_copy.get() + n * get_my()),
-                                 (void*) (get_array_d(tlev) + n * (get_my() + geom.get_pad_y())), 
-                                 get_my() * sizeof(value_t), 
-                                 cudaMemcpyDeviceToDevice));
-        }
-        // Take the square of the absolute value
-        kernel_evaluate_2<<<get_grid(), get_block()>>>(device_copy.get(),
-                                                       [=] __device__ (value_t in, size_t n, size_t m, cuda::slab_layout_t geom ) -> value_t
-                                                       {
-                                                           return(abs(in) * abs(in));
-                                                           //return(in);
-                                                       },
-                                                       tmp_geom);
-        //value_t* tmp_arr(new value_t[Nx * My]);
-        //gpuErrchk(cudaMemcpy(tmp_arr, device_copy.get(), get_nx() * get_my() * sizeof(value_t), cudaMemcpyDeviceToHost));
-        //for(size_t n = 0; n < get_nx(); n++)
-        //{
-        //    for(size_t m = 0; m < get_my(); m++)
-        //    {
-        //        cout << tmp_arr[n * get_my() + m] << "\t";
-        //    }
-        //    cout << endl;
-        //}
-        //delete [] tmp_arr;
-        // Perform 2d -> 1d reduction
-        kernel_reduce<<<gridsize_row, blocksize_row, shmem_size_row>>>(device_copy.get(), d_tmp_profile.get(), 
-                                                                       [=] __device__ (value_t op1, value_t op2) -> value_t {return(op1 + op2);},
-                                                                       1, get_nx(), get_nx(), get_my());
-        //gpuErrchk(cudaMemcpy(h_tmp_profile, d_tmp_profile.get(), get_nx() * sizeof(value_t), cudaMemcpyDeviceToHost));
-        //for(size_t n = 0; n < Nx; n++)
-        //{
-        //    cout << n << ": " << h_tmp_profile[n] << endl;
-        //}
-        // Perform 1d -> 0d reduction
-        kernel_reduce<<<1, get_nx(), shmem_size_row>>>(d_tmp_profile.get(), d_rval_ptr.get(), 
-                                                       [=] __device__ (value_t op1, value_t op2) -> value_t {return(op1 + op2);},
-                                                       1, get_nx(), get_nx(), 1);
-        gpuErrchk(cudaMemcpy(&rval, (void*) d_rval_ptr.get(), sizeof(value_t), cudaMemcpyDeviceToHost));
-    }
-    else
-    {
-        stringstream err_msg;
-        err_msg << "cuda_array_bc_nogp<allocator> :: value_t cuda_array_bc_nogp<allocator> :: L2(const size_t tlev):    ";
-        err_msg << "tlev = " << tlev << " is out of bounds: get_tlevs() = " << get_tlevs() << "\n";
-        throw out_of_bounds_err(err_msg.str());
-    }
-
-    //delete [] h_tmp_profile;
-    return(sqrt(rval / static_cast<value_t>(get_nx() * get_my())));
-}
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator>::copy_device_to_host()
-{
-    for(size_t t = 0; t < tlevs; t++)
-    {
-        cout << "copy_device_to_host() t = " << t << endl;
-        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(value_t) * get_nelem_per_t(), cudaMemcpyDeviceToHost));	
-    }
-}
-
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: copy_host_to_device()
-{ 
-    for(size_t t = 0; t < tlevs; t++)
-        gpuErrchk(cudaMemcpy(&array_h[t * get_nelem_per_t()], get_array_d(t), sizeof(value_t) * get_nelem_per_t(), cudaMemcpyDeviceToHost));
-}
-
-
-template <typename allocator>
-void cuda_array_bc_nogp<allocator> :: copy(const size_t t_dst, const cuda_array_bc_nogp<allocator>& src,const size_t t_src)
-{
-    check_bounds(src.get_tlevs(), src.get_nx(), src.get_my());
-    cout << "copying array data t_dst = " << t_dst << ", t_src = " << t_src << endl;
-    gpuErrchk(cudaMemcpy(get_array_d(t_dst),
-                         src.get_array_d(t_src),
-                         get_nelem_per_t() * sizeof(value_t), cudaMemcpyDeviceToDevice));
+    check_bounds(t_dst, src.get_nx(), src.get_my());
+    std::cerr << "Not implemented yet " << std::endl;
+    //cout << "copying array data t_dst = " << t_dst << ", t_src = " << t_src << endl;
+    //my_alloc.copy(get_array_d(t_dst), src.get_array_d(t_src), get_nelem_per_t());
 }
 
 #endif /* cuda_array_bc_H_ */

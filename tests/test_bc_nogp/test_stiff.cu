@@ -25,12 +25,15 @@ int main(void)
                                    cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
     cuda::slab_layout_t my_geom(-10.0, 20.0 / double(Nx), -10.0, 20.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
-    cuda::stiff_params_t stiff_params(0.001, 20.0, 20.0, 0.001, 0.0, My, Nx / 2 + 1, 2);
+    cuda::stiff_params_t stiff_params(0.01, 20.0, 20.0, 0.1, 0.0, My, Nx / 2 + 1, 2);
     {
         slab_bc my_slab(my_geom, my_bvals, stiff_params);
+        //cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol(my_geom, my_bvals, 1);
+
         my_slab.initialize_gaussian(test_ns::field_t::arr1);
         my_slab.initialize_tint(test_ns::field_t::arr1);
 
+        //my_slab.integrate((cuDoubleComplex*) sol.get_array_d(0));
         //size_t t{0};
         //for(t = 0; t < num_tsteps; t++)
         //{
