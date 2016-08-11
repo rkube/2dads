@@ -8,21 +8,11 @@
 #include <cublas_v2.h>
 #include "cucmplx.h"
 #include "error.h"
+#include "2dads_types.h"
 #include "cuda_types.h"
 
 #ifndef SOLVERS_H
 #define SOLVERS_H
-
-//#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-//inline void gpuAssert(cudaError_t code, const char *file, int line)
-//{
-//    if (code != cudaSuccess)
-//    {
-//        std::stringstream err_str;
-//        err_str << "GPUassert: " << cudaGetErrorString(code) << "\t file: " << file << ", line: " << line << std::endl;
-//        throw gpu_error(err_str.str()); 
-//    }
-//}    
 
 // Structures for solver libraries
 // 
@@ -98,11 +88,11 @@ namespace solvers
             cuDoubleComplex* d_tmp_mat;
 
         public:
-            elliptic(const cuda::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
-                                                        My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
-                                                        Nx_int{static_cast<int>(_geom.get_nx())},
-                                                        inv_dx2{1.0 / (_geom.get_deltax() * _geom.get_deltax())}
-            {
+            elliptic(const twodads::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
+                                                           My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
+                                                           Nx_int{static_cast<int>(_geom.get_nx())},
+                                                           inv_dx2{1.0 / (_geom.get_deltax() * _geom.get_deltax())}
+             {
                 cudaError_t err;
                 if( (err = cudaMalloc((void**) &d_tmp_mat, get_nx() * get_my21() * sizeof(cuDoubleComplex))) != cudaSuccess)
                 {

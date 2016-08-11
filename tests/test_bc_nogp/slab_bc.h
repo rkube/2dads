@@ -11,11 +11,13 @@
 #include <string>
 #include <map>
 #include <cufft.h>
-#include "solvers.h"
+#include "2dads_types.h"
 #include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
-#include "derivatives.h"
-#include "integrators.h"
+#include "dft_type.h"
+//#include "solvers.h"
+//#include "derivatives.h"
+//#include "integrators.h"
 
 
 namespace test_ns{
@@ -25,12 +27,12 @@ namespace test_ns{
 class slab_bc
 {
     public:
-        using value_t = cuda::real_t;
+        using value_t = twodads::real_t;
 
-        using cuda_arr_real = cuda_array_bc_nogp<my_allocator_device<cuda::real_t>>;
-        using cuda_arr_cmpl = cuda_array_bc_nogp<my_allocator_device<cuda::cmplx_t>>;
+        using cuda_arr_real = cuda_array_bc_nogp<twodads::real_t, allocator_device>;
+        using cuda_arr_cmpl = cuda_array_bc_nogp<twodads::cmplx_t, allocator_device>;
 
-        slab_bc(const cuda::slab_layout_t, const cuda::bvals_t<real_t>, const cuda::stiff_params_t);
+        slab_bc(const twodads::slab_layout_t, const twodads::bvals_t<twodads::real_t>, const twodads::stiff_params_t);
         ~slab_bc();
 
         void dft_r2c(const test_ns::field_t, const size_t);
@@ -50,28 +52,28 @@ class slab_bc
         void arakawa(const test_ns::field_t, const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
         void print_field(const test_ns::field_t) const;
-        void print_field(const test_ns::field_t, const string) const;
+        void print_field(const test_ns::field_t, const std::string) const;
 
         void initialize_tint(const test_ns::field_t);
         void integrate(const test_ns::field_t);
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
-        inline cuda::slab_layout_t get_geom() const {return(geom);};
-        inline cuda::bvals_t<cuda::real_t> get_bvals() const {return(boundaries);};
+        inline twodads::slab_layout_t get_geom() const {return(geom);};
+        inline twodads::bvals_t<twodads::real_t> get_bvals() const {return(boundaries);};
     private:
         const size_t Nx;
         const size_t My;
         const size_t tlevs;
 
-        const cuda::bvals_t<cuda::real_t> boundaries;
-        const cuda::slab_layout_t geom;
+        const twodads::bvals_t<twodads::real_t> boundaries;
+        const twodads::slab_layout_t geom;
 
         //solvers::cublas_handle_t cublas_handle;
         //solvers::cusparse_handle_t cusparse_handle;
 
-        derivs<my_allocator_device<cuda::real_t>> der;
-        dft_object_t<cuda::real_t> myfft;
-        integrator<my_allocator_device<cuda::real_t>>* tint;
+        //derivs<allocator_device<twodads::real_t>> der;
+        dft_object_t<twodads::real_t>* myfft;
+        //integrator<my_allocator_device<twodads::real_t>>* tint;
 
         cuda_arr_real arr1;
         cuda_arr_real arr1_x;

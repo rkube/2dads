@@ -49,6 +49,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <memory>
+#include "2dads_types.h"
 #include "bounds.h"
 #include "address.h"
 #include "error.h"
@@ -56,7 +57,6 @@
 #include "allocators.h"
 
 
-// Error checking macro for cuda calls
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line)
 {
@@ -77,7 +77,7 @@ inline void gpuVerifyLaunch(const char* file, int line)
      cudaError_t error = cudaGetLastError();
      if(error != cudaSuccess)
      {
-         std::stringstream err_str;
+        std::stringstream err_str;
         err_str << "GPUassert: " << cudaGetErrorString(error) << "\t file: " << file << ", line: " << line << "\n";
         throw gpu_error(err_str.str());
      }
@@ -100,7 +100,7 @@ namespace device
 #ifdef __CUDACC__
     /// Return true if row and column are within geom(excluding padded rows/cols)
     /// Return false if row or column is outside the geometry
-    __device__ inline bool good_idx(size_t row, size_t col, const cuda::slab_layout_t geom)
+    __device__ inline bool good_idx(size_t row, size_t col, const twodads::slab_layout_t geom)
     {
         return((row < geom.get_nx()) && (col < geom.get_my()));
     }
@@ -108,9 +108,9 @@ namespace device
 
     template <typename T>
     __global__
-    void kernel_set_tlev_ptr(T* data, T** tlev_ptr, const cuda::slab_layout_t geom)
+    void kernel_set_tlev_ptr(T* data, T** tlev_ptr, const size_t tlevs, const twodads::slab_layout_t geom)
     {
-        for(size_t t = 0; t < geom.get_tlevs(); t++)
+        for(size_t t = 0; t < tlevs; t++)
         {
             tlev_ptr[t] = &data[t * geom.get_nelem_per_t()];
             printf("I am kernel set_tlev_ptr: tlev_ptr[%u] at %p\n", t, tlev_ptr[t]);
@@ -122,7 +122,7 @@ namespace device
     /// op_func(T, size_t, size_t, slab_layout_t)
     template <typename T, typename O>
     __global__
-    void kernel_apply(T* array_d_t, O device_func, const cuda::slab_layout_t geom) 
+    void kernel_apply(T* array_d_t, O device_func, const twodads::slab_layout_t geom) 
     {
         const size_t col{cuda :: thread_idx :: get_col()};
         const size_t row{cuda :: thread_idx :: get_row()};
@@ -136,7 +136,7 @@ namespace device
     /// Perform element-wise arithmetic operation lhs[idx] = op(lhs[idx], rhs[idx])
     template<typename T, typename O>
     __global__
-    void kernel_elementwise(T* lhs, T* rhs, O device_func, const cuda::slab_layout_t geom)
+    void kernel_elementwise(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom)
     {
         const size_t col{cuda :: thread_idx :: get_col()};
         const size_t row{cuda :: thread_idx :: get_row()};
@@ -151,8 +151,8 @@ namespace device
     template <typename T>
     __global__
     void kernel_init_address(address_t<T>** my_address, 
-            const cuda::slab_layout_t geom, 
-            const cuda::bvals_t<T> bvals)
+            const twodads::slab_layout_t geom, 
+            const twodads::bvals_t<T> bvals)
     {
         *my_address = new address_t<T>(geom, bvals);
         printf("kernel_init_address: address_t at %p\n", *my_address);
@@ -161,7 +161,7 @@ namespace device
 
     template <typename T>
     __global__
-    void kernel_use_address(const T* u, address_t<T>** address_u, const cuda::slab_layout_t geom)
+    void kernel_use_address(const T* u, address_t<T>** address_u, const twodads::slab_layout_t geom)
     {
         printf("kernel_use_address: address_t at %p\n", address_u);
         const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
@@ -250,7 +250,7 @@ template <typename T, template <typename> class allocator> class cuda_array_bc_n
 namespace host
 {
     template <typename T, typename O>
-    void host_apply(T* data_ptr, O host_func, const cuda::slab_layout_t geom)
+    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t geom)
     {
         size_t index{0};
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -265,7 +265,7 @@ namespace host
     }
 
     template <typename T, typename O>
-    void host_elementwise(T* lhs, T* rhs, O host_func, const cuda::slab_layout_t geom)
+    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t geom)
     {
         size_t index{0};
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -286,9 +286,7 @@ namespace utility
     template <typename T>
     cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>& src)
     {
-        std::cout << "Creating host vector\n";
-        cuda_array_bc_nogp<T, allocator_host> res (src.get_geom(), src.get_bvals());
-        std::cout << "Copying " << src.get_geom().get_tlevs() << "(" <<  res.get_geom().get_tlevs() << ") * " << src.get_geom().get_nelem_per_t() <<  "*" << sizeof(T) << " bytes" << std::endl;
+        cuda_array_bc_nogp<T, allocator_host> res (src.get_geom(), src.get_bvals(), src.get_tlevs());
         for(size_t t = 0; t < src.get_tlevs(); t++)
         {
             gpuErrchk(cudaMemcpy(res.get_tlev_ptr(t), src.get_tlev_ptr(t), src.get_geom().get_nelem_per_t() * sizeof(T), cudaMemcpyDeviceToHost));
@@ -317,7 +315,7 @@ namespace utility
         {
             for(size_t m = 0; m < vec.get_geom().get_my(); m++)
             {
-                os << std::setw(cuda::io_w) << std::setprecision(cuda::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
             }
             os << std::endl;
         }
@@ -333,16 +331,16 @@ namespace detail
     /// data_tlev_ptr[1] = data[0] + nelem 
     /// ...
     template <typename T>
-    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const cuda::slab_layout_t sl, allocator_device<T>)
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t sl, allocator_device<T>)
     {
-        device :: kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, sl);
+        device :: kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, tlevs, sl);
     }
 
 
     template <typename T>
-    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const cuda::slab_layout_t sl, allocator_host<T>)
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t sl, allocator_host<T>)
     {
-        for(size_t t = 0; t < sl.get_tlevs(); t++)
+        for(size_t t = 0; t < tlevs; t++)
         {
             data_tlev_ptr[t] = data + t * sl.get_nelem_per_t();
             std::cout << "data_tlev_ptr[" << t << "] at " << data_tlev_ptr[t] << std::endl;
@@ -355,7 +353,7 @@ namespace detail
     // The device implementation uses address_2ptr, an address_t<T>**, while the host implementation uses
     // an address_t<T>*.
     template <typename T>
-    inline address_t<T>* impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const cuda::slab_layout_t geom, const cuda::bvals_t<T> bvals, allocator_device<T>)
+    inline address_t<T>* impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t geom, const twodads::bvals_t<T> bvals, allocator_device<T>)
     {
         gpuErrchk(cudaMalloc(&address_2ptr, sizeof(address_t<T>**)));
         device :: kernel_init_address<<<1, 1>>>(address_2ptr, geom, bvals);
@@ -375,7 +373,7 @@ namespace detail
 
     
     template <typename T>
-    inline void impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const cuda::slab_layout_t geom, const cuda::bvals_t<T> bvals, allocator_host<T>)
+    inline void impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t geom, const twodads::bvals_t<T> bvals, allocator_host<T>)
     {
         address_ptr = new address_t<T>(geom, bvals);
         //std::cerr << "impl_init_address(host): address_ptr -> " << address_ptr << std::endl;
@@ -409,66 +407,66 @@ namespace detail
 
 
     template <typename T>
-    inline void impl_initialize(T* data_ptr, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    inline void impl_initialize(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_apply<<<grid, block>>>(data_ptr, 
-                                      [=] __device__ (T value, size_t n, size_t m, cuda::slab_layout_t geom) -> T {return(T(0.0));},
+                                      [=] __device__ (T value, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(T(0.0));},
                                       geom);
     }
 
 
     template <typename T>
-    void impl_initialize(T* data_ptr, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_initialize(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, [=] (T value, size_t n, size_t m, cuda::slab_layout_t geom) -> T {return(T(0.0));}, geom);
+        host :: host_apply(data_ptr, [=] (T value, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(T(0.0));}, geom);
     }
 
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_apply<<<grid, block>>>(data_ptr, myfunc, geom);   
     }
 
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
         host :: host_apply(data_ptr, myfunc, geom);
     }
 
 
     template <typename T>
-    inline void impl_normalize_1d(T* data_ptr, const cuda::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    inline void impl_normalize_1d(T* data_ptr, const twodads::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, [=] (T value, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> T
+        host :: host_apply(data_ptr, [=] (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T
                                      { return(value / geom.get_my()); },
                            geom);
     }
 
 
     template <typename T>
-    inline void impl_normalize_2d(T* data_ptr, const cuda::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    inline void impl_normalize_2d(T* data_ptr, const twodads::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, [=] (T value, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> T
+        host :: host_apply(data_ptr, [=] (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T
                                      { return(value / (geom.get_nx() * geom.get_my())); },
                            geom);
     }
 
     template <typename T>
-    inline void impl_normalize_1d(T* data_ptr, const cuda::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    inline void impl_normalize_1d(T* data_ptr, const twodads::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_apply<<<grid, block>>>(data_ptr, 
-                                                [=] __device__ (T data, size_t n, size_t m, cuda::slab_layout_t geom) -> T {return(data / T(geom.get_my()));},
+                                                [=] __device__ (T data, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(data / T(geom.get_my()));},
                                                 geom);
     }
 
 
     template <typename T>
-    inline void impl_normalize_2d(T* data_ptr, const cuda::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    inline void impl_normalize_2d(T* data_ptr, const twodads::slab_layout_t& geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_apply<<<grid, block>>>(data_ptr, 
-                                                [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom) -> T
+                                                [=] __device__ (T in, size_t n, size_t m, twodads::slab_layout_t geom) -> T
                                                 {return(in / T(geom.get_nx() * geom.get_my()));},
                                                 geom);
     }
@@ -493,49 +491,49 @@ namespace detail
 
 
     template <typename T>
-    void impl_op_plus_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_plus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [=] (T lhs, T rhs) -> T {return(lhs + rhs);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_plus_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    void impl_op_plus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_elementwise<<<grid, block>>>(lhs, rhs, [=] __device__ (T lhs, T rhs) -> T {return(lhs + rhs);}, geom);
     }
 
 
     template <typename T>
-    void impl_op_minus_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_minus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [=] (T lhs, T rhs) -> T {return(lhs - rhs);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_minus_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    void impl_op_minus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         host :: host_elementwise(lhs, rhs, [=] (T lhs, T rhs) -> T {return(lhs - rhs);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_mult_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_mult_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [=] (T lhs, T rhs) -> T {return(lhs * rhs);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_mult_equal(T* lhs, T* rhs, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    void impl_op_mult_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         device :: kernel_elementwise(lhs, rhs, [=] (T lhs, T rhs) -> T {return(lhs * rhs);}, geom);
     }
  
 
     template <typename T>
-    T impl_reduce(T* data_ptr, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    T impl_reduce(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
     {
         T tmp{0.0};
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -550,7 +548,7 @@ namespace detail
 
 
     template <typename T>
-    T impl_reduce(T* data_ptr, const cuda::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    T impl_reduce(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
     {
         // Configuration for reduction kernel
         const size_t shmem_size_row = geom.get_nx() * sizeof(T);
@@ -573,8 +571,8 @@ namespace detail
         gpuErrchk(cudaMalloc((void**) &device_copy, geom.get_nx() * geom.get_my() * sizeof(T)));
 
         // Geometry of the temporary array, no padding
-        cuda::slab_layout_t tmp_geom{geom.get_xleft(), geom.get_deltax(), geom.get_ylo(), geom.get_deltay(),
-                                     geom.get_nx(), 0, geom.get_my(), 0, geom.get_grid(), geom.get_tlevs()};
+        twodads::slab_layout_t tmp_geom{geom.get_xleft(), geom.get_deltax(), geom.get_ylo(), geom.get_deltay(),
+                                     geom.get_nx(), 0, geom.get_my(), 0, geom.get_grid()};
 
         // Create device copy column-wise, ignore padding
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -587,7 +585,7 @@ namespace detail
 
         // Take the square of the absolute value
         device :: kernel_apply<<<grid, block>>>(device_copy,
-                                                [=] __device__ (T in, size_t n, size_t m, cuda::slab_layout_t geom ) -> T 
+                                                [=] __device__ (T in, size_t n, size_t m, twodads::slab_layout_t geom ) -> T 
                                                 {return(abs(in) * abs(in));}, 
                                                 tmp_geom);
         //T* tmp_arr(new T[Nx * My]);
@@ -640,7 +638,7 @@ public:
     using p_deleter_type = typename my_allocator_traits<T*, allocator> :: deleter_type;
     using pptr_type = std::unique_ptr<T*, p_deleter_type>;
 
-	cuda_array_bc_nogp(const cuda::slab_layout_t, const cuda::bvals_t<T>);
+	cuda_array_bc_nogp(const twodads::slab_layout_t, const twodads::bvals_t<T>, const size_t _tlevs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>* rhs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs);
 
@@ -684,9 +682,9 @@ public:
 	// Access to private members
 	inline size_t get_nx() const {return(get_geom().get_nx());};
 	inline size_t get_my() const {return(get_geom().get_my());};
-	inline size_t get_tlevs() const {return(get_geom().get_tlevs());};
-    inline cuda::slab_layout_t get_geom() const {return(geom);};
-    inline cuda::bvals_t<T> get_bvals() const {return(boundaries);};
+	inline size_t get_tlevs() const {return(tlevs);};
+    inline twodads::slab_layout_t get_geom() const {return(geom);};
+    inline twodads::bvals_t<T> get_bvals() const {return(boundaries);};
     // We are working with 2 pointer levels, since we instantiate an address object 
     // in a cuda kernel in the constructor. That way, we can just pass this
     // pointer to all cuda kernels that need an address object.
@@ -719,8 +717,9 @@ public:
 
 private:
     const bounds array_bounds;
-	const cuda::bvals_t<T> boundaries;
-    const cuda::slab_layout_t geom;
+	const twodads::bvals_t<T> boundaries;
+    const twodads::slab_layout_t geom;
+    const size_t tlevs;
     bool transformed;
 
     allocator_type my_alloc;
@@ -746,10 +745,11 @@ private:
 
 
 template <typename T, template<typename> class allocator>
-cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const cuda::slab_layout_t _geom, const cuda::bvals_t<T> bvals) : 
+cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layout_t _geom, const twodads::bvals_t<T> bvals, const size_t _tlevs) : 
         array_bounds(get_tlevs(), get_nx(), get_my()),
         boundaries(bvals), 
         geom(_geom), 
+        tlevs(_tlevs),
         transformed{false},
         address_2ptr{nullptr},
         address_ptr{nullptr},
@@ -767,7 +767,7 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const cuda::slab_layout_
     //cout << geom << endl;
 
     // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
-    detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_geom(), allocator_type{});
+    detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
    
     // Initialize the address object
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
@@ -789,7 +789,7 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<
 
 template <typename T, template <typename> class allocator>
 cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs) :
-    cuda_array_bc_nogp(rhs.get_geom(), rhs.get_bvals()) 
+    cuda_array_bc_nogp(rhs.get_geom(), rhs.get_bvals(), rhs.get_tlevs()) 
 {
     my_alloc.copy(rhs.get_data(), rhs.get_data() + get_tlevs() * get_geom().get_nelem_per_t(), get_data());
     my_palloc.copy(rhs.get_tlev_ptr(), rhs.get_tlev_ptr() + get_tlevs(), get_tlev_ptr());
@@ -808,7 +808,7 @@ cuda_array_bc_nogp<T, allocator> :: ~cuda_array_bc_nogp()
 template <typename T, template <typename> class allocator>
 inline T* cuda_array_bc_nogp<T, allocator> :: get_tlev_ptr(const size_t tlev) const
 {
-    return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tlev, get_geom().get_tlevs(), allocator_type{}));
+    return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tlev, get_tlevs(), allocator_type{}));
 }
 
 
@@ -829,7 +829,7 @@ inline void cuda_array_bc_nogp<T, allocator> :: initialize(const size_t tlev)
 template <typename T, template <typename> class allocator>
 inline void cuda_array_bc_nogp<T, allocator> :: initialize()
 {
-    for(size_t t = 0; t < get_geom().get_tlevs(); t++)
+    for(size_t t = 0; t < get_tlevs(); t++)
     {
         initialize(t);
     }
@@ -945,13 +945,13 @@ inline void cuda_array_bc_nogp<T, allocator> :: normalize(const size_t tlev)
     // If we made a 1d DFT normalize by My. Otherwise nomalize by Nx * My
     switch (boundaries.get_bc_left())
     {
-        case cuda::bc_t::bc_dirichlet:
+        case twodads::bc_t::bc_dirichlet:
             // fall through
-        case cuda::bc_t::bc_neumann:
+        case twodads::bc_t::bc_neumann:
             detail :: impl_normalize_1d(get_tlev_ptr(tlev), get_geom(), get_grid(), get_block(), allocator_type{});
             break;
 
-        case cuda::bc_t::bc_periodic:
+        case twodads::bc_t::bc_periodic:
             detail :: impl_normalize_2d(get_tlev_ptr(tlev), get_geom(), get_grid(), get_block(), allocator_type{});
             break;
     }

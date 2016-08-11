@@ -10,7 +10,7 @@
 #define CUDA_MEMBER
 #endif
 
-#include "cuda_types.h"
+#include "2dads_types.h"
 #include "error.h"
 #include "bounds.h"
 
@@ -82,7 +82,7 @@ template <typename T>
 class address_t
 {
     public:
-        CUDA_MEMBER address_t(const cuda::slab_layout_t _sl, const cuda::bvals_t<T> _bv) : Nx(_sl.get_nx()), 
+        CUDA_MEMBER address_t(const twodads::slab_layout_t _sl, const twodads::bvals_t<T> _bv) : Nx(_sl.get_nx()), 
                                                                                            My(_sl.get_my()), 
                                                                                            pad_My(_sl.get_pad_y()), 
                                                                                            deltax(_sl.get_deltax()), 
@@ -93,30 +93,30 @@ class address_t
             {
                 switch(bv.get_bc_left())
                 {
-                    case cuda::bc_t::bc_dirichlet:
+                    case twodads::bc_t::bc_dirichlet:
                         gp_interpolator_left = new bval_interpolator_dirichlet_left<T>(bv.get_bv_left());
                         break;
 
-                    case cuda::bc_t::bc_neumann:
+                    case twodads::bc_t::bc_neumann:
                         gp_interpolator_left = new bval_interpolator_neumann_left<T>(bv.get_bv_left());
                         break;
                     // Periodic BCs in x are not implemented with FDs. set a nullptr and hope it fails somewhere down the line
                     // with an illegal memory access :)
-                    case cuda::bc_t::bc_periodic:
+                    case twodads::bc_t::bc_periodic:
                     default:
                         break;
                 }
            
                 switch(bv.get_bc_right())
                 {
-                    case cuda::bc_t::bc_dirichlet:
+                    case twodads::bc_t::bc_dirichlet:
                         gp_interpolator_right = new bval_interpolator_dirichlet_right<T>(bv.get_bv_right());
                         break;
 
-                    case cuda::bc_t::bc_neumann:
+                    case twodads::bc_t::bc_neumann:
                         gp_interpolator_right = new bval_interpolator_neumann_right<T>(bv.get_bv_right());
                         break;
-                    case cuda::bc_t::bc_periodic:
+                    case twodads::bc_t::bc_periodic:
                     default:
                         break;
                 }
@@ -190,7 +190,7 @@ class address_t
         // Sample discretization in y
         const T deltay;
         // The boundary values and conditions of the array
-        const cuda::bvals_t<T> bv;
+        const twodads::bvals_t<T> bv;
         // Interpolator to get ghost points left n=-1
         bval_interpolator<T>* gp_interpolator_left;
         // Interpolator to get ghost points right, n=Nx
