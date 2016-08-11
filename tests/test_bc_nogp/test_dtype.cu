@@ -13,6 +13,7 @@ int main(void)
 
     size_t Nx{128};
     size_t My{32};
+    cout << "My at " << &My << endl;
     const size_t tlevs{4};
     cout << "Enter Nx: " << endl;
     cin >> Nx;
@@ -22,18 +23,38 @@ int main(void)
     cuda::slab_layout_t my_geom(0.0, 1.0 / cuda::real_t(Nx), 0.0, 1.0 / cuda::real_t(My), Nx, 0, My, 2, tlevs, cuda::grid_t::cell_centered);
     cuda::bvals_t<value_t> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
-    cout << "Entering scopy" << endl;
+    cout << "Entering scope" << endl;
     {
         cuda_array_bc_nogp<value_t, allocator_device> vd (my_geom, my_bvals);
-        vd.evaluate([=] __device__ (const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 0);
-        //vh.evaluate([=] (const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 0);
+        vd.apply([=] __device__ (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(1.2);}, 0);
+        vd.apply([=] __device__ (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(2.2);}, 1);
+        vd.apply([=] __device__ (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 2);
+        vd.apply([=] __device__ (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(4.2);}, 3);
+        cuda_array_bc_nogp<value_t, allocator_host> vh = utility :: create_host_vector(vd);
+
+        //cuda_array_bc_nogp<value_t, allocator_host> vh (my_geom, my_bvals);
+        //vh.apply([=] (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(1.2);}, 0);
+        //vh.apply([=] (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(2.2);}, 1);
+        //vh.apply([=] (value_t dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(3.2);}, 2);
+        //vh.apply([=] ( dummy, const size_t n, const size_t m, const cuda::slab_layout_t geom) -> value_t {return(4.2);}, 3);
 
         // Create a host copy and print the device data
         //cuda_array_bc_nogp<value_t, allocator_host> vh = utility :: create_host_vector(vd);
-        //for(size_t t = 0; t < tlevs; t++)
-        //{
-        //    //vh.print(t);
-        //} 
+        for(size_t t = 0; t < tlevs; t++)
+        {
+            cout << t << endl;
+            utility :: print(vh, t, std::cout);
+        } 
+        cout << "=================================== advance ========================" << endl;
+
+        vd.advance();
+        utility :: update_host_vector(vh, vd);
+        for(size_t t = 0; t < tlevs; t++)
+        {
+            cout << t << endl;
+            utility :: print(vh, t, std::cout);
+        } 
+
     }
     cout << "Leaving scope and exiting" << endl;
     cudaDeviceReset();

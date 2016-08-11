@@ -93,6 +93,15 @@ namespace cuda
         const cuda::grid_t grid;
         const real_t cellshift;
 
+        CUDAMEMBER inline bool operator==(const slab_layout_t& rhs)
+        {
+            return((get_nx() == rhs.get_nx()) &&
+                   (get_my() == rhs.get_my()) &&
+                   (get_pad_x() == rhs.get_pad_x()) &&
+                   (get_pad_y() == rhs.get_pad_y()) &&
+                   (get_tlevs() == rhs.get_tlevs())); 
+        }
+
         CUDAMEMBER inline real_t get_xleft() const {return(x_left);};
         CUDAMEMBER inline real_t get_deltax() const {return(delta_x);};
         CUDAMEMBER inline real_t get_xright() const {return(x_left + static_cast<real_t>(Nx) * get_deltax());};
@@ -113,7 +122,7 @@ namespace cuda
 
         CUDAMEMBER inline size_t get_tlevs() const {return(tlevs);};
 
-        CUDAMEMBER inline size_t get_nelem_per_t() const {return((Nx + pad_x) * (My + pad_y));};
+        CUDAMEMBER inline size_t get_nelem_per_t() const {return((get_nx() + get_pad_x()) * (get_my() + get_pad_y()));};
         CUDAMEMBER inline cuda::grid_t get_grid() const {return(grid);};
         CUDAMEMBER inline real_t get_cellshift() const {return(cellshift);};
     } __attribute__ ((aligned (8)));
@@ -221,6 +230,15 @@ namespace cuda
             const size_t Nx21;
             const size_t level;
     } __attribute__ ((aligned (8)));
+
+    #ifdef __CUDACC__
+    struct thread_idx
+    {
+        static __device__ size_t get_col() {return(blockIdx.x * blockDim.x + threadIdx.x);}
+        static __device__ size_t get_row() {return(blockIdx.y * blockDim.y + threadIdx.y);}
+        __device__ thread_idx(){}
+    };
+    #endif //__CUDACC
 
     //constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
     constexpr real_t ss3_alpha_r[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
