@@ -21,7 +21,6 @@
  */
 
 #include <iostream>
-#include <fstream>
 #include <sstream>
 #include "slab_bc.h"
 
@@ -29,6 +28,11 @@ using namespace std;
 
 
 int main(void){
+    constexpr twodads::real_t x_l{-1.0};
+    constexpr twodads::real_t Lx{2.0};
+    constexpr twodads::real_t y_l{-1.0};
+    constexpr twodads::real_t Ly{2.0};
+
     size_t Nx{128};
     size_t My{128};
     cout << "Enter Nx: ";
@@ -39,26 +43,26 @@ int main(void){
     stringstream fname;
     ofstream of;
 
-    cuda::slab_layout_t my_geom(-1.0, 2.0 / double(Nx), -1.0, 2.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
-    cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
+    twodads::slab_layout_t my_geom(x_l, Lx / twodads::real_t(Nx), y_l, Ly / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
+    twodads::bvals_t<double> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic,
         0.0, 0.0, 0.0, 0.0};
+    twodads::stiff_params_t stiff_params(0.1, Lx, Ly, 0.1, 0.0, Nx, My / 2 + 1, 4);
 
     {
-        slab_bc my_slab(my_geom, my_bvals);
-        cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_an(my_geom, my_bvals, 1);
-        sol_an.evaluate([=] __device__ (size_t n, size_t m, cuda::slab_layout_t geom) -> cuda::real_t
+        slab_bc my_slab(my_geom, my_bvals, stiff_params);
+        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
+        sol_an.apply([=] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
                 {
-                    cuda::real_t x{geom.get_x(n)};
-                    cuda::real_t y{geom.get_y(m)};
-                    return(16.0 * cuda::PI * cuda::PI * cos(cuda::PI * x) * cos(cuda::PI * y) * (cos(cuda::TWOPI * x) - cos(cuda::TWOPI * y)) * sin(cuda::PI * x) * sin(cuda::PI * x) * sin(cuda::PI * y) * sin(cuda::PI * y));
+                    twodads::real_t x{geom.get_x(n)};
+                    twodads::real_t y{geom.get_y(m)};
+                    return(16.0 * twodads::PI * twodads::PI * cos(twodads::PI * x) * cos(twodads::PI * y) * (cos(twodads::TWOPI * x) - cos(twodads::TWOPI * y)) * sin(twodads::PI * x) * sin(twodads::PI * x) * sin(twodads::PI * y) * sin(twodads::PI * y));
                 }, 
                 0);
 
         fname.str(string(""));
         fname << "test_arakawa_solan_" << Nx << "_out.dat";
-        of.open(fname.str());
-        of << sol_an;
-        of.close();
+        cout << "sol_an: L2 = " << sol_an.L2(0) << endl;
+        utility :: print(sol_an, 0, fname.str());
 
         //cerr << "Initializing fields..." << endl;
         my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2);
@@ -77,16 +81,15 @@ int main(void){
         fname << "test_arakawa_solnum_" << Nx << "_out.dat";
         my_slab.print_field(test_ns::field_t::arr3, fname.str());
        
-        cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
+        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
+        cout << "sol_num: L2 = " << sol_num.L2(0) << endl;
         sol_num -= sol_an;
 
         cout << "sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
 
         fname.str(string(""));
         fname << "test_arakawa_diff_" << Nx << "_out.dat";
-        of.open(fname.str());
-        of << sol_num;
-        of.close();
+        utility :: print(sol_num, 0, fname.str());
     }
     cudaDeviceReset();
 }

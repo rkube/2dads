@@ -15,8 +15,8 @@
 namespace cuda
 {
     using real_t = double;
-    constexpr unsigned int blockdim_col{4}; ///< Block dimension for consecutive elements (y-direction)
-    constexpr unsigned int blockdim_row{4}; ///< Block dimension for non-consecutive elements (x-direction)
+    constexpr unsigned int blockdim_col{32}; ///< Block dimension for consecutive elements (y-direction)
+    constexpr unsigned int blockdim_row{16}; ///< Block dimension for non-consecutive elements (x-direction)
 
     constexpr unsigned int blockdim_nx_max{1024};
     constexpr unsigned int blockdim_my_max{1024};
@@ -47,6 +47,7 @@ namespace cuda
     {
         static __device__ size_t get_col() {return(blockIdx.x * blockDim.x + threadIdx.x);}
         static __device__ size_t get_row() {return(blockIdx.y * blockDim.y + threadIdx.y);}
+
         __device__ thread_idx(){}
     };
 

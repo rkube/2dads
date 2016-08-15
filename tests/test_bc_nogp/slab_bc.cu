@@ -9,8 +9,8 @@ using namespace std;
 slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) :
     Nx(_sl.Nx), My(_sl.My), tlevs(1), 
     boundaries(_bc), geom(_sl), 
-    //der(_sl), 
     myfft{new cufft_object_t<twodads::real_t>(get_geom(), twodads::dft_t::dft_1d)},
+    my_derivs(get_geom()),
     //tint(new integrator_karniadakis<my_allocator_device<twodads::real_t>>
     //        (get_geom(), get_bvals(),  _sp)),
     arr1(_sl, _bc, 1), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
@@ -32,19 +32,23 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
 
 void slab_bc :: print_field(const test_ns::field_t fname) const
 {
-    // Create a host vector from fname and print to coud
-    cuda_array_bc_nogp<twodads::real_t, allocator_host> tmp = utility :: create_host_vector((*get_field_by_name.at(fname))); 
-    utility :: print(tmp, 0, std::cout);
+    // Use this when running device code
+    utility :: print(utility :: create_host_vector(get_field_by_name.at(fname)), 0, std::cout);
+
+    // Use this when running host code
+    //utility :: print((*get_field_by_name.at(fname)), 0, std::cout);
 }
 
 
 void slab_bc :: print_field(const test_ns::field_t fname, const string file_name) const
 {
-    //get_field_by_name.at(fname) -> copy_device_to_host();
     ofstream output_file;
     output_file.open(file_name.data());
-    cuda_array_bc_nogp<twodads::real_t, allocator_host> tmp = utility :: create_host_vector((*get_field_by_name.at(fname))); 
-    utility :: print(tmp, 0, output_file);
+    // Use this when running device code
+    utility :: print(utility :: create_host_vector(get_field_by_name.at(fname)), 0, output_file);
+
+    //Use this when running host code
+    //utility :: print((*get_field_by_name.at(fname)), 0, output_file);
     output_file.close();
 }
 
@@ -83,6 +87,7 @@ void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
 void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
+    //(*arr).apply([=] (twodads::real_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t
     (*arr).apply([=] __device__ (twodads::real_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t
                 {
                     const value_t x{geom.get_x(n)};
@@ -95,6 +100,7 @@ void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
 void slab_bc :: initialize_sine(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
+    //(*arr).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr).apply([=] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                  {
                     return(sin(twodads::TWOPI * geom.get_x(n)) + 0.0 * sin(twodads::TWOPI * geom.get_y(m)));
@@ -108,6 +114,7 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
   
     // arr1 =-sin^2(2 pi y) sin^2(2 pi x). Dirichlet bc, f(-1, y) = f(1, y) = 0.0
+    //(*arr1).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr1).apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                   {
                     value_t x{geom.get_x(n)};
@@ -116,6 +123,7 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
                   }, 0);
 
     // arr2 = sin(pi x) sin (pi y). Dirichlet BC: g(-1, y) = g(1, y) = 0.0
+    //(*arr2).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr2).apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                   {
                     return(sin(twodads::PI * geom.get_x(n)) * sin(twodads::PI * geom.get_y(m)));
@@ -128,11 +136,13 @@ void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test
     cuda_arr_real* arr1 = get_field_by_name.at(fname1);
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
 
+    //(*arr1).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr1).apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 return(sin(twodads::TWOPI * geom.get_x(n)));
             }, 0);
 
+    //(*arr2).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr2).apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 value_t y{geom.get_y(m)};
@@ -144,6 +154,7 @@ void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test
 void slab_bc :: initialize_dfttest(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
+    //(*arr).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr).apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
            {       
                return(sin(twodads::TWOPI * geom.get_y(m)));
@@ -154,6 +165,7 @@ void slab_bc :: initialize_dfttest(const test_ns::field_t fname)
 void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
+    //(*arr).apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
     (*arr).apply([=] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {
                 return(exp(-0.5 * (geom.get_x(n) * geom.get_x(n) + geom.get_y(m) * geom.get_y(m)) ) );
@@ -162,22 +174,22 @@ void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
 
 
 // Compute x-derivative
-//void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
-//                     const size_t d, const size_t t_src, const size_t t_dst)
-//{
-//    cuda_arr_real* arr_src{get_field_by_name.at(fname_src)};
-//    cuda_arr_real* arr_dst{get_field_by_name.at(fname_dst)};
-//
-//    if(d == 1)
-//    {
-//        cout << "slab_bc :: computing d_dx" << endl;
-//        der.dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
-//    }
-//    else if (d == 2)
-//    {
-//        der.dx_2((*arr_src), (*arr_dst), t_src, t_dst);
-//    }
-//}
+void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
+                     const size_t d, const size_t t_src, const size_t t_dst)
+{
+    cuda_arr_real* arr_src{get_field_by_name.at(fname_src)};
+    cuda_arr_real* arr_dst{get_field_by_name.at(fname_dst)};
+
+    if(d == 1)
+    {
+        cout << "slab_bc :: computing d_dx" << endl;
+        my_derivs.dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
+    }
+    else if (d == 2)
+    {
+        my_derivs.dx_2((*arr_src), (*arr_dst), t_src, t_dst);
+    }
+}
 
 
 // Compute y-derivative
@@ -208,15 +220,15 @@ void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
 // fname_arr_res: array where we store the result
 // t_src: time level at which f and g are taken
 // t_dst: time level where we store the result in res
-//void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
-//                        const size_t t_src, const size_t t_dst)
-//{
-//    cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
-//    cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
-//    cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
-//
-//    der.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
-//}
+void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
+                        const size_t t_src, const size_t t_dst)
+{
+    cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
+    cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
+    cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
+
+    my_derivs.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
+}
 
 
 // Invert the laplace equation

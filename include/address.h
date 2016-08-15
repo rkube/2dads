@@ -42,7 +42,7 @@ class bval_interpolator_dirichlet_left : public bval_interpolator<T>
     public:
         CUDA_MEMBER bval_interpolator_dirichlet_left(const T _bval) : bval_interpolator<T>(_bval) {};
         CUDA_MEMBER ~bval_interpolator_dirichlet_left() {};
-        CUDA_MEMBER virtual inline T operator()(const T uval, const T deltax) const {return(2.0 * bval_interpolator<T>::get_bval() - uval);} ;
+        CUDA_MEMBER virtual inline T operator()(const T uval, const T deltax) const {return(bval_interpolator<T>::get_bval() * 2.0 - uval);} ;
 };
 
 
@@ -52,7 +52,7 @@ class bval_interpolator_dirichlet_right : public bval_interpolator<T>
     public:
         CUDA_MEMBER bval_interpolator_dirichlet_right(const T _bval) : bval_interpolator<T>(_bval) {};
         CUDA_MEMBER ~bval_interpolator_dirichlet_right() {};
-        CUDA_MEMBER virtual inline T operator()(const T uval, const T deltax) const {return(2.0 * bval_interpolator<T>::get_bval() - uval);};
+        CUDA_MEMBER virtual inline T operator()(const T uval, const T deltax) const {return(bval_interpolator<T>::get_bval() * 2.0 - uval);};
 };
 
 

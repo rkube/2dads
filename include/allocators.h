@@ -19,7 +19,7 @@ struct deleter_host
 {
     void operator()(T* p) 
     { 
-        std::cerr << "deleter_host: freeing memory at " << p << std::endl;
+        //std::cerr << "deleter_host: freeing memory at " << p << std::endl;
         delete [] p; 
     }
 };
@@ -30,7 +30,7 @@ struct deleter_device
 {
         void operator() (T* p)
         {
-            std::cerr << "deleter_device: freeing memory at " << p << std::endl;
+            //std::cerr << "deleter_device: freeing memory at " << p << std::endl;
             cudaError_t res;
             if ((res = cudaFree(static_cast<void*>(p))) != cudaSuccess)
             {
@@ -59,17 +59,17 @@ struct allocator_device
         cudaError_t res;
         if((res = cudaMalloc(&ptr, s * sizeof(T))) != cudaSuccess)
         {
-            std::cerr << "Error allocating " << s * sizeof(T) << " bytes: " << cudaGetErrorString(res) << std::endl;
+            //std::cerr << "Error allocating " << s * sizeof(T) << " bytes: " << cudaGetErrorString(res) << std::endl;
             throw;
         }
-        std::cerr << "allocator_device :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr << std::endl;
+        //std::cerr << "allocator_device :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr << std::endl;
         return ptr_type(static_cast<T*>(ptr));
     }
 
     // Delete the pointer using the deleter_device<T> class
     void deallocate(ptr_type ptr)
     {
-        std::cerr << "freeing memory at " << ptr.get() << std::endl;
+        //std::cerr << "freeing memory at " << ptr.get() << std::endl;
         deleter_device<T> del;
         del(ptr.get());
     }
@@ -108,17 +108,17 @@ struct allocator_host
     // Delete the pointer using deleter_host<T>
     void deallocate(ptr_type ptr) 
     { 
-        std::cerr << "freeing memory at " << ptr.get() << std::endl;
+        //std::cerr << "freeing memory at " << ptr.get() << std::endl;
         deleter_host<T> del;
         del(ptr.get());
-        std::cerr << "allocator_host :: free ... done" << std::endl;
+        //std::cerr << "allocator_host :: free ... done" << std::endl;
     }
 
     // Allocate s * sizeof(T) bytes
     ptr_type allocate (size_t s) 
     { 
         ptr_type ptr{new T[s]};
-        std::cerr << "allocator_host :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr.get() << std::endl;
+        //std::cerr << "allocator_host :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr.get() << std::endl;
         return(ptr);
     } 
 

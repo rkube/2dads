@@ -16,7 +16,7 @@
 #include "cuda_array_bc_nogp.h"
 #include "dft_type.h"
 //#include "solvers.h"
-//#include "derivatives.h"
+#include "derivatives.h"
 //#include "integrators.h"
 
 
@@ -44,6 +44,7 @@ class slab_bc
         void initialize_derivatives(const test_ns::field_t, const test_ns::field_t);
         void initialize_dfttest(const test_ns::field_t);
         void initialize_gaussian(const test_ns::field_t);
+        void initialize_tint(const test_ns::field_t);
 
         void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
@@ -54,7 +55,6 @@ class slab_bc
         void print_field(const test_ns::field_t) const;
         void print_field(const test_ns::field_t, const std::string) const;
 
-        void initialize_tint(const test_ns::field_t);
         void integrate(const test_ns::field_t);
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
@@ -71,8 +71,9 @@ class slab_bc
         //solvers::cublas_handle_t cublas_handle;
         //solvers::cusparse_handle_t cusparse_handle;
 
-        //derivs<allocator_device<twodads::real_t>> der;
         dft_object_t<twodads::real_t>* myfft;
+        deriv_t<twodads::real_t, allocator_device> my_derivs;
+        //deriv_t<twodads::real_t, allocator_host> my_derivs;
         //integrator<my_allocator_device<twodads::real_t>>* tint;
 
         cuda_arr_real arr1;

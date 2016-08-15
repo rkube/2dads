@@ -19,35 +19,19 @@
 
 #ifdef __CUDACC__
 
-__device__ inline size_t d_get_col_2()
+namespace device
 {
-    return (blockIdx.x * blockDim.x + threadIdx.x); 
-}
-
-
-__device__ inline size_t d_get_row_2()
-{
-    return (blockIdx.y * blockDim.y + threadIdx.y); 
-}
-
-
-__device__ inline bool good_idx2(size_t row, size_t col, const cuda::slab_layout_t geom)
-{
-    return((row < geom.get_nx()) && (col < geom.get_my()));
-}  
-
-
 // Apply three point stencil to points within the domain, rows 1..Nx-2
 template <typename T, typename O>
 __global__
 void kernel_threepoint_center(const T* u, address_t<T>** address_u,
-                              T* result, O stencil_func, const cuda::slab_layout_t geom)
+                              T* result, O stencil_func, const twodads::slab_layout_t geom)
 {
-    const int col{static_cast<int>(d_get_col_2())};
-    const int row{static_cast<int>(d_get_row_2())};
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
     const T inv_dx{1.0 / geom.get_deltax()};
-    const T inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
+    const T inv_dx2{inv_dx * inv_dx};
 
     if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col >= 0 && col < static_cast<int>(geom.get_my()))
     {
@@ -64,12 +48,12 @@ template <typename T, typename O>
 __global__
 void kernel_threepoint_single_row(const T* u, address_t<T>** address_u,
                                   T* result, O stencil_func, 
-                                  const cuda::slab_layout_t geom, const int row)
+                                  const twodads::slab_layout_t geom, const int row)
 {
-    const int col{static_cast<int>(d_get_col_2())};
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
     const T inv_dx{1.0 / geom.get_deltax()};
-    const T inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
+    const T inv_dx2{inv_dx * inv_dx};
 
     if(col >= 0 && col < static_cast<int>(geom.get_my()))
     {
@@ -88,10 +72,10 @@ template <typename T>
 __global__
 void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
                            const T* v, address_t<T>** address_v, 
-                           T* result, const cuda::slab_layout_t geom)
+                           T* result, const twodads::slab_layout_t geom)
 {
-    const int col{static_cast<int>(d_get_col_2())};
-    const int row{static_cast<int>(d_get_row_2())};
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
 
     const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
@@ -174,11 +158,11 @@ template <typename T>
 __global__
 void kernel_arakawa_single_row(const T* u, address_t<T>** address_u,
                                const T* v, address_t<T>** address_v,
-                               T* result, const cuda::slab_layout_t geom,
+                               T* result, const twodads::slab_layout_t geom,
                                const int row)
 {
     // Use int for col and row to pass them into address<T>::operator()
-    const int col{static_cast<int>(d_get_col_2())};
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
 
     const T inv_dx_dy{1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
@@ -252,11 +236,11 @@ template <typename T>
 __global__
 void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
                                const T* v, address_t<T>** address_v,
-                               T* result, const cuda::slab_layout_t geom, const int col)
+                               T* result, const twodads::slab_layout_t geom, const int col)
 {
-    const int row{static_cast<int>(d_get_row_2())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-    const real_t inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
 
     if(row > 0 && row < static_cast<int>(geom.get_nx() - 1))
     {
@@ -335,14 +319,14 @@ void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
 //
 template <typename T>
 __global__
-void kernel_gen_coeffs(CuCmplx<T>* kmap_dx1, CuCmplx<T>* kmap_dx2, cuda::slab_layout_t geom)
+void kernel_gen_coeffs(CuCmplx<T>* kmap_dx1, CuCmplx<T>* kmap_dx2, twodads::slab_layout_t geom)
 {
-    const size_t col{d_get_col_2()};
-    const size_t row{d_get_row_2()};
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-    const T two_pi_Lx{cuda::TWOPI / geom.get_Lx()};
-    const T two_pi_Ly{cuda::TWOPI / (static_cast<T>((geom.get_my() - 1) * 2) * geom.get_deltay())}; 
-    const size_t My{(geom.get_my() - 1) * 2};
+    const T two_pi_Lx{twodads::TWOPI / geom.get_Lx()};
+    const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom.get_my() - 1) * 2) * geom.get_deltay())}; 
+    //const size_t My{(geom.get_my() - 1) * 2};
 
     CuCmplx<T> tmp1(0.0, 0.0);
     CuCmplx<T> tmp2(0.0, 0.0);
@@ -378,10 +362,10 @@ void kernel_gen_coeffs(CuCmplx<T>* kmap_dx1, CuCmplx<T>* kmap_dx2, cuda::slab_la
 template <typename T, typename O>
 __global__
 void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
-                            cuda::slab_layout_t geom)
+                            twodads::slab_layout_t geom)
 {
-    const size_t col{d_get_col_2()};
-    const size_t row{d_get_row_2()};
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
     const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
 
     if(col < geom.get_my() && row < geom.get_nx())
@@ -390,410 +374,1112 @@ void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_
     }
 }
 
+}
 
 #endif //__CUDACC__
+
+
+namespace host
+{
+    template <typename T, typename O>
+    void apply_threepoint_center(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t geom)
+    {
+        const T inv_dx{1.0 / geom.get_deltax()};
+        const T inv_dx2{inv_dx * inv_dx};
+
+        for(size_t n = 0; n < geom.get_nx(); n++)
+        {
+            for(size_t m = 0; m < geom.get_my(); m++)
+            {
+                res[n * (geom.get_my() + geom.get_pad_y()) + m] = stencil_func((*address_u).get_elem(u, n - 1, m),
+                                                                               (*address_u).get_elem(u, n    , m),
+                                                                               (*address_u).get_elem(u, n + 1, m),
+                                                                               inv_dx, inv_dx2);
+            }
+        }
+    }
+
+
+    template <typename T, typename O> 
+    void apply_threepoint(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t geom,
+                          std::vector<size_t>& row_vals, std::vector<size_t>& col_vals)
+    {
+        const T inv_dx{1.0 / geom.get_deltax()};
+        const T inv_dx2{inv_dx * inv_dx};
+
+        for(auto row : row_vals)
+        {
+            for(auto col : col_vals)
+            {
+                res[row * (geom.get_my() + geom.get_pad_y()) + col] = stencil_func((*address_u)(u, row - 1, col),
+                                                                                   (*address_u)(u, row    , col),
+                                                                                   (*address_u)(u, row + 1, col),
+                                                                                   inv_dx, inv_dx2);
+            }
+        }
+    }
+
+
+    template <typename T>
+    void arakawa_center(const T* u, address_t<T>* address_u, const T* v, address_t<T>* address_v, T* result, const twodads::slab_layout_t geom)
+    {
+        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+        for(size_t row = 1; row < geom.get_nx() - 1; row++)
+        {
+           for(size_t col = 1; col < geom.get_my() - 1; col++)
+            {
+            result[index] = 
+                ((((*address_u).get_elem(u, row    , col - 1) + 
+                   (*address_u).get_elem(u, row + 1, col - 1) - 
+                   (*address_u).get_elem(u, row    , col + 1) - 
+                   (*address_u).get_elem(u, row + 1, col + 1))
+                  *
+                  ((*address_v).get_elem(v, row + 1, col    ) + 
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row - 1, col - 1) +
+                   (*address_u).get_elem(u, row    , col - 1) -
+                   (*address_u).get_elem(u, row - 1, col + 1) -
+                   (*address_u).get_elem(u, row    , col + 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row - 1, col    )))
+                 +
+                 (((*address_u).get_elem(u, row + 1, col    ) +
+                   (*address_u).get_elem(u, row + 1, col + 1) -
+                   (*address_u).get_elem(u, row - 1, col    ) -
+                   (*address_u).get_elem(u, row - 1, col + 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row + 1, col - 1) +
+                   (*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row - 1, col - 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row    , col - 1)))
+                 +
+                 (((*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row    , col + 1))
+                  *
+                  ((*address_v).get_elem(v, row + 1, col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+
+                 -
+                 (((*address_u).get_elem(u, row    , col - 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row - 1, col - 1)))
+
+                 +
+                 (((*address_u).get_elem(u, row    , col + 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row - 1, col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row    , col - 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row + 1, col - 1)))
+         )
+         * inv_dx_dy;
+        }
+            }
+    }
+
+    template <typename T>
+    void arakawa_single(const T* u, address_t<T>* address_u, 
+                        const T* v, address_t<T>* address_v, 
+                        T* result, const twodads::slab_layout_t geom,
+                        std::vector<size_t> row_vals,
+                        std::vector<size_t> col_vals)
+    {
+        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+        for(size_t row : row_vals)
+        {
+           for(size_t col : col_vals)
+           {
+               result[index] = 
+                   ((((*address_u)(u, row    , col - 1) + 
+                      (*address_u)(u, row + 1, col - 1) - 
+                      (*address_u)(u, row    , col + 1) - 
+                      (*address_u)(u, row + 1, col + 1))
+                     *
+                     ((*address_v)(v, row + 1, col    ) + 
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row - 1, col - 1) +
+                      (*address_u)(u, row    , col - 1) -
+                      (*address_u)(u, row - 1, col + 1) -
+                      (*address_u)(u, row    , col + 1))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row - 1, col    )))
+                    +
+                    (((*address_u)(u, row + 1, col    ) +
+                      (*address_u)(u, row + 1, col + 1) -
+                      (*address_u)(u, row - 1, col    ) -
+                      (*address_u)(u, row - 1, col + 1))
+                     *
+                     ((*address_v)(v, row    , col + 1) +
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row + 1, col - 1) +
+                      (*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row - 1, col - 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row    , col - 1)))
+                    +
+                    (((*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row    , col + 1))
+                     *
+                     ((*address_v)(v, row + 1, col + 1) +
+                      (*address_v)(v, row    , col    )))
+
+                    -
+                    (((*address_u)(u, row    , col - 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row - 1, col - 1)))
+
+                    +
+                    (((*address_u)(u, row    , col + 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row - 1, col + 1) +
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row    , col - 1))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row + 1, col - 1)))
+                    )
+                 * inv_dx_dy;
+           }    
+        }
+    }
+}
+
+namespace detail
+{
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
+                          const twodads::slab_layout_t geom_my21,
+                          allocator_host<T>)
+    {
+        const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
+        const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
+
+        size_t n{0};
+        size_t m{0};
+        for(n = 0; n < geom_my21.get_nx() / 2 - 1; n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(two_pi_Lx * T(n));
+                (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(two_pi_Ly * T(m));
+
+                (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(0.0);
+                (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            m = geom_my21.get_my();
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(two_pi_Lx * T(n));
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(0.0);
+
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(0.0);
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+
+        n = geom_my21.get_nx() / 2;
+        for(m = 0; m < geom_my21.get_my() - 1; m++)
+        {
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(T(0.0));
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(two_pi_Ly * T(m));
+
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(T(0.0));
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        m = geom_my21.get_my();
+        (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(T(0.0));
+        (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(T(0.0));
+
+        (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(0.0);
+        (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+
+        for(n = geom_my21.get_nx() / 2; n < geom_my21.get_nx(); n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+                (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(two_pi_Ly * T(m));
+
+                (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(0.0);
+                (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            m = geom_my21.get_my();
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+            (coeffs_dy1.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_re(0.0);
+            (coeffs_dy2.get_tlev_ptr(0))[n * geom_my21.get_my() + m].set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+    }
+
+
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
+                          const twodads::slab_layout_t geom_my21,
+                          allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+
+        device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
+    }
+
+
+    template <typename T>
+    void impl_init_diagonals(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
+                             CuCmplx<T>* h_diag,
+                             twodads::slab_layout_t geom_my21,
+                             allocator_host<T>)
+    {
+        T ky2{0.0};
+        const T inv_dx{1.0 / geom_my21.get_deltax()};      // delta_x ^ -1
+        const T inv_dx2{inv_dx * inv_dx};                  // delta_x ^ -2
+        const T Ly{static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay()};
+        // Initialize the main diagonal separately for every ky
+        size_t m{0};
+        size_t n{0};
+        // Diagonals are m * Nx + n, i.e. contiguous rows
+        for(m = 0; m < geom_my21.get_my(); m++)
+        {
+            ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
+            for(n = 0; n < geom_my21.get_nx(); n++)
+            {
+                (diag.get_tlev_ptr(0))[m * geom_my21.get_nx() + n] = -2.0 * inv_dx2 - ky2;
+            }
+            (diag.get_tlev_ptr(0))[m * geom_my21.get_nx()] = (diag.get_tlev_ptr(0))[0] - inv_dx2;
+            (diag.get_tlev_ptr(0))[(m + 1) * geom_my21.get_nx() - 1] = (diag.get_tlev_ptr(0))[(m + 1) * geom_my21.get_nx() - 1] - inv_dx2;
+        }
+
+        for(m = 0; m < geom_my21.get_my(); m++)
+        {
+            for(n = 0; n < geom_my21.get_nx(); n++)
+            {
+                (diag_u.get_tlev_ptr(0))[m * geom_my21.get_nx() + n] = inv_dx2;
+                (diag_l.get_tlev_ptr(0))[m * geom_my21.get_nx() + n] = inv_dx2;
+            }
+            (diag_u.get_tlev_ptr(0))[(m + 1) * geom_my21.get_nx() - 1] = 0.0;
+            (diag_l.get_tlev_ptr(0))[m * geom_my21.get_nx()] = 0.0;
+        }
+    }
+
+
+    template <typename T>
+    void impl_init_diagonals(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
+                             CuCmplx<T>* h_diag,
+                             twodads::slab_layout_t geom_my21,
+                             allocator_device<T>)
+    {
+        // Host copy of main and lower diagonal
+        CuCmplx<T>* h_diag_u{new CuCmplx<T>[geom_my21.get_nx()]};
+        CuCmplx<T>* h_diag_l{new CuCmplx<T>[geom_my21.get_nx()]};
+
+        // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
+        // The upper diagonal is equal to the lower diagonal
+
+        T ky2{0.0};                                        // ky^2
+        const T inv_dx{1.0 / geom_my21.get_deltax()};      // delta_x^-1
+        const T inv_dx2{inv_dx * inv_dx};                  // delta_x^-2
+        const T Ly{static_cast<T>(geom_my21.get_my()) * geom_my21.get_deltay()};
+
+        // Initialize the main diagonal separately for every ky
+        for(size_t m = 0; m < geom_my21.get_my(); m++)
+        {
+            ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(m * m) / (Ly * Ly);
+            for(size_t n = 0; n < geom_my21.get_nx(); n++)
+            {
+                h_diag[n] = -2.0 * inv_dx2 - ky2;
+            }
+            h_diag[0] = h_diag[0] - inv_dx2;
+            h_diag[geom_my21.get_nx() - 1] = h_diag[geom_my21.get_nx() - 1] - inv_dx2;
+
+            gpuErrchk(cudaMemcpy(diag.get_tlev_ptr(0) + m * geom_my21.get_nx(), h_diag, geom_my21.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
+        }
+
+        // Initialize the upper and lower diagonal with 1/delta_x^2
+        for(size_t n = 0; n < geom_my21.get_nx(); n++)
+        {
+            h_diag_u[n] = inv_dx2;
+            h_diag_l[n] = inv_dx2;
+        }
+
+        // Set first/last element of lower/upper diagonal to zero (required by cusparseZgtsvStridedBatch)
+        h_diag_u[geom_my21.get_nx() - 1] = 0.0;
+        h_diag_l[0] = 0.0;
+
+        // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
+        for(size_t m = 0; m < geom_my21.get_my(); m++)
+        {
+            gpuErrchk(cudaMemcpy(diag_l.get_tlev_ptr(0) + m * geom_my21.get_nx(), h_diag_l, geom_my21.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+            gpuErrchk(cudaMemcpy(diag_u.get_tlev_ptr(0) + m * geom_my21.get_nx(), h_diag_u, geom_my21.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
+        }
+
+        delete [] h_diag_l;
+        delete [] h_diag_u;
+    }
+
+
+    template <typename T>
+    void impl_dx1(const cuda_array_bc_nogp<T, allocator_host>& in,
+                  cuda_array_bc_nogp<T, allocator_host>& out,
+                  const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(in.get_geom().get_my());
+        std::vector<size_t> row_vals(1);
+
+        row_vals[0] = 0;
+        for(size_t m = 0; m < in.get_geom().get_my(); m++)
+            col_vals[m] = m;
+
+        // Apply threepoint stencil in interior domain, no interpolation here
+        host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                        [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                        {return(0.5 * (u_right - u_left) * inv_dx);}, 
+                                        out.get_geom());
+
+        // Call expensive interpolation routine only for 2 columns
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return(0.5 * (u_right - u_left) * inv_dx);},
+                                 out.get_geom(), row_vals, col_vals);
+
+        row_vals[0] = in.get_geom().get_nx() - 1;
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return(0.5 * (u_right - u_left) * inv_dx);},
+                                 out.get_geom(), row_vals, col_vals);
+    }
+
+    template <typename T>
+    void impl_dx1(const cuda_array_bc_nogp<T, allocator_device>& in,
+                  cuda_array_bc_nogp<T, allocator_device>& out,
+                  const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+        static dim3 block_single_row(cuda::blockdim_row, 1);
+        static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+        // Call kernel that accesses elements with get_elem; no wrapping around
+        device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom());
+
+        // Call kernel that accesses elements with operator(); interpolates ghost point values
+        device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom(), 0);
+
+        // Call kernel that accesses elements with operator(); interpolates ghost point values
+        device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom(), out.get_geom().get_nx() - 1);
+    }
+
+   
+
+    template <typename T>
+    void impl_dx2(const cuda_array_bc_nogp<T, allocator_host>& in,
+                  cuda_array_bc_nogp<T, allocator_host>& out,
+                  const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(in.get_geom().get_my());
+        std::vector<size_t> row_vals(1);
+
+        row_vals[0] = 0;
+        for(size_t m = 0; m < in.get_geom().get_my(); m++)
+            col_vals[m] = m;
+
+        // Apply threepoint stencil in interior domain, no interpolation here
+        host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                        [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                        {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                        out.get_geom());
+
+        // Call expensive interpolation routine only for 2 columns
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst),
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                 out.get_geom(), row_vals, col_vals);
+
+        std::cerr << "apply_threepoint at " << row_vals[0] << std::endl;
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst),
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                 out.get_geom(), row_vals, col_vals);
+    }
+
+
+    template <typename T>
+    void impl_dx2(const cuda_array_bc_nogp<T, allocator_device>& in,
+                  cuda_array_bc_nogp<T, allocator_device>& out,
+                  const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+    static dim3 block_single_row(cuda::blockdim_row, 1);
+    static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+    // Call kernel that accesses elements with get_elem; no wrapping around
+    device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+              out.get_geom());
+
+    // Call kernel that accesses elements with operator(); interpolates ghost point values
+    device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);}, 
+              out.get_geom(), 0);
+
+    // Call kernel that accesses elements with operator(); interpolates ghost point values
+    device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+              out.get_geom(), out.get_geom().get_nx() - 1);
+    }
+
+
+    template <typename T>
+    void impl_arakawa(const cuda_array_bc_nogp<T, allocator_host>& u,
+            const cuda_array_bc_nogp<T, allocator_host>& v,
+            cuda_array_bc_nogp<T, allocator_host> res,
+            const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(0);
+        std::vector<size_t> row_vals(0);
+
+        host :: arakawa_center(u.get_tlev_ptr(t_src), v.get_tlev_ptr(t_src), res.get_tlev_ptr(t_dst),
+                               u.get_geom());
+
+        // Arakawa kernel for col 0, n = 0..Nx-1
+        col_vals.resize(1);
+        col_vals[0] = 0;
+        row_vals.resize(u.get_geom().get_nx());
+        for(size_t n = 0; n < u.get_geom().get_nx(); n++)
+            row_vals[n] = n;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+
+        //Arakawa kernel for col = My-1, n = 0..Nx-1
+        col_vals[0] = u.get_geom().get_my() - 1;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+
+        // Arakawa kernel for col 0..My-1, row n = 0
+        col_vals.resize(u.get_geom().get_my());
+        row_vals.resize(1);
+        row_vals[0] = 0;
+        for(size_t m = 0; m < u.get_geom().get_my(); m++)
+            col_vals[m] = m;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+        // Arakawa kernel for col 0..My-1, row n = Nx - 1
+        row_vals[0] = u.get_geom().get_nx() - 1;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+
+
+
+    }
+
+
+    template <typename T>
+    void impl_arakawa(const cuda_array_bc_nogp<T, allocator_device>& u,
+                           const cuda_array_bc_nogp<T, allocator_device>& v,
+                           cuda_array_bc_nogp<T, allocator_device> res,
+                           const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+        // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
+        static dim3 block_single_row(cuda::blockdim_row, 1);
+        static dim3 grid_single_row((u.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+        // Thread layout for accessing a single column (m = 0, My - 1, n = 0...Nx-1)
+        static dim3 block_single_col(1, cuda::blockdim_col);
+        static dim3 grid_single_col(1, (u.get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
+
+        device :: kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom());
+
+        // Create address objects to access ghost points 
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), 0);
+
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_nx() - 1);
+
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), 0);
+
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_my() - 1);
+    }
+    
+
+}
+
 
 /*
  * Datatype that provides derivation routines and elliptic solver
  */
 
-template <typename allocator>
-class derivs
+template <typename T, template <typename> class allocator>
+class deriv_t
 {
     public:
-        using value_t = typename my_allocator_traits<allocator> :: value_type;
-        using cmplx_t = CuCmplx<value_t>;
+        using cmplx_t = CuCmplx<T>;
+        using cmplx_arr = cuda_array_bc_nogp<cmplx_t, allocator>;
 
-        derivs(const cuda::slab_layout_t);
-        ~derivs();
+        deriv_t(const twodads::slab_layout_t);    
+        ~deriv_t();
 
-        // Compute first derivative in x-direction
-        void dx_1(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+        void dx_1(const cuda_array_bc_nogp<T, allocator>&,
+                  cuda_array_bc_nogp<T, allocator>&,
                   const size_t, const size_t);
 
-        // Compute second derivative in x-direction
-        void dx_2(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+        void dx_2(const cuda_array_bc_nogp<T, allocator>&,
+                  cuda_array_bc_nogp<T, allocator>&,
                   const size_t, const size_t);
 
-        // Compute first derivative in y-direction
-        void dy_1(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+        void dy_1(const cuda_array_bc_nogp<T, allocator>&,
+                  cuda_array_bc_nogp<T, allocator>&,
                   const size_t, const size_t);
 
-        // Compute second derivative in y-direction
-        void dy_2(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+        void dy_2(const cuda_array_bc_nogp<T, allocator>&,
+                  cuda_array_bc_nogp<T, allocator>&,
                   const size_t, const size_t);
 
-        // Invert laplace equation
-        void invert_laplace(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
-                            const cuda::bc_t, const value_t,
-                            const cuda::bc_t, const value_t,
-                            const size_t, const size_t);
-       
-        // Compute arakawa bracket 
-        void arakawa(const cuda_array_bc_nogp<allocator>&, 
-                     const cuda_array_bc_nogp<allocator>&, 
-                     cuda_array_bc_nogp<allocator>&, 
+        void invert_laplace(const cuda_array_bc_nogp<T, allocator>&,
+                            cuda_array_bc_nogp<T, allocator>&,
+                             const twodads::bc_t, const T,
+                             const twodads::bc_t, const T,
+                             const size_t, const size_t);
+
+        void arakawa(const cuda_array_bc_nogp<T, allocator>&,
+                     const cuda_array_bc_nogp<T, allocator>&,
+                     cuda_array_bc_nogp<T, allocator>&,
                      const size_t, const size_t);
-   
 
-        // Initialize DFT, 1d-periodic, column-major 
-        cmplx_t* get_coeffs_dy1() const {return(d_coeffs_dy1);};
-        cmplx_t* get_coeffs_dy2() const {return(d_coeffs_dy2);};
-        cuda::slab_layout_t get_geom() const {return(geom);};
+        cmplx_arr& get_coeffs_dy1() {return(coeffs_dy1);};
+        cmplx_arr& get_coeffs_dy2() {return(coeffs_dy2);};
+        cmplx_arr& get_diag() {return(diag);};
+        cmplx_arr& get_diag_u() {return(diag_u);};
+        cmplx_arr& get_diag_l() {return(diag_l);};
+        twodads::slab_layout_t get_geom() const {return(geom);};
+        twodads::slab_layout_t get_geom_my21() const {return(geom);};
 
     private:
-        const size_t My21;
-        const cuda::slab_layout_t geom;
-        dft_object_t<cuda::real_t> myfft;
+        const twodads::slab_layout_t geom;          // Layout for Nx * My arrays
+        const twodads::slab_layout_t geom_my21;     // Layout for spectrally transformed NX * My21 arrays
+        dft_object_t<twodads::real_t>* myfft;
 
         // Coefficient storage for spectral derivation
-        cmplx_t* d_coeffs_dy1;
-        cmplx_t* d_coeffs_dy2;
+        cuda_array_bc_nogp<CuCmplx<T>, allocator> coeffs_dy1;
+        cmplx_arr   coeffs_dy2;
         // Matrix storage for solving tridiagonal equations
-        cmplx_t* d_diag;     // Main diagonal
-        cmplx_t* d_diag_l;   // lower diagonal
-        cmplx_t* d_diag_u;   // upper diagonal, for Laplace equation this is the same as the lower diagonal
+        cmplx_arr   diag;
+        cmplx_arr   diag_l;
+        cmplx_arr   diag_u;
         cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions passed to invert_laplace routine.
 };
 
+//template <typename allocator>
+//class derivs
+//{
+//    public:
+//        using value_t = typename my_allocator_traits<allocator> :: value_type;
+//        using cmplx_t = CuCmplx<value_t>;
+//
+//        derivs(const twodads::slab_layout_t);
+//        ~derivs();
+//
+//        // Compute first derivative in x-direction
+//        void dx_1(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+//                  const size_t, const size_t);
+//
+//        // Compute second derivative in x-direction
+//        void dx_2(const cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+//                  const size_t, const size_t);
+//
+//        // Compute first derivative in y-direction
+//        void dy_1(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+//                  const size_t, const size_t);
+//
+//        // Compute second derivative in y-direction
+//        void dy_2(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&,
+//                  const size_t, const size_t);
+//
+//        // Invert laplace equation
+//        void invert_laplace(cuda_array_bc_nogp<allocator>&, cuda_array_bc_nogp<allocator>&, 
+//                            const twodads::bc_t, const value_t,
+//                            const twodads::bc_t, const value_t,
+//                            const size_t, const size_t);
+//       
+//        // Compute arakawa bracket 
+//        void arakawa(const cuda_array_bc_nogp<allocator>&, 
+//                     const cuda_array_bc_nogp<allocator>&, 
+//                     cuda_array_bc_nogp<allocator>&, 
+//                     const size_t, const size_t);
+//   
+//
+//        // Initialize DFT, 1d-periodic, column-major 
+//        cmplx_t* get_coeffs_dy1() const {return(d_coeffs_dy1);};
+//        cmplx_t* get_coeffs_dy2() const {return(d_coeffs_dy2);};
+//        twodads::slab_layout_t get_geom() const {return(geom);};
+//
+//    private:
+//        const size_t My21;
+//        const twodads::slab_layout_t geom;
+//        dft_object_t<twodads::real_t> myfft;
+//
+//        // Coefficient storage for spectral derivation
+//        cmplx_t* d_coeffs_dy1;
+//        cmplx_t* d_coeffs_dy2;
+//        // Matrix storage for solving tridiagonal equations
+//        cmplx_t* d_diag;     // Main diagonal
+//        cmplx_t* d_diag_l;   // lower diagonal
+//        cmplx_t* d_diag_u;   // upper diagonal, for Laplace equation this is the same as the lower diagonal
+//        cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions passed to invert_laplace routine.
+//};
 
-template <typename allocator>
-derivs<allocator> :: derivs(const cuda::slab_layout_t _geom) : 
-    My21(static_cast<int>(_geom.get_my()) / 2 + 1), 
+
+template <typename T, template <typename> class allocator>
+deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
     geom(_geom),
-    myfft(geom, cuda::dft_t::dft_1d),
-    d_coeffs_dy1{nullptr}, d_coeffs_dy2{nullptr},
-    d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr},
-    h_diag{nullptr}
+    geom_my21(get_geom().get_xleft(), get_geom().get_deltax(), get_geom().get_ylo(), get_geom().get_deltay(), get_geom().get_nx(), 0, (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0, get_geom().get_grid()),
+    myfft{new cufft_object_t<T>(get_geom(), twodads::dft_t::dft_1d)},
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    coeffs_dy1(get_geom_my21(), 
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}),
+               1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    coeffs_dy2(get_geom_my21(),
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, T(0), T(0), T(0), T(0)), 1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag(get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, T(0), T(0), T(0), T(0)), 1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag_l(get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, T(0), T(0), T(0), T(0)), 1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag_u(get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, T(0), T(0), T(0), T(0)), 1),
+    h_diag{new cmplx_t[get_geom().get_nx()]}
 {
-    cout << "Allocating " <<  get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>) << " bytes" << endl;
-    gpuErrchk(cudaMalloc((void**) &d_coeffs_dy1, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)))
-    gpuErrchk(cudaMalloc((void**) &d_coeffs_dy2, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)))
+    //std::cout << "Allocating " <<  get_geom().get_nx() * My21 * sizeof(cmplx_t) << " bytes" << std::endl;
+    //gpuErrchk(cudaMalloc((void**) &d_coeffs_dy1, get_geom().get_nx() * My21 * sizeof(cmplx_t)))
+    //gpuErrchk(cudaMalloc((void**) &d_coeffs_dy2, get_geom().get_nx() * My21 * sizeof(cmplx_t)))
 
-    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
-    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
-            (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
-                         
-
-    kernel_gen_coeffs<<<grid_my21, block_my21>>>(get_coeffs_dy1(), get_coeffs_dy2(), 
-                                                 cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
-                                                                     get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                     get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
-
-    // Host copy of main and lower diagonal
-    h_diag = new cmplx_t[get_geom().get_nx()];
-    cmplx_t* h_diag_u = new cmplx_t[get_geom().get_nx()];
-    cmplx_t* h_diag_l = new cmplx_t[get_geom().get_nx()];
-
-    // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
-    // The upper diagonal is equal to the lower diagonal
-    gpuErrchk(cudaMalloc((void**) &d_diag, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
-    gpuErrchk(cudaMalloc((void**) &d_diag_u, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
-    gpuErrchk(cudaMalloc((void**) &d_diag_l, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
-
-    value_t ky2{0.0};                             // ky^2
-    const value_t inv_dx{1.0 / get_geom().get_deltax()};      // 1 / delta_x
-    const value_t inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
-    const value_t Ly{static_cast<value_t>(get_geom().get_my()) * get_geom().get_deltay()};
-
-    // Initialize the main diagonal separately for every ky
-    for(size_t m = 0; m < My21; m++)
-    {
-        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
-        for(size_t n = 0; n < get_geom().get_nx(); n++)
-        {
-            h_diag[n] = -2.0 * inv_dx2 - ky2;
-        }
-        h_diag[0] = h_diag[0] - inv_dx2;
-        h_diag[get_geom().get_nx() - 1] = h_diag[get_geom().get_nx() - 1] - inv_dx2;
-
-        gpuErrchk(cudaMemcpy(d_diag + m * get_geom().get_nx(), h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
-    }
-
-    // Initialize the upper and lower diagonal with 1/delta_x^2
-    for(size_t n = 0; n < get_geom().get_nx(); n++)
-    {
-        h_diag_u[n] = inv_dx2;
-        h_diag_l[n] = inv_dx2;
-    }
-    // Set first/last element of lower/upper diagonal to zero (required by cusparseZgtsvStridedBatch)
-    h_diag_u[get_geom().get_nx() - 1] = 0.0;
-    h_diag_l[0] = 0.0;
-
-    // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
-    for(size_t m = 0; m < My21; m++)
-    {
-        gpuErrchk(cudaMemcpy(d_diag_l + m * get_geom().get_nx(), h_diag_l, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
-        gpuErrchk(cudaMemcpy(d_diag_u + m * get_geom().get_nx(), h_diag_u, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
-    }
-
-    delete [] h_diag_l;
-    delete [] h_diag_u;
+    detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+    detail :: impl_init_diagonals(get_diag(), get_diag_u(), get_diag_l(), h_diag, get_geom_my21(), allocator<T>{});
 }
+//template <typename allocator>
+//derivs<allocator> :: derivs(const twodads::slab_layout_t _geom) : 
+//    My21(static_cast<int>(_geom.get_my()) / 2 + 1), 
+//    geom(_geom),
+//    myfft(geom, twodads::dft_t::dft_1d),
+//    d_coeffs_dy1{nullptr}, d_coeffs_dy2{nullptr},
+//    d_diag{nullptr}, d_diag_l{nullptr}, d_diag_u{nullptr},
+//    h_diag{nullptr}
+//{
+//    cout << "Allocating " <<  get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>) << " bytes" << endl;
+//    gpuErrchk(cudaMalloc((void**) &d_coeffs_dy1, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)))
+//    gpuErrchk(cudaMalloc((void**) &d_coeffs_dy2, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)))
+//
+//    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+//    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
+//            (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+//                         
+//
+//    kernel_gen_coeffs<<<grid_my21, block_my21>>>(get_coeffs_dy1(), get_coeffs_dy2(), 
+//                                                 twodads::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
+//                                                                     get_geom().get_ylo(), get_geom().get_deltay(), 
+//                                                                     get_geom().get_nx(), 0, My21, 0, twodads::grid_t::cell_centered));
+//
+//    // Host copy of main and lower diagonal
+//    h_diag = new cmplx_t[get_geom().get_nx()];
+//    cmplx_t* h_diag_u = new cmplx_t[get_geom().get_nx()];
+//    cmplx_t* h_diag_l = new cmplx_t[get_geom().get_nx()];
+//
+//    // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
+//    // The upper diagonal is equal to the lower diagonal
+//    gpuErrchk(cudaMalloc((void**) &d_diag, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
+//    gpuErrchk(cudaMalloc((void**) &d_diag_u, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
+//    gpuErrchk(cudaMalloc((void**) &d_diag_l, get_geom().get_nx() * My21 * sizeof(CuCmplx<value_t>)));
+//
+//    value_t ky2{0.0};                             // ky^2
+//    const value_t inv_dx{1.0 / get_geom().get_deltax()};      // 1 / delta_x
+//    const value_t inv_dx2{inv_dx * inv_dx};       // 1 / delta_x^2
+//    const value_t Ly{static_cast<value_t>(get_geom().get_my()) * get_geom().get_deltay()};
+//
+//    // Initialize the main diagonal separately for every ky
+//    for(size_t m = 0; m < My21; m++)
+//    {
+//        ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
+//        for(size_t n = 0; n < get_geom().get_nx(); n++)
+//        {
+//            h_diag[n] = -2.0 * inv_dx2 - ky2;
+//        }
+//        h_diag[0] = h_diag[0] - inv_dx2;
+//        h_diag[get_geom().get_nx() - 1] = h_diag[get_geom().get_nx() - 1] - inv_dx2;
+//
+//        gpuErrchk(cudaMemcpy(d_diag + m * get_geom().get_nx(), h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
+//    }
+//
+//    // Initialize the upper and lower diagonal with 1/delta_x^2
+//    for(size_t n = 0; n < get_geom().get_nx(); n++)
+//    {
+//        h_diag_u[n] = inv_dx2;
+//        h_diag_l[n] = inv_dx2;
+//    }
+//    // Set first/last element of lower/upper diagonal to zero (required by cusparseZgtsvStridedBatch)
+//    h_diag_u[get_geom().get_nx() - 1] = 0.0;
+//    h_diag_l[0] = 0.0;
+//
+//    // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
+//    for(size_t m = 0; m < My21; m++)
+//    {
+//        gpuErrchk(cudaMemcpy(d_diag_l + m * get_geom().get_nx(), h_diag_l, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
+//        gpuErrchk(cudaMemcpy(d_diag_u + m * get_geom().get_nx(), h_diag_u, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice)); 
+//    }
+//
+//    delete [] h_diag_l;
+//    delete [] h_diag_u;
+//}
+//
 
 
-// Call three point stencil with centered difference formula for first derivative
-template <typename allocator>
-void derivs<allocator> :: dx_1(const cuda_array_bc_nogp<allocator>& in,
-                               cuda_array_bc_nogp<allocator>& out,
-                               const size_t t_src, const size_t t_dst)
-{
-    static dim3 block_single_row(cuda::blockdim_row, 1);
-    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
-
-    // Call kernel that accesses elements with get_elem; no wrapping around
-    kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), in.get_address(),
-                                                                out.get_array_d(t_dst), 
-                                                                [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                value_t u_right, value_t inv_dx, 
-                                                                                value_t inv_dx2) -> value_t
-                                                                {
-                                                                  return(0.5 * (u_right - u_left) * inv_dx);
-                                                                }, 
-                                                                out.get_geom());
-
-    // Call kernel that accesses elements with operator(); interpolates ghost point values
-    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
-                                                                        out.get_array_d(t_dst), 
-                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                        value_t u_right, value_t inv_dx, 
-                                                                                        value_t inv_dx2) -> value_t
-                                                                        {
-                                                                          return(0.5 * (u_right - u_left) * inv_dx);
-                                                                        },
-                                                                        out.get_geom(), 0);
-
-    // Call kernel that accesses elements with operator(); interpolates ghost point values
-    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
-                                                                        out.get_array_d(t_dst), 
-                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                        value_t u_right, value_t inv_dx, 
-                                                                                        value_t inv_dx2) -> value_t
-                                                                        {
-                                                                          return(0.5 * (u_right - u_left) * inv_dx);
-                                                                        }, 
-                                                                        out.get_geom(), out.get_geom().get_nx() - 1);
-}
-
-
-// Call three point stencil with centered difference formula for first derivative
-template <typename allocator>
-void derivs<allocator> :: dx_2(const cuda_array_bc_nogp<allocator>& in,
-                               cuda_array_bc_nogp<allocator>& out,
-                               const size_t t_src, const size_t t_dst)
-{
-    static dim3 block_single_row(cuda::blockdim_row, 1);
-    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
-
-    // Call kernel that accesses elements with get_elem; no wrapping around
-    kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), in.get_address(),
-                                                                out.get_array_d(t_dst), 
-                                                                [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                value_t u_right, value_t inv_dx, 
-                                                                                value_t inv_dx2) -> value_t
-                                                                {
-                                                                  return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
-                                                                }, 
-                                                                out.get_geom());
-
-    // Call kernel that accesses elements with operator(); interpolates ghost point values
-    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
-                                                                        out.get_array_d(t_dst), 
-                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                        value_t u_right, value_t inv_dx, 
-                                                                                        value_t inv_dx2) -> value_t
-                                                                        {
-                                                                          return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
-                                                                        },
-                                                                        out.get_geom(), 0);
-
-    // Call kernel that accesses elements with operator(); interpolates ghost point values
-    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
-                                                                        out.get_array_d(t_dst), 
-                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
-                                                                                        value_t u_right, value_t inv_dx, 
-                                                                                        value_t inv_dx2) -> value_t
-                                                                        {
-                                                                          return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
-                                                                        }, 
-                                                                        out.get_geom(), out.get_geom().get_nx() - 1);
-}
-
-
-template <typename allocator>
-void derivs<allocator> :: dy_1(cuda_array_bc_nogp<allocator>& in,
-                               cuda_array_bc_nogp<allocator> &out,
-                               const size_t t_src, const size_t t_dst)
-{
-    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
-    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
-            (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
-    // In-place DFT of in, multiply by kmap, in-place iDFT of in
-    if(!(in.is_transformed()))
-    {
-        cout << "dy_1: DFT" << endl;
-        myfft.dft_r2c(in.get_array_d(t_src), reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)));
-        in.set_transformed(true);
-    }
-
-    // Multiply with coefficients for ky
-    kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)),
-                                                   get_coeffs_dy1(),
-                                                   reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_dst)),
-                                                   [=] __device__ (CuCmplx<value_t> val_in, CuCmplx<value_t> val_map) -> CuCmplx<value_t>
-                                                   {
-                                                     return(val_in * CuCmplx<value_t>(0.0, val_map.im()));
-                                                   },
-                                                   cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
-                                                                       get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                       get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
-
-    myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
-    out.set_transformed(false);
-    out.normalize(t_src);
-}
-
-
-template <typename allocator>
-void derivs<allocator> :: dy_2(cuda_array_bc_nogp<allocator>& in,
-                               cuda_array_bc_nogp<allocator> &out,
-                               const size_t t_src, const size_t t_dst)
-{
-    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
-    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
-                         (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
-
-    // In-place DFT of in, multiply by kmap, in-place iDFT of in
-    if(!(in.is_transformed()))
-    {
-        cout << "dy_1: DFT" << endl;
-        myfft.dft_r2c(in.get_array_d(t_src), reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)));
-        in.set_transformed(true);
-    }
-
-    // Multiply with coefficients for ky
-    kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)),
-                                                   get_coeffs_dy2(),
-                                                   reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_dst)),
-                                                   [=] __device__ (CuCmplx<value_t> val_in, CuCmplx<value_t> val_map) -> CuCmplx<value_t>
-                                                   {
-                                                     return(val_in * val_map.im());
-                                                   },
-                                                   cuda::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
-                                                                       get_geom().get_ylo(), get_geom().get_deltay(), 
-                                                                       get_geom().get_nx(), 0, My21, 0, cuda::grid_t::cell_centered));
-
-    myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
-    out.set_transformed(false);
-    out.normalize(t_src);
-}
-
-
-template <typename allocator>
-void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res,
+template <typename T, template <typename> class allocator>
+void deriv_t<T, allocator> :: dx_1(const cuda_array_bc_nogp<T, allocator>& in,
+                                  cuda_array_bc_nogp<T, allocator>& out,
                                   const size_t t_src, const size_t t_dst)
 {
-    // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
-    static dim3 block_single_row(cuda::blockdim_row, 1);
-    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
-
-    // Thread layout for accessing a single column (m = 0, My - 1, n = 0...Nx-1)
-    static dim3 block_single_col(1, cuda::blockdim_col);
-    static dim3 grid_single_col(1, (get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
-
-    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), u.get_address(),
-                                                           v.get_array_d(t_src), v.get_address(),
-                                                           res.get_array_d(t_dst), u.get_geom());
-    
-    // Create address objects to access ghost points 
-    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
-                                                                     v.get_array_d(t_src), v.get_address(),
-                                                                     res.get_array_d(t_dst), get_geom(), 0);
-
-    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
-                                                                     v.get_array_d(t_src), v.get_address(),
-                                                                     res.get_array_d(t_dst), get_geom(), get_geom().get_nx() - 1);
-
-    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
-                                                                     v.get_array_d(t_src), v.get_address(),
-                                                                     res.get_array_d(t_dst), get_geom(), 0);
-
-    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
-                                                                     v.get_array_d(t_src), v.get_address(),
-                                                                     res.get_array_d(t_dst), get_geom(), get_geom().get_my() - 1);
-    cout << "done" << endl;
+    detail :: impl_dx1(in, out, t_src, t_dst, allocator<T>{}); 
 }
 
 
-template <typename allocator>
-derivs<allocator> :: ~derivs()
+template <typename T, template <typename> class allocator>
+void deriv_t<T, allocator> :: dx_2(const cuda_array_bc_nogp<T, allocator>& in,
+                                   cuda_array_bc_nogp<T, allocator>& out,
+                                   const size_t t_src, const size_t t_dst)
 {
-    cudaFree(d_diag_l);
-    cudaFree(d_diag_u);
-    cudaFree(d_diag);
+    detail :: impl_dx2(in, out, t_src, t_dst, allocator<T>{});
+}
 
+
+template <typename T, template<typename> class allocator>
+void deriv_t<T, allocator> :: arakawa(const cuda_array_bc_nogp<T, allocator>& u,
+        const cuda_array_bc_nogp<T, allocator>& v,
+        cuda_array_bc_nogp<T, allocator>& res,
+        const size_t t_src, const size_t t_dst)
+{
+    detail :: impl_arakawa(u, v, res, t_src, t_dst, allocator<T>{});
+}
+
+
+template <typename T, template<typename> class allocator>
+deriv_t<T, allocator> :: ~deriv_t()
+{
     delete [] h_diag;
-
-    cudaFree(d_coeffs_dy1);
-    cudaFree(d_coeffs_dy2);
 }
 
-template <typename allocator>
-void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cuda_array_bc_nogp<allocator>& src, 
-                                         const cuda::bc_t bctype_left, const value_t bval_left,
-                                         const cuda::bc_t bctype_right, const value_t bval_right,
-                                         const size_t t_src, const size_t t_dst)
-{
-    const value_t inv_dx2{1.0 / (get_geom().get_deltax() * get_geom().get_deltax())};
-
-    if (dst.get_bvals() != src.get_bvals())
-    {
-        throw assert_error(string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
-    }
-
-    solvers::elliptic my_ell_solver(get_geom());
-
-    //// Solve the tridiagonal system
-    //// 1.) Update the main diagonal for ky=0 mode with the boundary values
-    ////     Add the Fourier coefficient for mode m=0 of f(0.0, y) = u: hat(u) = My * u
-    for(size_t n = 0; n < get_geom().get_nx(); n++)
-    {
-        h_diag[n] = -2.0 * inv_dx2; // -ky2(=0) 
-    }
-    switch(bctype_left)
-    {
-        case cuda::bc_t::bc_dirichlet:
-            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * cuda::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
-            break;
-        case cuda::bc_t::bc_neumann:
-            h_diag[0] = -3.0 * inv_dx2 - bval_left * cuda::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
-            break;
-        case cuda::bc_t::bc_periodic:
-            cerr << "Periodic boundary conditions not implemented yet." << endl;
-            cerr << "Treating as dirichlet, bval=0" << endl;
-            break;
-    }
-
-    switch(bctype_right)
-    {
-        case cuda::bc_t::bc_dirichlet:
-            h_diag[geom.get_nx() - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * cuda::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
-            break;
-        case cuda::bc_t::bc_neumann:
-            h_diag[geom.get_nx() - 1] = -3.0 * inv_dx2 - bval_right * cuda::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
-            break;
-        case cuda::bc_t::bc_periodic:
-            cerr << "Periodic boundary conditions not implemented yet." << endl;
-            cerr << "Treating as dirichlet, bval=0" << endl;
-            break;
-    }
-    gpuErrchk(cudaMemcpy(d_diag, h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
-
-    my_ell_solver.solve((cuDoubleComplex*) dst.get_array_d(t_dst), (cuDoubleComplex*) src.get_array_d(t_src),
-                        (cuDoubleComplex*)d_diag_l, (cuDoubleComplex*) d_diag, nullptr);
-
-    dst.set_transformed(true);
-}
+//// Call three point stencil with centered difference formula for first derivative
+//template <typename allocator>
+//void derivs<allocator> :: dx_1(const cuda_array_bc_nogp<allocator>& in,
+//                               cuda_array_bc_nogp<allocator>& out,
+//                               const size_t t_src, const size_t t_dst)
+//{
+//    static dim3 block_single_row(cuda::blockdim_row, 1);
+//    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+//
+//    // Call kernel that accesses elements with get_elem; no wrapping around
+//    kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                out.get_array_d(t_dst), 
+//                                                                [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                value_t u_right, value_t inv_dx, 
+//                                                                                value_t inv_dx2) -> value_t
+//                                                                {
+//                                                                  return(0.5 * (u_right - u_left) * inv_dx);
+//                                                                }, 
+//                                                                out.get_geom());
+//
+//    // Call kernel that accesses elements with operator(); interpolates ghost point values
+//    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                        out.get_array_d(t_dst), 
+//                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                        value_t u_right, value_t inv_dx, 
+//                                                                                        value_t inv_dx2) -> value_t
+//                                                                        {
+//                                                                          return(0.5 * (u_right - u_left) * inv_dx);
+//                                                                        },
+//                                                                        out.get_geom(), 0);
+//
+//    // Call kernel that accesses elements with operator(); interpolates ghost point values
+//    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                        out.get_array_d(t_dst), 
+//                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                        value_t u_right, value_t inv_dx, 
+//                                                                                        value_t inv_dx2) -> value_t
+//                                                                        {
+//                                                                          return(0.5 * (u_right - u_left) * inv_dx);
+//                                                                        }, 
+//                                                                        out.get_geom(), out.get_geom().get_nx() - 1);
+//}
+//
+//
+//// Call three point stencil with centered difference formula for first derivative
+//template <typename allocator>
+//void derivs<allocator> :: dx_2(const cuda_array_bc_nogp<allocator>& in,
+//                               cuda_array_bc_nogp<allocator>& out,
+//                               const size_t t_src, const size_t t_dst)
+//{
+//    static dim3 block_single_row(cuda::blockdim_row, 1);
+//    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+//
+//    // Call kernel that accesses elements with get_elem; no wrapping around
+//    kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                out.get_array_d(t_dst), 
+//                                                                [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                value_t u_right, value_t inv_dx, 
+//                                                                                value_t inv_dx2) -> value_t
+//                                                                {
+//                                                                  return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
+//                                                                }, 
+//                                                                out.get_geom());
+//
+//    // Call kernel that accesses elements with operator(); interpolates ghost point values
+//    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                        out.get_array_d(t_dst), 
+//                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                        value_t u_right, value_t inv_dx, 
+//                                                                                        value_t inv_dx2) -> value_t
+//                                                                        {
+//                                                                          return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
+//                                                                        },
+//                                                                        out.get_geom(), 0);
+//
+//    // Call kernel that accesses elements with operator(); interpolates ghost point values
+//    kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_array_d(t_src), in.get_address(),
+//                                                                        out.get_array_d(t_dst), 
+//                                                                        [=] __device__ (value_t u_left, value_t u_middle, 
+//                                                                                        value_t u_right, value_t inv_dx, 
+//                                                                                        value_t inv_dx2) -> value_t
+//                                                                        {
+//                                                                          return((u_left + u_right - 2.0 * u_middle) * inv_dx2);
+//                                                                        }, 
+//                                                                        out.get_geom(), out.get_geom().get_nx() - 1);
+//}
+//
+//
+//template <typename allocator>
+//void derivs<allocator> :: dy_1(cuda_array_bc_nogp<allocator>& in,
+//                               cuda_array_bc_nogp<allocator> &out,
+//                               const size_t t_src, const size_t t_dst)
+//{
+//    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+//    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
+//            (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+//    // In-place DFT of in, multiply by kmap, in-place iDFT of in
+//    if(!(in.is_transformed()))
+//    {
+//        cout << "dy_1: DFT" << endl;
+//        myfft.dft_r2c(in.get_array_d(t_src), reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)));
+//        in.set_transformed(true);
+//    }
+//
+//    // Multiply with coefficients for ky
+//    kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)),
+//                                                   get_coeffs_dy1(),
+//                                                   reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_dst)),
+//                                                   [=] __device__ (CuCmplx<value_t> val_in, CuCmplx<value_t> val_map) -> CuCmplx<value_t>
+//                                                   {
+//                                                     return(val_in * CuCmplx<value_t>(0.0, val_map.im()));
+//                                                   },
+//                                                   twodads::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
+//                                                                       get_geom().get_ylo(), get_geom().get_deltay(), 
+//                                                                       get_geom().get_nx(), 0, My21, 0, twodads::grid_t::cell_centered));
+//
+//    myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
+//    out.set_transformed(false);
+//    out.normalize(t_src);
+//}
+//
+//
+//template <typename allocator>
+//void derivs<allocator> :: dy_2(cuda_array_bc_nogp<allocator>& in,
+//                               cuda_array_bc_nogp<allocator> &out,
+//                               const size_t t_src, const size_t t_dst)
+//{
+//    const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+//    const dim3 grid_my21((My21 + cuda::blockdim_col - 1) / cuda::blockdim_col,
+//                         (get_geom().get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+//
+//    // In-place DFT of in, multiply by kmap, in-place iDFT of in
+//    if(!(in.is_transformed()))
+//    {
+//        cout << "dy_1: DFT" << endl;
+//        myfft.dft_r2c(in.get_array_d(t_src), reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)));
+//        in.set_transformed(true);
+//    }
+//
+//    // Multiply with coefficients for ky
+//    kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<value_t>*>(in.get_array_d(t_src)),
+//                                                   get_coeffs_dy2(),
+//                                                   reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_dst)),
+//                                                   [=] __device__ (CuCmplx<value_t> val_in, CuCmplx<value_t> val_map) -> CuCmplx<value_t>
+//                                                   {
+//                                                     return(val_in * val_map.im());
+//                                                   },
+//                                                   twodads::slab_layout_t(get_geom().get_xleft(), get_geom().get_deltax(), 
+//                                                                       get_geom().get_ylo(), get_geom().get_deltay(), 
+//                                                                       get_geom().get_nx(), 0, My21, 0, twodads::grid_t::cell_centered));
+//
+//    myfft.dft_c2r(reinterpret_cast<CuCmplx<value_t>*>(out.get_array_d(t_src)), out.get_array_d(t_src));
+//    out.set_transformed(false);
+//    out.normalize(t_src);
+//}
+//
+//
+//template <typename allocator>
+//void derivs<allocator> :: arakawa(const cuda_array_bc_nogp<allocator>& u, const cuda_array_bc_nogp<allocator>& v, cuda_array_bc_nogp<allocator>& res,
+//                                  const size_t t_src, const size_t t_dst)
+//{
+//    // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
+//    static dim3 block_single_row(cuda::blockdim_row, 1);
+//    static dim3 grid_single_row((get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+//
+//    // Thread layout for accessing a single column (m = 0, My - 1, n = 0...Nx-1)
+//    static dim3 block_single_col(1, cuda::blockdim_col);
+//    static dim3 grid_single_col(1, (get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
+//
+//    kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_array_d(t_src), u.get_address(),
+//                                                           v.get_array_d(t_src), v.get_address(),
+//                                                           res.get_array_d(t_dst), u.get_geom());
+//    
+//    // Create address objects to access ghost points 
+//    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
+//                                                                     v.get_array_d(t_src), v.get_address(),
+//                                                                     res.get_array_d(t_dst), get_geom(), 0);
+//
+//    kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_array_d(t_src), u.get_address(),
+//                                                                     v.get_array_d(t_src), v.get_address(),
+//                                                                     res.get_array_d(t_dst), get_geom(), get_geom().get_nx() - 1);
+//
+//    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
+//                                                                     v.get_array_d(t_src), v.get_address(),
+//                                                                     res.get_array_d(t_dst), get_geom(), 0);
+//
+//    kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_array_d(t_src), u.get_address(),
+//                                                                     v.get_array_d(t_src), v.get_address(),
+//                                                                     res.get_array_d(t_dst), get_geom(), get_geom().get_my() - 1);
+//    cout << "done" << endl;
+//}
+//
+//
+//
+//template <typename allocator>
+//void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cuda_array_bc_nogp<allocator>& src, 
+//                                         const twodads::bc_t bctype_left, const value_t bval_left,
+//                                         const twodads::bc_t bctype_right, const value_t bval_right,
+//                                         const size_t t_src, const size_t t_dst)
+//{
+//    const value_t inv_dx2{1.0 / (get_geom().get_deltax() * get_geom().get_deltax())};
+//
+//    if (dst.get_bvals() != src.get_bvals())
+//    {
+//        throw assert_error(string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
+//    }
+//
+//    solvers::elliptic my_ell_solver(get_geom());
+//
+//    //// Solve the tridiagonal system
+//    //// 1.) Update the main diagonal for ky=0 mode with the boundary values
+//    ////     Add the Fourier coefficient for mode m=0 of f(0.0, y) = u: hat(u) = My * u
+//    for(size_t n = 0; n < get_geom().get_nx(); n++)
+//    {
+//        h_diag[n] = -2.0 * inv_dx2; // -ky2(=0) 
+//    }
+//    switch(bctype_left)
+//    {
+//        case twodads::bc_t::bc_dirichlet:
+//            h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * twodads::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
+//            break;
+//        case twodads::bc_t::bc_neumann:
+//            h_diag[0] = -3.0 * inv_dx2 - bval_left * twodads::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
+//            break;
+//        case twodads::bc_t::bc_periodic:
+//            cerr << "Periodic boundary conditions not implemented yet." << endl;
+//            cerr << "Treating as dirichlet, bval=0" << endl;
+//            break;
+//    }
+//
+//    switch(bctype_right)
+//    {
+//        case twodads::bc_t::bc_dirichlet:
+//            h_diag[geom.get_nx() - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * twodads::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
+//            break;
+//        case twodads::bc_t::bc_neumann:
+//            h_diag[geom.get_nx() - 1] = -3.0 * inv_dx2 - bval_right * twodads::TWOPI * static_cast<value_t>(get_geom().get_my()) / get_geom().get_Ly();
+//            break;
+//        case twodads::bc_t::bc_periodic:
+//            cerr << "Periodic boundary conditions not implemented yet." << endl;
+//            cerr << "Treating as dirichlet, bval=0" << endl;
+//            break;
+//    }
+//    gpuErrchk(cudaMemcpy(d_diag, h_diag, get_geom().get_nx() * sizeof(cmplx_t), cudaMemcpyHostToDevice));
+//
+//    my_ell_solver.solve((cuDoubleComplex*) dst.get_array_d(t_dst), (cuDoubleComplex*) src.get_array_d(t_src),
+//                        (cuDoubleComplex*)d_diag_l, (cuDoubleComplex*) d_diag, nullptr);
+//
+//    dst.set_transformed(true);
+//}
 
 
 //#ifdef DEBUG
@@ -912,7 +1598,7 @@ void derivs<allocator> :: invert_laplace(cuda_array_bc_nogp<allocator>& dst, cud
 //
 //        // Update values of csrValA_h
 //        // Assume Dirichlet=0 boundary conditions for now
-//        ky2 = cuda::TWOPI * cuda::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
+//        ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<value_t>(m * m) / (Ly * Ly);
 //        csrValA_h[0] = cmplx_t(-3.0 * inv_dx2 - ky2);
 //        for(size_t n = 2; n < nnz - 3; n += 3)
 //        {
