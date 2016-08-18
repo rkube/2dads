@@ -209,7 +209,6 @@ namespace cufft
                 err_str << "Error executing cufftZ2D DFT: " << cuda::cufftGetErrorString.at(err) << std::endl;
                 throw gpu_error(err_str.str());
             }
-            std::cerr << "!!_!_!_!_!1-1-1--1-1--1!!!!! DFT_C2R" << std::endl;
         }
 
 
@@ -255,9 +254,6 @@ namespace fftw
             // Create dummy arrays for FFTW_ESTIMATE
             double* dummy_double = new double[(geom.get_nx() + geom.get_pad_x()) * (geom.get_my() + geom.get_pad_y())];
             CuCmplx<double>* dummy_cmplx = new CuCmplx<double>[(geom.get_nx() + geom.get_pad_x()) * ((geom.get_my() + geom.get_pad_y()) / 2)];
-
-            std::cout << "dummy_double at " << dummy_double;
-            std::cout << "\tdummy_cmplx at " << dummy_cmplx << std::endl;
 
             switch(dft_type)
             {

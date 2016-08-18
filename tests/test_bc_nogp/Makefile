@@ -15,8 +15,11 @@ test_slab_host: test_slab.cpp slab_bc.cpp slab_bc.h derivatives.h
 test_slab_device: test_slab.cu slab_bc.cu slab_bc.h derivatives.h 
 	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o test_slab_device test_slab.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lfftw3 -lm 
 
-test_derivs: slab_bc.cu slab_bc.h test_derivs.cu derivatives.h
-	$(CUDACC) $(CUDACFLAGS) -DHOST -o test_derivs test_derivs.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse -lfftw3 -lm
+test_derivs_host: slab_bc.cpp slab_bc.h derivatives.h test_derivs.cpp 
+	$(CUDACC) $(CUDACFLAGS) -DHOST -o test_derivs_host test_derivs.cpp slab_bc.cpp $(INCLUDES) $(CUDALFLAGS) -lfftw3 -lm
+
+test_derivs_device: slab_bc.cu slab_bc.h derivatives.h test_derivs.cu 
+	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o test_derivs_device test_derivs.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse -lfftw3 -lm
 
 test_cusolve: test_cusolve.cu derivatives.h
 	$(CUDACC) $(CUDACFLAGS) -DHOST -o test_cusolve test_cusolve.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse -lfftw3 -lm

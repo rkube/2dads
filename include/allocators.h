@@ -52,10 +52,8 @@ struct allocator_device
         cudaError_t res;
         if((res = cudaMalloc(&ptr, s * sizeof(T))) != cudaSuccess)
         {
-            //std::cerr << "Error allocating " << s * sizeof(T) << " bytes: " << cudaGetErrorString(res) << std::endl;
             throw;
         }
-        //std::cerr << "allocator_device :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr << std::endl;
         return ptr_type(static_cast<T*>(ptr));
     }
 

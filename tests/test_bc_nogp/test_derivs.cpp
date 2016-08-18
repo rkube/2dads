@@ -19,8 +19,6 @@
 #include <iostream>
 #include <sstream>
 #include "2dads_types.h"
-#include <cuda.h>
-#include <cuda_runtime_api.h>
 #include "slab_bc.h"
 
 using namespace std;
@@ -46,14 +44,13 @@ int main(void)
     twodads::slab_layout_t my_geom(x_l, (Lx - x_l) / twodads::real_t(Nx), y_l, (Ly - y_l)  / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
     twodads::stiff_params_t stiff_params(0.1, Lx, Ly, 0.1, 0.0, Nx, My / 2 + 1, 4);
 
-
     {
         slab_bc my_slab(my_geom, my_bvals, stiff_params);
         my_slab.initialize_derivatives(test_ns::field_t::arr1, test_ns::field_t::arr2);
 
         // Initialize analytic solution for first derivative
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
-        sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
+        sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 return(twodads::TWOPI * cos(twodads::TWOPI * geom.get_x(n)));
             }, 0);
@@ -70,14 +67,13 @@ int main(void)
         fname << "test_derivs_ddx1_solnum_" << Nx << "_out.dat";
         my_slab.print_field(test_ns::field_t::arr3, fname.str());
 
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;
-
         cout << "First x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Initialize analytic solution for second derivative
-        sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 return(-1.0 * twodads::TWOPI * twodads::TWOPI * sin(twodads::TWOPI * geom.get_x(n)));
             }, 0);
@@ -99,10 +95,10 @@ int main(void)
         sol_num -= sol_an;
         cout << "Second x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Test first y-derivative
         // g_y = -100 * (y - 0.5) * exp(-50 * (y - 0.5) * (y - 0.5))
-        sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 twodads::real_t y{geom.get_y(m)};
                 return(-100 * (y - 0.5) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
@@ -120,13 +116,13 @@ int main(void)
         fname << "test_derivs_ddy1_solnum_" << Nx << "_out.dat";
         my_slab.print_field(test_ns::field_t::arr3, fname.str());
 
-        sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3); 
+        sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
         sol_num -= sol_an;
         cout << "First y-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Test second y-derivative
         // g_yy = 10000 * (0.24 - y + y^2) * exp(-50 * (y - 0.5) * (y - 0.5))
-        sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t 
+        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 twodads::real_t y{geom.get_y(m)};
                 return(10000 * (0.24 - y + y * y) * exp(-50.0 * (y - 0.5) * (y - 0.5)));

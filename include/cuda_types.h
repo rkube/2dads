@@ -15,7 +15,7 @@
 namespace cuda
 {
     using real_t = double;
-    constexpr unsigned int blockdim_col{32}; ///< Block dimension for consecutive elements (y-direction)
+    constexpr unsigned int blockdim_col{16}; ///< Block dimension for consecutive elements (y-direction)
     constexpr unsigned int blockdim_row{16}; ///< Block dimension for non-consecutive elements (x-direction)
 
     constexpr unsigned int blockdim_nx_max{1024};
