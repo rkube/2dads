@@ -50,8 +50,9 @@ int main(void){
 
     {
         slab_bc my_slab(my_geom, my_bvals, stiff_params);
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
-        sol_an.apply([=] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
+        //sol_an.apply([=] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
                 {
                     twodads::real_t x{geom.get_x(n)};
                     twodads::real_t y{geom.get_y(m)};
@@ -61,7 +62,6 @@ int main(void){
 
         fname.str(string(""));
         fname << "test_arakawa_solan_" << Nx << "_out.dat";
-        cout << "sol_an: L2 = " << sol_an.L2(0) << endl;
         utility :: print(sol_an, 0, fname.str());
 
         //cerr << "Initializing fields..." << endl;
@@ -81,8 +81,7 @@ int main(void){
         fname << "test_arakawa_solnum_" << Nx << "_out.dat";
         my_slab.print_field(test_ns::field_t::arr3, fname.str());
        
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
-        cout << "sol_num: L2 = " << sol_num.L2(0) << endl;
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;
 
         cout << "sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;

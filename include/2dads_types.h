@@ -12,16 +12,29 @@
 #endif
 
 #include "cucmplx.h"
+#ifdef DEVICE
 #include "cufft.h"
+#endif //DEVICE
+
+#ifdef HOST
+#include <fftw3.h>
+#endif //HOST
+
 #include <vector>
 #include <cassert>
+#include <iostream>
 
 namespace twodads {
     using real_t = double;
     using cmplx_t = CuCmplx<real_t>;
 
+    #ifdef DEVICE
     using fft_handle_t = cufftHandle;
+    #endif //DEVICE
 
+    #ifdef HOST
+    using fft_handle_t = fftw_plan;
+    #endif //HOST
 
     // Use PI from math.h
     constexpr real_t PI{3.141592653589793};
@@ -72,6 +85,21 @@ namespace twodads {
         const size_t pad_y;
         const twodads::grid_t grid;
         const real_t cellshift;
+
+        friend std::ostream& operator<< (std::ostream& os, const slab_layout_t& sl)
+        {
+            os << "x_left = " << sl.get_xleft();
+            os << "\tdelta_x = " << sl.get_deltax();
+            os << "\ty_lo = " << sl.get_ylo();
+            os << "\tdelta_y = " << sl.get_deltay();
+            os << "\tNx = " << sl.get_nx();
+            os << "\tpad_x = " << sl.get_pad_x();
+            os << "\tMy = " << sl.get_my();
+            os << "\tpad_y = " << sl.get_pad_y();
+            os << "\tcellshift = " << sl.get_cellshift();
+            os << std::endl;
+            return(os);
+        }
 
         CUDAMEMBER inline bool operator==(const slab_layout_t& rhs)
         {

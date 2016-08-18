@@ -7,16 +7,22 @@
  *
  */
 
-//#include "2dads.h"
-#include <string>
-#include <exception>
-#include <map>
-#include "cublas_v2.h"
-#include "cusparse.h"
-
 #ifndef ERROR_H
 #define ERROR_H
 
+#include <string>
+#include <exception>
+#include <map>
+
+#ifdef __CUDACC__
+#include "cublas_v2.h"
+#include "cusparse.h"
+#endif //__CUDACC__
+
+
+
+
+#ifdef __CUDACC__
 class cublas_err : public std::exception
 {
     public:
@@ -64,6 +70,21 @@ class cusparse_err : public std::exception
 
         const std::string error;
 };
+
+
+/// GPU call errorss
+class gpu_error : public std::exception
+{
+    public:
+        gpu_error(const std::string err) : error(err) {};
+        ~gpu_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+    private:
+        const std::string error;
+};
+
+#endif //__CUDACC__
 
 class out_of_bounds_err : public std::exception
 {
@@ -146,17 +167,7 @@ class name_error : public std::exception
 };
 
 
-/// GPU call errorss
-class gpu_error : public std::exception
-{
-    public:
-        gpu_error(const std::string err) : error(err) {};
-        ~gpu_error() throw() {};
-        virtual const char* what() const throw() {return error.data();};
 
-    private:
-        const std::string error;
-};
 
 /// things not implemented yet
 class not_implemented_error : public std::exception

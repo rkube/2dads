@@ -10,27 +10,47 @@
 #include <fstream>
 #include <string>
 #include <map>
-#include <cufft.h>
 #include "2dads_types.h"
-#include "cuda_types.h"
 #include "cuda_array_bc_nogp.h"
+#include "utility.h"
 #include "dft_type.h"
 //#include "solvers.h"
 #include "derivatives.h"
 //#include "integrators.h"
+
+#ifdef __CUDACC__
+#include "cuda_types.h"
+#endif //__CUDACC__
 
 
 namespace test_ns{
     enum class field_t {arr1, arr1_x, arr1_y, arr2, arr2_x, arr2_y, arr3, arr3_x, arr3_y};
 }
 
+#ifndef __CUDACC__
+#define LAMBDACALLER
+#endif
+
+#ifdef __CUDACC__
+#define LAMBDACALLER __device__
+#endif
+
+
 class slab_bc
 {
     public:
         using value_t = twodads::real_t;
 
+#ifdef DEVICE
         using cuda_arr_real = cuda_array_bc_nogp<twodads::real_t, allocator_device>;
         using cuda_arr_cmpl = cuda_array_bc_nogp<twodads::cmplx_t, allocator_device>;
+        using dft_library_t = cufft_object_t<twodads::real_t>;
+#endif //DEVICE
+#ifdef HOST
+        using cuda_arr_real = cuda_array_bc_nogp<twodads::real_t, allocator_host>;
+        using cuda_arr_cmpl = cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>;
+        using dft_library_t = fftw_object_t<twodads::real_t>;
+#endif //HOST
 
         slab_bc(const twodads::slab_layout_t, const twodads::bvals_t<twodads::real_t>, const twodads::stiff_params_t);
         ~slab_bc();
@@ -61,20 +81,24 @@ class slab_bc
         inline twodads::slab_layout_t get_geom() const {return(geom);};
         inline twodads::bvals_t<twodads::real_t> get_bvals() const {return(boundaries);};
     private:
-        const size_t Nx;
-        const size_t My;
-        const size_t tlevs;
 
         const twodads::bvals_t<twodads::real_t> boundaries;
         const twodads::slab_layout_t geom;
+        const twodads::stiff_params_t tint_params;
 
         //solvers::cublas_handle_t cublas_handle;
         //solvers::cusparse_handle_t cusparse_handle;
 
         dft_object_t<twodads::real_t>* myfft;
+
+#ifdef DEVICE
         deriv_t<twodads::real_t, allocator_device> my_derivs;
-        //deriv_t<twodads::real_t, allocator_host> my_derivs;
         //integrator<my_allocator_device<twodads::real_t>>* tint;
+#endif //DEVICE
+#ifdef HOST
+        deriv_t<twodads::real_t, allocator_host> my_derivs;
+        //integrator<twodads::real_t, allocator_host> tint;
+#endif //HOST
 
         cuda_arr_real arr1;
         cuda_arr_real arr1_x;

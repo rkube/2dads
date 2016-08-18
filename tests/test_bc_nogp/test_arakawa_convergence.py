@@ -33,7 +33,7 @@ def fin2(x, y):
 def fout_an(x, y):
     return(16. * np.pi * np.pi * np.cos(np.pi * x) * np.cos(np.pi * y) * (np.cos(2. * np.pi * y) - np.cos(2. * np.pi * x)) * np.sin(np.pi * x) * np.sin(np.pi * x) * np.sin(np.pi * y) * np.sin(np.pi * y))
 
-Nx_arr = np.array([128, 256, 512, 1024, 2048], dtype='int')
+Nx_arr = np.array([128, 256, 512, 1024], dtype='int')
 L2_arr = np.zeros(Nx_arr.shape[0], dtype='float64')
 L = 2.0
 

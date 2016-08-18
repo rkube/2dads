@@ -48,10 +48,10 @@ int main(void)
         my_slab.initialize_derivatives(test_ns::field_t::arr1, test_ns::field_t::arr2);
 
         // Initialize analytic solution for first derivative
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
         //cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
-        //sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-        sol_an.apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        //sol_an.apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 return(twodads::TWOPI * cos(twodads::TWOPI * geom.get_x(n)));
             }, 0);
@@ -68,15 +68,15 @@ int main(void)
         fname << "test_derivs_ddx1_solnum_" << Nx << "_out.dat";
         my_slab.print_field(test_ns::field_t::arr3, fname.str());
 
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
-        //cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
+        //cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;
-        cout << "First x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
+        cout << "First x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Initialize analytic solution for second derivative
-        //sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-        sol_an.apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        sol_an.apply([=] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        //sol_an.apply([=] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 return(-1.0 * twodads::TWOPI * twodads::TWOPI * sin(twodads::TWOPI * geom.get_x(n)));
             }, 0);
@@ -96,60 +96,57 @@ int main(void)
 
         sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
         sol_num -= sol_an;
-        cout << "Second x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
+        cout << "Second x-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
 
-    //    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //    // Test first y-derivative
-    //    // g_y = -100 * (y - 0.5) * exp(-50 * (y - 0.5) * (y - 0.5))
-    //    sol_an.evaluate([=] __device__(size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-    //        {
-    //            twodads::real_t y{geom.get_y(m)};
-    //            return(-100 * (y - 0.5) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
-    //        }, 0);
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Test first y-derivative
+        // g_y = -100 * (y - 0.5) * exp(-50 * (y - 0.5) * (y - 0.5))
+        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        //sol_an.apply([] __device__(twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+            {
+                twodads::real_t y{geom.get_y(m)};
+                return(-100 * (y - 0.5) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
+            }, 0);
 
-    //    // Write analytic solution to file
-    //    fname.str(string(""));
-    //    fname << "test_derivs_ddy1_solan_" << Nx << "_out.dat";
-    //    of.open(fname.str());
-    //    of << sol_an;
-    //    of.close();
+        // Write analytic solution to file
+        fname.str(string(""));
+        fname << "test_derivs_ddy1_solan_" << Nx << "_out.dat";
+        utility :: print(sol_an, 0, fname.str());
 
-    //    //// compute first x-derivative
-    //    my_slab.d_dy(test_ns::field_t::arr2, test_ns::field_t::arr3, 1, 0, 0);
+        //// compute first y-derivative
+        my_slab.d_dy(test_ns::field_t::arr2, test_ns::field_t::arr3, 1, 0, 0);
+        
+        fname.str(string(""));
+        fname << "test_derivs_ddy1_solnum_" << Nx << "_out.dat";
+        my_slab.print_field(test_ns::field_t::arr3, fname.str());
 
-    //    fname.str(string(""));
-    //    fname << "test_derivs_ddy1_solnum_" << Nx << "_out.dat";
-    //    my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
+        sol_num -= sol_an;
+        cout << "First y-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Test second y-derivative
+        // g_yy = 10000 * (0.24 - y + y^2) * exp(-50 * (y - 0.5) * (y - 0.5))
+        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        //sol_an.evaluate([] __device__(size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t 
+            {
+                twodads::real_t y{geom.get_y(m)};
+                return(10000 * (0.24 - y + y * y) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
+            }, 0);
 
-    //    sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
-    //    sol_num -= sol_an;
-    //    cout << "First y-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
-    //    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //    // Test second y-derivative
-    //    // g_yy = 10000 * (0.24 - y + y^2) * exp(-50 * (y - 0.5) * (y - 0.5))
-    //    sol_an.evaluate([=] __device__(size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-    //        {
-    //            twodads::real_t y{geom.get_y(m)};
-    //            return(10000 * (0.24 - y + y * y) * exp(-50.0 * (y - 0.5) * (y - 0.5)));
-    //        }, 0);
+        // Write analytic solution to file
+        fname.str(string(""));
+        fname << "test_derivs_ddy2_solan_" << Nx << "_out.dat";
+        utility :: print(sol_an, 0, fname.str());
 
-    //    // Write analytic solution to file
-    //    fname.str(string(""));
-    //    fname << "test_derivs_ddy2_solan_" << Nx << "_out.dat";
-    //    of.open(fname.str());
-    //    of << sol_an;
-    //    of.close();
+        //// compute first x-derivative
+        my_slab.d_dy(test_ns::field_t::arr2, test_ns::field_t::arr3, 2, 0, 0);
 
-    //    //// compute first x-derivative
-    //    my_slab.d_dy(test_ns::field_t::arr2, test_ns::field_t::arr3, 2, 0, 0);
+        fname.str(string(""));
+        fname << "test_derivs_ddy2_solnum_" << Nx << "_out.dat";
+        my_slab.print_field(test_ns::field_t::arr3, fname.str());
 
-    //    fname.str(string(""));
-    //    fname << "test_derivs_ddy2_solnum_" << Nx << "_out.dat";
-    //    my_slab.print_field(test_ns::field_t::arr3, fname.str());
-
-    //    sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
-    //    sol_num -= sol_an;
-    //    cout << "First y-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << sol_num.L2(0) << endl;
-
+        sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
+        sol_num -= sol_an;
+        cout << "First y-derivative: sol_num - sol_an: Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
     }
 }

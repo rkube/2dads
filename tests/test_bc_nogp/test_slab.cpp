@@ -32,10 +32,9 @@ int main(void)
         my_slab.print_field(test_ns::field_t::arr1);
 
         my_slab.dft_r2c(test_ns::field_t::arr1, 0);
-        cout << "===============================================================================================" << endl;
+        cout << "===========================================================================================" << endl;
 
         //my_slab.dft_c2r(test_ns::field_t::arr1, 0);
         my_slab.print_field(test_ns::field_t::arr1);
     } // Let managed memory go out of scope before calling cudaDeviceReset()
-    cudaDeviceReset();
 }

@@ -9,22 +9,15 @@
 
 #include <memory>
 #include <iostream>
-#include <cuda.h>
-#include <cuda_runtime_api.h>
 #include "error.h"
 
-
-template <typename T>
-struct deleter_host
-{
-    void operator()(T* p) 
-    { 
-        //std::cerr << "deleter_host: freeing memory at " << p << std::endl;
-        delete [] p; 
-    }
-};
+#ifdef __CUDACC__
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#endif //__CUDACC__
 
 
+#ifdef __CUDACC__
 template <typename T>
 struct deleter_device
 {
@@ -93,6 +86,19 @@ struct allocator_device
         return(p);
     }
 };
+#endif //__CUDACC__
+
+
+template <typename T>
+struct deleter_host
+{
+    void operator()(T* p) 
+    { 
+        //std::cerr << "deleter_host: freeing memory at " << p << std::endl;
+        delete [] p; 
+    }
+};
+
 
 
 template <typename T>
@@ -158,6 +164,7 @@ struct my_allocator_traits<T*, allocator_host>
 };
 
 
+#ifdef __CUDACC__
 template <typename T>
 struct my_allocator_traits<T, allocator_device>
 {
@@ -174,7 +181,7 @@ struct my_allocator_traits<T*, allocator_device>
     using value_type = T*;
     using deleter_type = deleter_device<T*>;
 };
-
+#endif //__CUDACC__
 
 
 

@@ -129,7 +129,12 @@ class address_t
         }
 
         // Direct element access, no wrapping / ghost points
-        CUDA_MEMBER T get_elem(const T* data, const int n, const int m) const
+        CUDA_MEMBER T& get_elem(T* data, int n, int m)
+        {
+            return(data[n * static_cast<int>(get_my() + get_pad_my()) + m]);
+        }
+
+        CUDA_MEMBER T get_elem(const T* data, int n, int m) const
         {
             return(data[n * static_cast<int>(get_my() + get_pad_my()) + m]);
         }
@@ -166,7 +171,19 @@ class address_t
                 ret_val = interp_gp_right(this -> get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped)); 
             }
             return(ret_val);
-        }        
+        }   
+
+        // Wrap m and return reference to data if n is within bounds
+        //CUDA_MEMBER T& operator()(T* data, const int n, const int m)
+        //{
+        //    const int m_wrapped = (m + static_cast<int>(get_my())) % static_cast<int>(get_my());
+        //    if(n >= 0 && n < static_cast<int>(get_nx()))
+        //    {
+        //        return(data[n * static_cast<int>(get_my() + get_pad_my()) + m_wrapped]);
+        //    }
+        //    printf("Out of bounds error in T& address operator() n = %d is out of bounds\n", n);
+        //    return(data[0]);
+        //}     
 
         CUDA_MEMBER inline size_t get_nx() const {return(Nx);};
         CUDA_MEMBER inline size_t get_my() const {return(My);};
