@@ -670,7 +670,7 @@ public:
         check_bounds(t_dst, 0, 0);
         src.check_bounds(t_src, 0, 0);
         assert(get_geom() == src.get_geom());
-        my_alloc.copy(src.get_tlev_ptr(t_src), src.get_tlev_ptr() + src.get_geom().get_nelem_per_t(), get_tlev_ptr(t_dst));
+        my_alloc.copy(src.get_tlev_ptr(t_src), src.get_tlev_ptr(t_src) + src.get_geom().get_nelem_per_t(), get_tlev_ptr(t_dst));
     }
 
 	///@brief Move data from t_src to t_dst, zero out t_src

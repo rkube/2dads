@@ -14,7 +14,7 @@
 #include "cuda_array_bc_nogp.h"
 #include "utility.h"
 #include "dft_type.h"
-//#include "solvers.h"
+#include "solvers.h"
 #include "derivatives.h"
 //#include "integrators.h"
 
@@ -72,8 +72,8 @@ class slab_bc
         void d_dy(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t, const size_t);
         void arakawa(const test_ns::field_t, const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
-        void print_field(const test_ns::field_t) const;
-        void print_field(const test_ns::field_t, const std::string) const;
+        //void print_field(const test_ns::field_t) const;
+        //void print_field(const test_ns::field_t, const std::string) const;
 
         void integrate(const test_ns::field_t);
 
@@ -85,9 +85,6 @@ class slab_bc
         const twodads::bvals_t<twodads::real_t> boundaries;
         const twodads::slab_layout_t geom;
         const twodads::stiff_params_t tint_params;
-
-        //solvers::cublas_handle_t cublas_handle;
-        //solvers::cusparse_handle_t cusparse_handle;
 
         dft_object_t<twodads::real_t>* myfft;
 

@@ -36,8 +36,8 @@ int main(void){
         slab_bc my_slab(my_geom, my_bvals, params);
         my_slab.initialize_invlaplace(test_ns::field_t::arr1);
 
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
-        sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
+        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
                 {
                     return(exp(-0.5 * (geom.get_x(n) * geom.get_x(n) + geom.get_y(m) * geom.get_y(m))));
                 },
@@ -59,9 +59,8 @@ int main(void){
         utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr2)), 0, fname.str());
 
         // Get the analytic solution
-        cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr2));
+        cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr2));
         sol_num -= sol_an;
         cout << "Nx = " << Nx << ", My = " << My << ", L2 = " << utility :: L2(sol_num, 0) << endl;
     } // Let managed memory go out of scope before calling cudaDeviceReset()
-    //cudaDeviceReset();
 }

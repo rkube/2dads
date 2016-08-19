@@ -4,12 +4,20 @@
 
 #include <iostream>
 #include <sstream>
+
+#include "2dads_types.h"
+#include "error.h"
+#include "cucmplx.h"
+
+#ifdef HOST
+#include "mkl.h"
+#endif //HOST
+
+#ifdef __CUDACC__
 #include <cusolverSp.h>
 #include <cublas_v2.h>
-#include "cucmplx.h"
-#include "error.h"
-#include "2dads_types.h"
 #include "cuda_types.h"
+#endif //__CUDACC__
 
 #ifndef SOLVERS_H
 #define SOLVERS_H
@@ -23,6 +31,8 @@
 namespace solvers
 {
     // Wrapper data type for cublasHandle_t
+
+#ifdef __CUDACC__
     class cublas_handle_t
     {
         private: 
@@ -80,18 +90,11 @@ namespace solvers
 
     class elliptic
     {
-        private:
-            const int My_int;
-            const int My21_int;
-            const int Nx_int;
-            const double inv_dx2;
-            cuDoubleComplex* d_tmp_mat;
-
         public:
             elliptic(const twodads::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
                                                            My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
-                                                           Nx_int{static_cast<int>(_geom.get_nx())},
-                                                           inv_dx2{1.0 / (_geom.get_deltax() * _geom.get_deltax())}
+                                                           Nx_int{static_cast<int>(_geom.get_nx())}};
+                                                           //inv_dx2{1.0 / (_geom.get_deltax() * _geom.get_deltax())}
              {
                 cudaError_t err;
                 if( (err = cudaMalloc((void**) &d_tmp_mat, get_nx() * get_my21() * sizeof(cuDoubleComplex))) != cudaSuccess)
@@ -109,11 +112,11 @@ namespace solvers
             inline int get_my() const {return(My_int);};
             inline int get_my21() const {return(My21_int);};
             inline int get_nx() const {return(Nx_int);};
-            inline double get_invdx2() const {return(inv_dx2);};
+            //inline double get_invdx2() const {return(inv_dx2);};
             inline cuDoubleComplex* get_d_tmp_mat() {return(d_tmp_mat);};
 
 
-            void solve(cuDoubleComplex* dst, cuDoubleComplex* src,
+            void solve(cuDoubleComplex* src, cuDoubleComplex* dst,
                        cuDoubleComplex* d_diag_l, cuDoubleComplex* d_diag, cuDoubleComplex* d_diag_u)
 
             {
@@ -143,7 +146,7 @@ namespace solvers
                                                                 get_nx(),
                                                                 d_diag_l,
                                                                 d_diag,
-                                                                d_diag_l,
+                                                                d_diag_u,
                                                                 get_d_tmp_mat(),
                                                                 get_my21(),
                                                                 get_nx())) != CUSPARSE_STATUS_SUCCESS)
@@ -168,9 +171,52 @@ namespace solvers
                 {
                     throw cublas_err(cublas_status);
                 }
-                std::cout << "Iam in solvers::elliptic" << std::endl;
+                std::cout << "I am in solvers::elliptic" << std::endl;
             }
+        private:
+            const int My_int;
+            const int My21_int;
+            const int Nx_int;
+            const double inv_dx2;
+            cuDoubleComplex* d_tmp_mat;
     };
+
+#endif //__CUDACC__
+
+#ifndef __CUDACC__
+    class elliptic
+    // Class wrapper for zgtsv routine
+    {
+        public:
+            elliptic(const twodads::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
+                                                          My21_int(static_cast<int>(_geom.get_my() + _geom.get_pad_y()) / 2),
+                                                          Nx_int(static_cast<int>(_geom.get_nx()))
+                                                          {};
+            
+            void solve(lapack_complex_double* src, lapack_complex_double* dst,
+                       lapack_complex_double* diag_l, lapack_complex_double* diag, lapack_complex_double* diag_u)
+                       {
+                           lapack_int res{0};
+                           if((res = LAPACKE_zgtsv(LAPACK_ROW_MAJOR,
+                                                  My21_int,
+                                                  Nx_int, 
+                                                  diag_l,
+                                                  diag,
+                                                  diag_u,
+                                                  dst,
+                           Nx_int)) != 0)
+                           {
+                               std::cerr << "Error from MKL LAPACK_zgtsv: " << res << std::endl;
+                           } 
+                       }
+        private:
+            const int My_int;
+            const int My21_int;
+            const int Nx_int;
+    };
+
+#endif //__CUDACC__
+
 }
 
 #endif // SOLVERS_H

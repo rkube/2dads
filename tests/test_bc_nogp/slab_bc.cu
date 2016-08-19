@@ -8,7 +8,6 @@ using namespace std;
 
 slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) : 
     boundaries(_bc), geom(_sl), tint_params(_sp),
-    //myfft{new cufft_object_t<twodads::real_t>(get_geom(), twodads::dft_t::dft_1d)},
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs(get_geom()),
     //tint(new integrator_karniadakis<my_allocator_device<twodads::real_t>>
@@ -26,35 +25,6 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
                        {test_ns::field_t::arr3_x,   &arr3_x},
                        {test_ns::field_t::arr3_y,   &arr3_y}}
 {
-    //std::cout << "slab_bc :: slab_bc: cublas_handle = " << solvers::cublas_handle_t::get_handle() << endl;
-}
-
-
-void slab_bc :: print_field(const test_ns::field_t fname) const
-{
-    // Use this when running device code
-    #ifdef DEVICE
-    utility :: print(utility :: create_host_vector(get_field_by_name.at(fname)), 0, std::cout);
-    #endif //DEVICE
-    // Use this when running host code
-    #ifdef HOST
-    utility :: print((*get_field_by_name.at(fname)), 0, std::cout);
-    #endif //HOST
-}
-
-
-void slab_bc :: print_field(const test_ns::field_t fname, const string file_name) const
-{
-    ofstream output_file;
-    output_file.open(file_name.data());
-    #ifdef DEVICE
-    utility :: print(utility :: create_host_vector(get_field_by_name.at(fname)), 0, output_file);
-    #endif
-
-    #ifdef HOST
-    utility :: print((*get_field_by_name.at(fname)), 0, output_file);
-    #endif
-    output_file.close();
 }
 
 
@@ -218,25 +188,24 @@ void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fn
 void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
                         const size_t t_src, const size_t t_dst)
 {
-    std::cout << "Disabled" << std::endl;
-    //cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
-    //cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
-    //cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
+    cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
+    cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
+    cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
 
-    //my_derivs.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
+    my_derivs.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
 }
 
 
 // Invert the laplace equation
-//void slab_bc :: invert_laplace(const test_ns::field_t out, const test_ns::field_t in, const size_t t_src, const size_t t_dst)
-//{
-//    cuda_arr_real* in_arr{get_field_by_name.at(in)};
-//    cuda_arr_real* out_arr{get_field_by_name.at(out)};
-//    der.invert_laplace((*out_arr), (*in_arr), 
-//                       in_arr -> get_bvals().get_bc_left(), in_arr -> get_bvals().get_bv_left(),
-//                       in_arr -> get_bvals().get_bc_right(), in_arr -> get_bvals().get_bv_right(),
-//                       t_src, t_dst);
-//}
+void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t out, const size_t t_src, const size_t t_dst)
+{
+    cuda_arr_real* in_arr{get_field_by_name.at(in)};
+    cuda_arr_real* out_arr{get_field_by_name.at(out)};
+    my_derivs.invert_laplace((*in_arr), (*out_arr), 
+                             (*in_arr).get_bvals().get_bc_left(), (*in_arr).get_bvals().get_bv_left(),
+                             (*in_arr).get_bvals().get_bc_right(), (*in_arr).get_bvals().get_bv_right(),
+                             t_src, t_dst);
+}
 
 
 //void slab_bc :: initialize_tint(const test_ns::field_t fname)

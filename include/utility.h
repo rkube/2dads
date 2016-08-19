@@ -51,10 +51,6 @@ namespace utility
     template <typename T>
     T L2(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev)
     {
-
-    //template <typename T>
-    //T impl_reduce(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    //{
         // Configuration for reduction kernel
         T* data_ptr = vec.get_tlev_ptr(tlev);
         const size_t shmem_size_row = vec.get_geom().get_nx() * sizeof(T);
