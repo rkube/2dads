@@ -1013,8 +1013,7 @@ namespace detail
                              reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                              [=] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                              {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
-                             geom_my21);
-        
+                             geom_my21); 
     }
 
 
@@ -1043,7 +1042,7 @@ namespace detail
     {
         std::vector<size_t> col_vals(0);
         std::vector<size_t> row_vals(0);
-
+        
         // Uses address with direct element access avoiding ifs etc.
         host :: arakawa_center(u.get_tlev_ptr(t_src), u.get_address_ptr(),
                                v.get_tlev_ptr(t_src), v.get_address_ptr(),
@@ -1137,18 +1136,22 @@ class deriv_t
             // DFT r2c
             if(!(src.is_transformed()))
             {
+                utility :: print(src, t_src, "dy1_input_real.dat");
                 std::cout << "dy_1: DFT" << std::endl;
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
                 src.set_transformed(true);
+                utility :: print(src, t_src, "dy1_input_freq.dat");
             }
             std::cout << "derivs_t: dy_1 -> dispatching" << std::endl;
             // Multiply with ky coefficients
             detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
 
             // DFT c2r and normalize
+            utility :: print(dst, t_dst, "dy1_output_freq.dat");
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
             dst.set_transformed(false);
             utility :: normalize(dst, t_dst);
+            utility :: print(dst, t_dst, "dy1_output_real.dat");
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(false);

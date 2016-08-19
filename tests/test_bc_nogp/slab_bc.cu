@@ -198,7 +198,6 @@ void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fn
 
     if(d == 1)
     {
-        std::cout << "slab: calling dy_1" << std::endl;
         my_derivs.dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
     }
     else if (d == 2)
@@ -219,9 +218,10 @@ void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fn
 void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
                         const size_t t_src, const size_t t_dst)
 {
-    cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
-    cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
-    cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
+    std::cout << "Disabled" << std::endl;
+    //cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
+    //cuda_arr_real* g_arr = get_field_by_name.at(fname_arr_g);
+    //cuda_arr_real* res_arr = get_field_by_name.at(fname_arr_res);
 
     //my_derivs.arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
 }

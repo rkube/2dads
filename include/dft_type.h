@@ -252,6 +252,13 @@ namespace fftw
             int ostride{1};
 
             // Create dummy arrays for FFTW_ESTIMATE
+            // We are going to use the new_array execute functions of fftw later on.
+            // Here we are planning an in-place dft.
+            // Later-on, we may not use in-place DFTs but out of place.
+            // For the derivatives, there was a bug when using a planned
+            // out-of-place transform with in-place data. 
+            // Maybe we need to later plan both, in- and out-of-place DFTs
+            // and dispatch according to the pointer addresses passed to dft_r2c/dft_c2r
             double* dummy_double = new double[(geom.get_nx() + geom.get_pad_x()) * (geom.get_my() + geom.get_pad_y())];
             CuCmplx<double>* dummy_cmplx = new CuCmplx<double>[(geom.get_nx() + geom.get_pad_x()) * ((geom.get_my() + geom.get_pad_y()) / 2)];
 
@@ -266,7 +273,7 @@ namespace fftw
                                                       NULL,         // inembed
                                                       istride,      // istride
                                                       idist,        // idist
-                                                      reinterpret_cast<fftw_complex*>(dummy_cmplx),  // fftw_complex* out
+                                                      reinterpret_cast<fftw_complex*>(dummy_double),  // fftw_complex* out
                                                       NULL,
                                                       ostride,      // ostride
                                                       odist,
@@ -274,7 +281,7 @@ namespace fftw
                     plan_c2r = fftw_plan_many_dft_c2r(rank,
                                                       n,
                                                       howmany,
-                                                      reinterpret_cast<fftw_complex*>(dummy_cmplx),
+                                                      reinterpret_cast<fftw_complex*>(dummy_double),
                                                       NULL,
                                                       ostride,
                                                       odist,

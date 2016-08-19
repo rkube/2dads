@@ -37,10 +37,10 @@ int main(void)
 
     stringstream fname;
 
-    constexpr twodads::real_t x_l{0.0};
-    constexpr twodads::real_t Lx{1.0};
-    constexpr twodads::real_t y_l{0.0};
-    constexpr twodads::real_t Ly{1.0};
+    constexpr twodads::real_t x_l{-1.0};
+    constexpr twodads::real_t Lx{2.0};
+    constexpr twodads::real_t y_l{-1.0};
+    constexpr twodads::real_t Ly{2.0};
 
     twodads::bvals_t<double> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, 0.0, 0.0, 0.0, 0.0};
     twodads::slab_layout_t my_geom(x_l, (Lx - x_l) / twodads::real_t(Nx), y_l, (Ly - y_l)  / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
