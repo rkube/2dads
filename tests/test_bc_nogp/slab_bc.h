@@ -16,7 +16,7 @@
 #include "dft_type.h"
 #include "solvers.h"
 #include "derivatives.h"
-//#include "integrators.h"
+#include "integrators.h"
 
 #ifdef __CUDACC__
 #include "cuda_types.h"
@@ -90,11 +90,11 @@ class slab_bc
 
 #ifdef DEVICE
         deriv_t<twodads::real_t, allocator_device> my_derivs;
-        //integrator<my_allocator_device<twodads::real_t>>* tint;
+        integrator_karniadakis<twodads::real_t, allocator_device> tint;
 #endif //DEVICE
 #ifdef HOST
         deriv_t<twodads::real_t, allocator_host> my_derivs;
-        //integrator<twodads::real_t, allocator_host> tint;
+        integrator_karniadakis<twodads::real_t, allocator_host> tint;
 #endif //HOST
 
         cuda_arr_real arr1;

@@ -32,8 +32,11 @@ test_laplace_host: test_laplace.cpp slab_bc.cpp slab_bc.h derivatives.h
 test_laplace_device: test_laplace.cu slab_bc.cu slab_bc.h derivatives.h 
 	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o test_laplace_device test_laplace.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) 
 
-#test_stiff: slab_bc.cu slab_bc.h test_stiff.cu
-#	$(CUDACC) $(CUDACFLAGS) -DHOST -o test_stiff test_stiff.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) -lcublas -lcusparse -lfftw3 -lm
+test_stiff_host: slab_bc.cpp slab_bc.h test_stiff.cpp
+	$(CC) $(CFLAGS) -DHOST -o test_stiff_host test_stiff.cpp slab_bc.cpp $(INCLUDES) $(LFLAGS) 
+
+test_stiff_device: slab_bc.cu slab_bc.h test_stiff.cu
+	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o test_stiff_device test_stiff.cu slab_bc.cu $(INCLUDES) $(CUDALFLAGS) 
 
 clean:
 	rm test_dtype_host test_dtype_device test_slab_host test_slab_device test_derivs_host test_derivs_device test_arakawa_host test_arakawa_device test_laplace_host test_laplace_device

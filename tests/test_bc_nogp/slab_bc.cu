@@ -10,8 +10,7 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
     boundaries(_bc), geom(_sl), tint_params(_sp),
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs(get_geom()),
-    //tint(new integrator_karniadakis<my_allocator_device<twodads::real_t>>
-    //        (get_geom(), get_bvals(),  _sp)),
+    tint(get_geom(), get_bvals(),  _sp),
     arr1(_sl, _bc, 1), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
     arr2(_sl, _bc, 1), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
     arr3(_sl, _bc, 1), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
@@ -135,7 +134,9 @@ void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {
-                return(exp(-0.5 * (geom.get_x(n) * geom.get_x(n) + geom.get_y(m) * geom.get_y(m)) ) );
+                const twodads::real_t x{geom.get_x(n)};
+                const twodads::real_t y{geom.get_y(m)};
+                return(exp(-0.5 * (x * x + y * y)));
             }, 0);
 }
 
