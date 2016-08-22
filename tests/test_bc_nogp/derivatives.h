@@ -608,64 +608,6 @@ namespace detail
     }
 
 
-
-    template <typename T>
-    void impl_init_diagonals(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
-                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
-                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
-                             CuCmplx<T>* h_diag,
-                             twodads::slab_layout_t geom,
-                             allocator_device<T>)
-    {
-        // Host copy of main and lower diagonal
-        CuCmplx<T>* h_diag_u{new CuCmplx<T>[geom.get_nx()]};
-        CuCmplx<T>* h_diag_l{new CuCmplx<T>[geom.get_nx()]};
-
-        // Allocate memory for the lower and main diagonal for tridiagonal matrix factorization
-        // The upper diagonal is equal to the lower diagonal
-
-        T ky2{0.0};                                        // ky^2
-        const T inv_dx{1.0 / geom.get_deltax()};      // delta_x^-1
-        const T inv_dx2{inv_dx * inv_dx};                  // delta_x^-2
-        const size_t My21{(geom.get_my() + geom.get_pad_y()) / 2};
-
-        // Initialize the main diagonal separately for every ky
-        for(size_t m = 0; m < My21; m++)
-        {
-            ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(m * m) / (geom.get_Ly() * geom.get_Ly());
-            for(size_t n = 0; n < geom.get_nx(); n++)
-            {
-                h_diag[n] = -2.0 * inv_dx2 - ky2;
-            }
-            h_diag[0] = h_diag[0] - inv_dx2;
-            h_diag[geom.get_nx() - 1] = h_diag[geom.get_nx() - 1] - inv_dx2;
-
-            gpuErrchk(cudaMemcpy(diag.get_tlev_ptr(0) + m * geom.get_nx(), h_diag, geom.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
-        }
-
-        // Initialize the upper and lower diagonal with 1/delta_x^2
-        for(size_t n = 0; n < geom.get_nx(); n++)
-        {
-            h_diag_u[n] = inv_dx2;
-            h_diag_l[n] = inv_dx2;
-        }
-
-        // Set first/last element of lower/upper diagonal to zero (required by cusparseZgtsvStridedBatch)
-        h_diag_l[0] = 0.0;
-        h_diag_u[geom.get_nx() - 1] = 0.0;
-
-        // Concatenate My21 copies of these vector together (required by cusparseZgtsvStridedBatch
-        for(size_t m = 0; m < My21; m++)
-        {
-            gpuErrchk(cudaMemcpy(diag_l.get_tlev_ptr(0) + m * geom.get_nx(), h_diag_l, geom.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
-            gpuErrchk(cudaMemcpy(diag_u.get_tlev_ptr(0) + m * geom.get_nx(), h_diag_u, geom.get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice)); 
-        }
-
-        delete [] h_diag_l;
-        delete [] h_diag_u;
-    }
-
-
     template <typename T>
     void impl_dx1(const cuda_array_bc_nogp<T, allocator_device>& in,
                   cuda_array_bc_nogp<T, allocator_device>& out,
@@ -875,11 +817,41 @@ namespace detail
         }
         gpuErrchk(cudaMemcpy(diag.get_tlev_ptr(0), h_diag, src.get_geom().get_nx() * sizeof(CuCmplx<T>), cudaMemcpyHostToDevice));
 
-        my_ell_solver.solve((cuDoubleComplex*) src.get_tlev_ptr(t_src), 
-                            (cuDoubleComplex*) dst.get_tlev_ptr(t_dst),
-                            (cuDoubleComplex*) diag_l.get_tlev_ptr(0), 
-                            (cuDoubleComplex*) diag.get_tlev_ptr(0), 
-                            (cuDoubleComplex*) diag_u.get_tlev_ptr(0));
+
+        const size_t My21{(src.get_geom().get_my() + src.get_geom().get_pad_y()) / 2};
+        CuCmplx<T>* arr_in = new CuCmplx<T>[src.get_geom().get_nx() * My21];
+        CuCmplx<T>* arr_out = new CuCmplx<T>[src.get_geom().get_nx() * My21];
+
+        gpuErrchk(cudaMemcpy(arr_in, src.get_tlev_ptr(t_src), src.get_geom().get_nx() * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(arr_out, dst.get_tlev_ptr(t_dst), src.get_geom().get_nx() * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+
+        //size_t off{1};
+        //for(size_t n = 0; n < src.get_geom().get_nx(); n++)
+        //{
+        //    std::cout << off + n * My21<< ": \t";
+        //    std::cout << h_diag[off + n] << "\t";
+        //    std::cout << arr_in[off + n * My21] << std::endl;
+        //    //std::cout << arr_out[off + n] << std::endl;
+        //}
+
+        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(src.get_tlev_ptr(t_src)), 
+                            reinterpret_cast<cuDoubleComplex*>(dst.get_tlev_ptr(t_dst)),
+                            reinterpret_cast<cuDoubleComplex*>(diag_l.get_tlev_ptr(0)), 
+                            reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
+                            reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
+
+        gpuErrchk(cudaMemcpy(arr_out, dst.get_tlev_ptr(t_dst), src.get_geom().get_nx() * My21 * sizeof(CuCmplx<T>), cudaMemcpyDeviceToHost));
+
+        //std::cout << "After:" << std::endl;
+        //for(size_t n = 0; n < src.get_geom().get_nx(); n++)
+        //{
+        //    std::cout << off + n * My21<< ": \t";
+        //    std::cout << arr_in[off + m] << "\t";
+        //    std::cout << arr_out[off + n * My21] << std::endl;
+        //}   
+
+        delete [] arr_in;
+        delete [] arr_out;
 
         dst.set_transformed(true);
     }
@@ -964,50 +936,6 @@ namespace detail
             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
         }
     }
-
-
-
-
-
-    template <typename T>
-    void impl_init_diagonals(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
-                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
-                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
-                             CuCmplx<T>* h_diag,
-                             twodads::slab_layout_t geom,
-                             allocator_host<T>)
-    {
-        T ky2{0.0};
-        const T inv_dx{1.0 / geom.get_deltax()};      // delta_x ^ -1
-        const T inv_dx2{inv_dx * inv_dx};             // delta_x ^ -2
-        const size_t My21{(geom.get_my() + geom.get_pad_y()) / 2};
-        // Initialize the main diagonal separately for every ky
-        
-        // Diagonals are m * Nx + n, i.e. contiguous rows
-        for(size_t m = 0; m < My21; m++)
-        {
-            ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(m * m) / (geom.get_Ly() * geom.get_Ly());
-            for(size_t n = 0; n < geom.get_nx(); n++)
-            {
-                (diag.get_tlev_ptr(0))[m * geom.get_nx() + n] = -2.0 * inv_dx2 - ky2;
-            }
-            (diag.get_tlev_ptr(0))[m * geom.get_nx()] = (diag.get_tlev_ptr(0))[0] - inv_dx2;
-            (diag.get_tlev_ptr(0))[(m + 1) * geom.get_nx() - 1] = (diag.get_tlev_ptr(0))[(m + 1) * geom.get_nx() - 1] - inv_dx2;
-        }
-
-        for(size_t m = 0; m < My21; m++)
-        {
-            for(size_t n = 0; n < geom.get_nx(); n++)
-            {
-                (diag_u.get_tlev_ptr(0))[m * geom.get_nx() + n] = inv_dx2;
-                (diag_l.get_tlev_ptr(0))[m * geom.get_nx() + n] = inv_dx2;
-            }
-            (diag_u.get_tlev_ptr(0))[(m + 1) * geom.get_nx() - 1] = 0.0;
-            (diag_l.get_tlev_ptr(0))[m * geom.get_nx()] = 0.0;
-        }
-    }
-
-
 
 
     template <typename T>
@@ -1189,17 +1117,18 @@ namespace detail
         //// Solve the tridiagonal system
         //// 1.) Update the main diagonal for ky=0 mode with the boundary values
         ////     Add the Fourier coefficient for mode m=0 of f(0.0, y) = u: hat(u) = My * u
+        CuCmplx<T>* hd = diag.get_tlev_ptr(0);
         for(size_t n = 0; n < src.get_geom().get_nx(); n++)
         {
-            h_diag[n] = -2.0 * inv_dx2; // -ky2(=0) 
+            hd[n] = -2.0 * inv_dx2; // -ky2(=0) 
         }
         switch(bc_t_left)
         {
             case twodads::bc_t::bc_dirichlet:
-                h_diag[0] = -3.0 * inv_dx2 + 2.0 * bval_left * twodads::TWOPI * delta_y;
+                hd[0] = -3.0 * inv_dx2 + 2.0 * bval_left * twodads::TWOPI * delta_y;
                 break;
             case twodads::bc_t::bc_neumann:
-                h_diag[0] = -3.0 * inv_dx2 - bval_left * twodads::TWOPI * delta_y;
+                hd[0] = -3.0 * inv_dx2 - bval_left * twodads::TWOPI * delta_y;
                 break;
             case twodads::bc_t::bc_periodic:
                 std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
@@ -1210,41 +1139,54 @@ namespace detail
         switch(bc_t_right)
         {
             case twodads::bc_t::bc_dirichlet:
-                h_diag[src.get_geom().get_nx() - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * twodads::TWOPI * delta_y;
+                hd[src.get_geom().get_nx() - 1] = -3.0 * inv_dx2 + 2.0 * bval_right * twodads::TWOPI * delta_y;
                 break;
             case twodads::bc_t::bc_neumann:
-                h_diag[src.get_geom().get_nx() - 1] = -3.0 * inv_dx2 - bval_right * twodads::TWOPI * delta_y;
+                hd[src.get_geom().get_nx() - 1] = -3.0 * inv_dx2 - bval_right * twodads::TWOPI * delta_y;
                 break;
             case twodads::bc_t::bc_periodic:
                 std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
                 std::cerr << "Treating as dirichlet, bval=0" << std::endl;
                 break;
-        }
+        } 
 
-        for(size_t n = 0; n < src.get_geom().get_nx(); n++)
-        {
-            (diag.get_tlev_ptr(0))[n] = h_diag[n];
-        }
-
+        // Copy input data for solver into dst.
         dst.copy(t_dst, src, t_src);
 
-        for(size_t m = 0; m < src.get_geom().get_my(); m++)
-        {
-            std::cout << "m: " << (diag_l.get_tlev_ptr(0))[m] << "\t";
-            std::cout<< (diag.get_tlev_ptr(0))[m] << "\t";
-            std::cout << (diag_u.get_tlev_ptr(0))[m] << "\t";
-            std::cout << (src.get_tlev_ptr(t_src))[m] << "\t";
-            std::cout << (dst.get_tlev_ptr(t_dst))[m] << "\n";
-        }
-
+        //size_t My21 {(src.get_geom().get_my() + src.get_geom().get_pad_y()) / 2}; 
+        //size_t off{1};
         
+        //CuCmplx<T>* ep = reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_src));
+        //CuCmplx<T>* dp = reinterpret_cast<CuCmplx<T>*>(diag.get_tlev_ptr(0));
+        //CuCmplx<T>* dp_u = reinterpret_cast<CuCmplx<T>*>(diag_u.get_tlev_ptr(0));
+        //CuCmplx<T>* dp_u = reinterpret_cast<CuCmplx<T>*>(diag_u.get_tlev_ptr(0));
+        //
+        //for(size_t n = 0; n < src.get_geom().get_nx(); n++)
+        //{
+            //std::cout << off + n * My21 << ": \t"; 
+            //std::cout << dp[off * src.get_geom().get_nx() + m] << "\t";
+            //std::cout << dp_u[off * src.get_geom().get_nx() + m] << "\t";
+            //std::cout << dp_l[off * src.get_geom().get_nx() + m] << "\t";
+//
+            //std::cout << ep[off + n * My21] << std::endl;
+        ////    //std::cout << (dst.get_tlev_ptr(t_dst))[2 * off + 2 * m] << ", " << (dst.get_tlev_ptr(t_dst))[2 * off + 2 * m + 1] << "\n";
+        //}
 
-        my_ell_solver.solve((lapack_complex_double*) src.get_tlev_ptr(t_src), 
-                            (lapack_complex_double*) dst.get_tlev_ptr(t_dst),
-                            (lapack_complex_double*) diag_l.get_tlev_ptr(0), 
-                            (lapack_complex_double*) diag.get_tlev_ptr(0), 
-                            (lapack_complex_double*) diag_u.get_tlev_ptr(0));
-
+#ifndef __CUDACC__
+        my_ell_solver.solve(nullptr,
+                            reinterpret_cast<lapack_complex_double*>(dst.get_tlev_ptr(t_dst)),
+                            reinterpret_cast<lapack_complex_double*>(diag_l.get_tlev_ptr(0)) + 1, 
+                            reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)), 
+                            reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));
+#endif //__CUDACC__
+        
+        //std::cout << "After:" << std::endl;
+        //for(size_t n = 0; n < src.get_geom().get_nx(); n++)
+        //{
+            //std::cout << n + off << ": \t";
+            //std::cout << dp[off + n * My21] << std::endl; 
+        //}                     
+        
         dst.set_transformed(true);
     }    
 }
@@ -1295,22 +1237,16 @@ class deriv_t
             // DFT r2c
             if(!(src.is_transformed()))
             {
-                utility :: print(src, t_src, "dy1_input_real.dat");
-                std::cout << "dy_1: DFT" << std::endl;
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
                 src.set_transformed(true);
-                utility :: print(src, t_src, "dy1_input_freq.dat");
             }
-            std::cout << "derivs_t: dy_1 -> dispatching" << std::endl;
             // Multiply with ky coefficients
             detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
 
             // DFT c2r and normalize
-            utility :: print(dst, t_dst, "dy1_output_freq.dat");
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
             dst.set_transformed(false);
             utility :: normalize(dst, t_dst);
-            utility :: print(dst, t_dst, "dy1_output_real.dat");
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(false);
@@ -1373,18 +1309,25 @@ class deriv_t
             detail :: impl_arakawa(u, v, dst, t_src, t_dst, allocator<T>{});
         }
 
+        void init_diagonals();
+
         cmplx_arr& get_coeffs_dy1() {return(coeffs_dy1);};
         cmplx_arr& get_coeffs_dy2() {return(coeffs_dy2);};
         cmplx_arr& get_diag() {return(diag);};
         cmplx_arr& get_diag_u() {return(diag_u);};
         cmplx_arr& get_diag_l() {return(diag_l);};
         cmplx_t* get_hdiag() {return(h_diag);};
+        // Layout of the real fields, i.e. Nx * My
         twodads::slab_layout_t get_geom() const {return(geom);};
+        // Layout of complex fields, i.e. Nx * My21
         twodads::slab_layout_t get_geom_my21() const {return(geom_my21);};
+        // Layouf of the diagonals, i.e. My21 * Nx
+        twodads::slab_layout_t get_geom_transpose() const {return(geom_transpose);};
 
     private:
         const twodads::slab_layout_t geom;          // Layout for Nx * My arrays
         const twodads::slab_layout_t geom_my21;     // Layout for spectrally transformed NX * My21 arrays
+        const twodads::slab_layout_t geom_transpose;     // Transposed complex layout (My21 * Nx) for the tridiagonal solver
         dft_object_t<twodads::real_t>* myfft;
 
         // Coefficient storage for spectral derivation
@@ -1408,6 +1351,13 @@ deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
               get_geom().get_nx(), get_geom().get_pad_x(),
               (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0, 
               get_geom().get_grid()},
+    geom_transpose{get_geom().get_ylo(),
+                   get_geom().get_deltay(),
+                   get_geom().get_xleft(),
+                   get_geom().get_deltax(),
+                   (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0,
+                   get_geom().get_nx(), 0,
+                   get_geom().get_grid()},
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy1{get_geom_my21(), 
@@ -1418,20 +1368,91 @@ deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
                twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
                1},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag(get_geom_my21(), 
+    diag(//get_geom_my21(), 
+         get_geom_transpose(), 
          twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
          1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag_l(get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
+    diag_l(//get_geom_my21(), 
+           get_geom_transpose(), 
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag_u(get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
-    h_diag{new cmplx_t[get_geom().get_nx()]}
+    diag_u(//get_geom_my21(), 
+           get_geom_transpose(), 
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
+    h_diag{new cmplx_t[get_geom().get_nx()]} 
 {
-    detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
-    detail :: impl_init_diagonals(get_diag(), get_diag_u(), get_diag_l(), h_diag, get_geom(), allocator<T>{});
+    // Initialize the diagonals in a function as CUDA currently doesn't allow to call
+    // Lambdas in the constructor.
+
+    //detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+    init_diagonals();
+    //utility :: print(get_diag(), 0, std::cout);
+    //std::cout << std::endl;
+    //utility :: print(get_diag_l(), 0, std::cout);
+    //std::cout << std::endl;
+    //utility :: print(get_diag_u(), 0, std::cout);
 }
 
+// Remember that the diagonals are transposed:
+// The normal layout has the columns contiguous in memory.
+// After a fourier transformation, contiguous elements correspond to different fourier modes.
+// The tridiagonal solver however solves one linear system for one fourier mode at a time
+// Thus, the diagonals have a layout in memory where contiguous values correspond to a single fourier mode
 
+template <typename T, template <typename> class allocator>
+void deriv_t<T, allocator> :: init_diagonals() 
+{
+    diag.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        // ky runs with index n (the kernel addressing function, see cuda::thread_idx
+        // We are transposed, Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
+        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
+        const CuCmplx<T> ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx);
+        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltay() * geom.get_deltay())};
+        if(m > 0 && m < geom.get_my() - 1)
+        {
+            // Use shitty notation ... * (-2.0) because operator* is not a friend of CuCmplx<T>
+            return (inv_dx2 * (-2.0) - ky2);
+        }
+        else if (m == 0)
+        {
+            return(inv_dx2 * (-3.0) - ky2);
+        }
+        else if (m == geom.get_my() - 1)
+        {
+            return(inv_dx2 * (-3.0) - ky2);
+        }
+        return(-1.0);
+    }, 0);
+
+    diag_l.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        // CUBLAS requires the first element in the lower diagonal to be zero.
+        // Remember to shift the pointer in the MKL implementation when passing to the
+        // MKL caller routine in solver
+        const CuCmplx<T> inv_dx2 = 1.0 / (geom.get_deltax() * geom.get_deltax());
+        if(m > 0)
+            //return(inv_dx2);
+            return(inv_dx2);
+        else if(m == 0)
+            return(0.0);
+        return(-1.0);
+    }, 0);
+
+    diag_u.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        // CUBLAS requires the last element in the upper diagonal to be zero.
+        // Remember to shift the pointer in the MKL implementation when passing to the
+        // MKL caller routine in solver
+        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
+        if(m < geom.get_my() - 1)
+            return(inv_dx2);
+        else if(m == geom.get_my() - 1)
+            return(0.0);  
+        return(-1.0);  
+    }, 0);
+}
 
 #endif //DERIVATIVES_H
 ///////////////////////////////// Only commented code below /////////////////////////////////

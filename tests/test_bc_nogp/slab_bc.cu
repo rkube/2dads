@@ -31,7 +31,6 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
 void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr{get_field_by_name.at(fname)};
-    std::cout << "dft_r2c, in = " << (*arr).get_tlev_ptr(tlev) << std::endl;
     if(!((*arr).is_transformed()))
     {
         (*myfft).dft_r2c((*arr).get_tlev_ptr(tlev), reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tlev)));
@@ -67,6 +66,7 @@ void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
                     const value_t x{geom.get_x(n)};
                     const value_t y{geom.get_y(m)};
                     return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
+                    //return(-1.0 * (twodads::TWOPI) * (twodads::TWOPI) * sin(twodads::TWOPI * y));
                 }, 0);
 }
 
@@ -233,3 +233,5 @@ slab_bc :: ~slab_bc()
     delete myfft;
     cout << "Deleting slab" << endl;
 }
+
+// End of file slab_bc.cu

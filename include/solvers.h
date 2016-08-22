@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <string.h>
 
 #include "2dads_types.h"
 #include "error.h"
@@ -38,7 +39,6 @@ namespace solvers
         private: 
             cublas_handle_t()
             {
-                std::cout << "Creating cublas_handle" << std::endl;
                 cublasStatus_t cublas_status;
                 if((cublas_status = cublasCreate(&cublas_handle)) != CUBLAS_STATUS_SUCCESS)
                 {
@@ -66,7 +66,6 @@ namespace solvers
         private: 
             cusparse_handle_t()
             {
-                std::cout << "Initializing cusparse " << cusparse_handle << std::endl;
                 cusparseStatus_t cusparse_status;
                 if((cusparse_status = cusparseCreate(&cusparse_handle)) != CUSPARSE_STATUS_SUCCESS)
                 {
@@ -90,10 +89,17 @@ namespace solvers
 
     class elliptic
     {
+        private:
+            const int My_int;
+            const int My21_int;
+            const int Nx_int;
+            //const double inv_dx2;
+            cuDoubleComplex* d_tmp_mat;
+
         public:
-            elliptic(const twodads::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
+            elliptic(const twodads::slab_layout_t _geom) : My_int{static_cast<int>(_geom.get_my())},
                                                            My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
-                                                           Nx_int{static_cast<int>(_geom.get_nx())}};
+                                                           Nx_int{static_cast<int>(_geom.get_nx())}
                                                            //inv_dx2{1.0 / (_geom.get_deltax() * _geom.get_deltax())}
              {
                 cudaError_t err;
@@ -141,6 +147,46 @@ namespace solvers
                 {
                     throw cublas_err(cublas_status);
                 }
+
+                //CuCmplx<twodads::real_t>* dp{new CuCmplx<twodads::real_t>[get_nx() * get_my21()]};
+                //CuCmplx<twodads::real_t>* dp_u{new CuCmplx<twodads::real_t>[get_nx() * get_my21()]};
+                //CuCmplx<twodads::real_t>* dp_l{new CuCmplx<twodads::real_t>[get_nx() * get_my21()]};
+                //CuCmplx<twodads::real_t>* ep{new CuCmplx<twodads::real_t>[get_nx() * get_my21()]};
+                //
+                //gpuErrchk(cudaMemcpy(dp, d_diag, get_nx() * get_my21() * sizeof(CuCmplx<twodads::real_t>), cudaMemcpyDeviceToHost));
+                //gpuErrchk(cudaMemcpy(dp_l, d_diag_l, get_nx() * get_my21() * sizeof(CuCmplx<twodads::real_t>), cudaMemcpyDeviceToHost));
+                //gpuErrchk(cudaMemcpy(dp_u, d_diag_u, get_nx() * get_my21() * sizeof(CuCmplx<twodads::real_t>), cudaMemcpyDeviceToHost));
+                //gpuErrchk(cudaMemcpy(ep, get_d_tmp_mat(), get_nx() * get_my21() * sizeof(CuCmplx<twodads::real_t>), cudaMemcpyDeviceToHost));
+                
+                //const size_t off{1};
+                //for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                //{
+                //    std::cout << off * get_nx() + n << ": ";
+                //    std::cout << dp[off * get_nx() + n] << "\t";
+                //    std::cout << dp_l[off * get_nx() + n] << "\t";
+                //    std::cout << dp_u[off * get_nx() + n] << "\t";
+                //    std::cout << ep[off * get_nx() + n] << std::endl;                     
+                //}
+                //std::cout << "Before: " << std::endl;
+                //for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                //{
+                //    for(size_t m = 0; m < My21_int; m++)
+                //    {
+                //        std::cout<< ep[m * get_nx() + n] << "\t";
+                //    }
+                //    std::cout << std::endl;
+                //}
+//
+                //std::cout << "diagonal:" << std::endl;
+                //for(size_t m = 0; m < My21_int; m++)
+                //{
+                //    for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                //    {
+                //        std::cout << dp[n + m * static_cast<size_t>(get_nx())] << "\t";
+                //    }
+                //    std::cout << std::endl;
+                //}
+
                 // Solve banded system 
                 if((cusparse_status = cusparseZgtsvStridedBatch(solvers::cusparse_handle_t::get_handle(),
                                                                 get_nx(),
@@ -153,6 +199,18 @@ namespace solvers
                 {
                     throw cusparse_err(cusparse_status);
                 }
+
+                //gpuErrchk(cudaMemcpy(ep, get_d_tmp_mat(), get_nx() * get_my21() * sizeof(CuCmplx<twodads::real_t>), cudaMemcpyDeviceToHost));
+                
+                //std::cout << "After: " << std::endl;
+                //for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                //{
+                //    for(size_t m = 0; m < My21_int; m++)
+                //    {
+                //        std::cout<< ep[m * get_nx() + n] << "\t";
+                //    }
+                //    std::cout << std::endl;
+                //}
 
                 // Tranpose back
                 if((cublas_status = cublasZgeam(solvers::cublas_handle_t::get_handle(),
@@ -171,14 +229,11 @@ namespace solvers
                 {
                     throw cublas_err(cublas_status);
                 }
-                std::cout << "I am in solvers::elliptic" << std::endl;
+                //delete [] dp;
+                //delete [] dp_l;
+                //delete [] dp_u;
+                //delete [] ep;
             }
-        private:
-            const int My_int;
-            const int My21_int;
-            const int Nx_int;
-            const double inv_dx2;
-            cuDoubleComplex* d_tmp_mat;
     };
 
 #endif //__CUDACC__
@@ -193,22 +248,134 @@ namespace solvers
                                                           Nx_int(static_cast<int>(_geom.get_nx()))
                                                           {};
             
-            void solve(lapack_complex_double* src, lapack_complex_double* dst,
+            void solve(lapack_complex_double* dummy, lapack_complex_double* dst,
                        lapack_complex_double* diag_l, lapack_complex_double* diag, lapack_complex_double* diag_u)
                        {
-                           lapack_int res{0};
-                           if((res = LAPACKE_zgtsv(LAPACK_ROW_MAJOR,
-                                                  My21_int,
-                                                  Nx_int, 
-                                                  diag_l,
-                                                  diag,
-                                                  diag_u,
-                                                  dst,
-                           Nx_int)) != 0)
-                           {
-                               std::cerr << "Error from MKL LAPACK_zgtsv: " << res << std::endl;
-                           } 
+                           // Solve tridiagonal system for dst. The input for zgtsv  needs to be stored dst
+                           // src is a dummy variable.
+                           // In contrast to the cublas library, it accepts the input in row-major
+                           // format. Thus do not transpose but solve directly.
+                           // The elements of the right-hand sides (fourier coefficients of the same mode sampled at a different x-place)
+                           // are along the rows: Uhat[1, m] and Uhat[2, m] are My21 * sizeof(CuCmplx<T>) away
+                           // Transpose matrix in-place
+                           // https://software.intel.com/en-us/node/520862
+
+
+                           /* Old transpose code. Don't use!!!
+                            MKL_Complex16 alpha;
+                            alpha.real = 1.0;
+                            alpha.imag = 0.0;
+
+                            mkl_zimatcopy('R', 'T', static_cast<size_t>(Nx_int), static_cast<size_t>(My21_int),
+                                          alpha, dst, static_cast<size_t>(My21_int), static_cast<size_t>(Nx_int));
+                            */
+
+                            //// Solve linear systems
+                            //// https://software.intel.com/en-us/node/520979
+                            //
+                            //CuCmplx<twodads::real_t>* dp = reinterpret_cast<CuCmplx<twodads::real_t>*>(diag);
+                            //CuCmplx<twodads::real_t>* dp_l = reinterpret_cast<CuCmplx<twodads::real_t>*>(diag_l);
+                            //CuCmplx<twodads::real_t>* dp_u = reinterpret_cast<CuCmplx<twodads::real_t>*>(diag_u);
+                            //CuCmplx<twodads::real_t>* ep = reinterpret_cast<CuCmplx<twodads::real_t>*>(dst);
+                            //size_t off{1};
+
+                            //std::cout << "Before: " << std::endl;
+                            //for(size_t n = 0; n < static_cast<size_t>(Nx_int); n++)
+                            //{
+                            //    for(size_t m = 0; m < My21_int; m++)
+                            //    {
+                            //        std::cout << ep[n * get_my21() + m] << "\t";
+                            //    }
+                            //    std::cout << std::endl;
+                            //}
+//
+                            //std::cout << "diagonal:" << std::endl;
+                            //for(size_t m = 0; m < My21_int; m++)
+                            //{
+                            //    for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                            //    {
+                            //        std::cout << dp[n + m * static_cast<size_t>(get_nx())] << "\t";
+                            //    }
+                            //    std::cout << std::endl;
+                            //}
+                            //for(size_t n = 0; n < static_cast<size_t>(Nx_int); n++)
+                            //{
+                            //    std::cout << off + n << ": ";
+                            //    std::cout << dp[off * get_nx() + n] << "\t";
+                            //    std::cout << dp_u[off * get_nx() + n] << "\t";
+                            //    std::cout << dp_l[off * get_nx() + n] << "\t";
+                            //    std::cout << ep[off + n * get_my21()] << std::endl;
+                            //}
+ 
+                            lapack_int res{0};
+                            
+                            // Use column major here because 
+                            //for(size_t m = 0; m < static_cast<size_t>(get_my21()); m++)
+                            lapack_complex_double* diag_l_copy = new lapack_complex_double[get_nx()];
+                            lapack_complex_double* diag_u_copy = new lapack_complex_double[get_nx()];
+                            lapack_complex_double* diag_copy = new lapack_complex_double[get_nx()];
+                            for(size_t m = 0; m < static_cast<size_t>(get_my21()); m++)
+                            {
+                                // dl, d, and du get overwritten by zgtsv. 
+                                // Create dummy copies in each iteration
+                                memcpy(diag_l_copy, diag_l, static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
+                                memcpy(diag_u_copy, diag_u, static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
+                                memcpy(diag_copy, diag + m * static_cast<size_t>(get_nx()), static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
+                                
+                                //for(size_t n = 0; n < static_cast<size_t>(get_nx()); n++)
+                                //{
+                                //    std::cout << n << ": " << reinterpret_cast<CuCmplx<twodads::real_t>*>(diag_l_copy)[n] << "\t";
+                                //    std::cout << reinterpret_cast<CuCmplx<twodads::real_t>*>(diag_u_copy)[n] << "\t";
+                                //    std::cout << reinterpret_cast<CuCmplx<twodads::real_t>*>(diag_copy)[n] << std::endl;
+//
+                                //}
+                                if((res = LAPACKE_zgtsv(LAPACK_ROW_MAJOR,
+                                                        Nx_int,
+                                                        1, 
+                                                        diag_l_copy,
+                                                        diag_copy,
+                                                        diag_u_copy,
+                                                        dst + m, 
+                                                        My21_int)) != 0)
+                                {
+                                    std::cerr << "Error from MKL LAPACK_zgtsv: " << res << std::endl;
+                                }
+                            } 
+                            delete [] diag_copy;
+                            delete [] diag_u_copy;
+                            delete [] diag_l_copy;
+                            
+                            //std::cout << "After: " << std::endl;
+                            //for(size_t n = 0; n < static_cast<size_t>(Nx_int); n++)
+                            //{
+                            //    for(size_t m = 0; m < My21_int; m++)
+                            //    {
+                            //        std::cout << ep[n * get_my21() + m] << "\t";
+                            //    }
+                            //    std::cout << std::endl;
+                            //}
+
+                            /* Old transpose code. Don't use
+                            //Transpose result
+                            //mkl_zimatcopy('R', 'T', static_cast<size_t>(My21_int), static_cast<size_t>(Nx_int),
+                            //               alpha, dst, static_cast<size_t>(Nx_int), static_cast<size_t>(My21_int));
+                            
+                            //foo = reinterpret_cast<CuCmplx<twodads::real_t>*>(dst);
+                            //std::cout << "After" << std::endl;
+                            //for(size_t n = 0; n < static_cast<size_t>(Nx_int); n++)
+                            //{
+                            //    for(size_t m = 0; m < static_cast<size_t>(My21_int); m++)
+                            //    {
+                            //        std::cout << foo[n * My21_int + m] << "\t";
+                            //    }
+                            //    std::cout << std::endl;
+                            //}
+                            */
                        }
+            inline int get_my() const {return(My_int);};
+            inline int get_my21() const {return(My21_int);};
+            inline int get_nx() const {return(Nx_int);};
+
         private:
             const int My_int;
             const int My21_int;

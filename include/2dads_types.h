@@ -45,8 +45,8 @@ namespace twodads {
 
     constexpr size_t max_initc{6}; /// < Maximal number of initial conditions
     
-    constexpr int io_w{16}; //width of fields used in cout
-    constexpr int io_p{10}; //precision when printing with cout
+    constexpr int io_w{10}; //width of fields used in cout
+    constexpr int io_p{4}; //precision when printing with cout
 
     // Coefficients for stiffly stable time integration
     constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};

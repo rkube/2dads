@@ -5,6 +5,80 @@
 
 namespace utility
 {
+    template <typename T>
+    void print(cuda_array_bc_nogp<T, allocator_host> vec, const size_t tlev, std::ostream& os)
+    {
+        address_t<T>* address = vec.get_address_ptr();
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
+            }
+            os << std::endl;
+        }
+    }
+
+
+    template <typename T>
+    void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev, std::string fname)
+    {
+        std::ofstream os(fname, std::ofstream::trunc);
+        address_t<T>* address = vec.get_address_ptr();
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
+            }
+            os << std::endl;
+        }
+        os.close();
+    }
+
+
+    template <typename T>
+    void normalize(cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev)
+    {
+        switch(vec.get_bvals().get_bc_left())
+        {
+            case twodads::bc_t::bc_dirichlet:
+            // fall through
+            case twodads::bc_t::bc_neumann:
+                vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+                          {return(value / T(geom.get_nx()));},
+                          tlev);
+                break;
+            case twodads::bc_t::bc_periodic:
+                vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+                          {return(value / T(geom.get_nx() * geom.get_my()));},
+                          tlev);
+            break;
+        }
+
+    }
+
+    template <typename T>
+    T L2(cuda_array_bc_nogp<T, allocator_host>&vec, const size_t tlev)
+    {
+        T tmp{0.0};
+        address_t<T>* addr{vec.get_address_ptr()};
+        T* data_ptr = vec.get_tlev_ptr(tlev); 
+
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                tmp += fabs(addr -> get_elem(data_ptr, n, m) * addr -> get_elem(data_ptr, n, m));
+            }
+            //std::cout << "L2: " << addr -> get_elem(data_ptr, n, 0) << ", " << fabs(addr -> get_elem(data_ptr, n, 0)) << ", " << abs(addr -> get_elem(data_ptr, n, 0) * addr -> get_elem(data_ptr, n, 0)) << std::endl;
+        }
+
+        tmp = sqrt(tmp / T(vec.get_geom().get_nx() * vec.get_geom().get_my()));
+        return tmp;
+    }
+
+
 #ifdef __CUDACC__
     template <typename T>
     cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>& src)
@@ -31,22 +105,15 @@ namespace utility
     template <typename T>
     void print(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev, std::string fname)
     {
-        cuda_array_bc_nogp<T, allocator_host> tmp(vec.get_geom(), vec.get_bvals(), vec.get_tlevs());
-        update_host_vector(tmp, vec);
-
-        std::ofstream os(fname, std::ofstream::trunc);
-        address_t<T>* address = tmp.get_address_ptr();
-        for(size_t n = 0; n < tmp.get_geom().get_nx(); n++)
-        {
-            for(size_t m = 0; m < tmp.get_geom().get_my(); m++)
-            {
-                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(tmp.get_tlev_ptr(tlev), n, m) << "\t";
-            }
-            os << std::endl;
-        }
-        os.close();
+        print(create_host_vector(vec), tlev, fname);
     }
 
+
+    template <typename T>
+    void print(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev, std::ostream& os)
+    {
+        print(create_host_vector(vec), tlev, os);
+    }
 
     template <typename T>
     T L2(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev)
@@ -130,8 +197,6 @@ namespace utility
     }
 
 
-
-
     template <typename T>
     cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>* src)
     {
@@ -166,78 +231,7 @@ namespace utility
 #endif //CUDACC
 
 
-    template <typename T>
-    void print(cuda_array_bc_nogp<T, allocator_host> vec, const size_t tlev, std::ostream& os)
-    {
-        address_t<T>* address = vec.get_address_ptr();
-        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
-        {
-            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
-            {
-                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
-            }
-            os << std::endl;
-        }
-    }
 
-
-    template <typename T>
-    void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev, std::string fname)
-    {
-        std::ofstream os(fname, std::ofstream::trunc);
-        address_t<T>* address = vec.get_address_ptr();
-        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
-        {
-            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
-            {
-                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
-            }
-            os << std::endl;
-        }
-        os.close();
-    }
-
-
-    template <typename T>
-    void normalize(cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev)
-    {
-        switch(vec.get_bvals().get_bc_left())
-        {
-            case twodads::bc_t::bc_dirichlet:
-            // fall through
-            case twodads::bc_t::bc_neumann:
-                vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
-                          {return(value / T(geom.get_nx()));},
-                          tlev);
-                break;
-            case twodads::bc_t::bc_periodic:
-                vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
-                          {return(value / T(geom.get_nx() * geom.get_my()));},
-                          tlev);
-            break;
-        }
-
-    }
-
-    template <typename T>
-    T L2(cuda_array_bc_nogp<T, allocator_host>&vec, const size_t tlev)
-    {
-        T tmp{0.0};
-        address_t<T>* addr{vec.get_address_ptr()};
-        T* data_ptr = vec.get_tlev_ptr(tlev); 
-
-        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
-        {
-            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
-            {
-                tmp += fabs(addr -> get_elem(data_ptr, n, m) * addr -> get_elem(data_ptr, n, m));
-            }
-            //std::cout << "L2: " << addr -> get_elem(data_ptr, n, 0) << ", " << fabs(addr -> get_elem(data_ptr, n, 0)) << ", " << abs(addr -> get_elem(data_ptr, n, 0) * addr -> get_elem(data_ptr, n, 0)) << std::endl;
-        }
-
-        tmp = sqrt(tmp / T(vec.get_geom().get_nx() * vec.get_geom().get_my()));
-        return tmp;
-    }
 }
 
 #endif //UTILITY_H

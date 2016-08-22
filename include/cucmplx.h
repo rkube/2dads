@@ -19,8 +19,8 @@
 #define CUDA_MEMBER
 #endif
 
-constexpr size_t io_width{16};
-constexpr size_t io_prec{10};
+constexpr size_t io_width{8};
+constexpr size_t io_prec{4};
 
 template<typename T>
 class CuCmplx
