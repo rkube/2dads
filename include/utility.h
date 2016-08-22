@@ -6,7 +6,7 @@
 namespace utility
 {
     template <typename T>
-    void print(cuda_array_bc_nogp<T, allocator_host> vec, const size_t tlev, std::ostream& os)
+    void print(cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev, std::ostream& os)
     {
         address_t<T>* address = vec.get_address_ptr();
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)

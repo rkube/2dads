@@ -11,9 +11,9 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs(get_geom()),
     tint(get_geom(), get_bvals(),  _sp),
-    arr1(_sl, _bc, 1), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
-    arr2(_sl, _bc, 1), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
-    arr3(_sl, _bc, 1), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
+    arr1(_sl, _bc, tint_params.get_tlevs()), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
+    arr2(_sl, _bc, tint_params.get_tlevs()), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
+    arr3(_sl, _bc, tint_params.get_tlevs()), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
     get_field_by_name{ {test_ns::field_t::arr1,     &arr1},
                        {test_ns::field_t::arr1_x,   &arr1_x},
                        {test_ns::field_t::arr1_y,   &arr1_y},
@@ -57,7 +57,7 @@ void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
 }
 
 
-void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
+void slab_bc :: initialize_invlaplace(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t
@@ -66,21 +66,21 @@ void slab_bc :: initialize_invlaplace(const test_ns::field_t fname)
                     const value_t y{geom.get_y(m)};
                     return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
                     //return(-1.0 * (twodads::TWOPI) * (twodads::TWOPI) * sin(twodads::TWOPI * y));
-                }, 0);
+                }, tlev);
 }
 
 
-void slab_bc :: initialize_sine(const test_ns::field_t fname)
+void slab_bc :: initialize_sine(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                  {
                     return(sin(twodads::TWOPI * geom.get_x(n)) + 0.0 * sin(twodads::TWOPI * geom.get_y(m)));
-                 }, 0);
+                 }, tlev);
 }
 
 
-void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns::field_t fname2)
+void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev)
 {
     cuda_arr_real* arr1 = get_field_by_name.at(fname1);
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
@@ -91,17 +91,17 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
                     value_t x{geom.get_x(n)};
                     value_t y{geom.get_y(m)};
                     return(-1.0 * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * x));
-                  }, 0);
+                  }, tlev);
 
     // arr2 = sin(pi x) sin (pi y). Dirichlet BC: g(-1, y) = g(1, y) = 0.0
     (*arr2).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                   {
                     return(sin(twodads::PI * geom.get_x(n)) * sin(twodads::PI * geom.get_y(m)));
-                  }, 0);
+                  }, tlev);
 }
 
 
-void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test_ns::field_t fname2)
+void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev)
 {
     cuda_arr_real* arr1 = get_field_by_name.at(fname1);
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
@@ -109,35 +109,36 @@ void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test
     (*arr1).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 return(sin(twodads::TWOPI * geom.get_x(n)));
-            }, 0);
+            }, tlev);
 
     (*arr2).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 value_t y{geom.get_y(m)};
                 return(exp(-50.0 * (y - 0.5) * (y - 0.5))); 
-            }, 0);
+            }, tlev);
 }
 
 
-void slab_bc :: initialize_dfttest(const test_ns::field_t fname)
+void slab_bc :: initialize_dfttest(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
            {       
                return(sin(twodads::TWOPI * geom.get_y(m)));
-           }, 0);
+           }, tlev);
 }
 
 
-void slab_bc :: initialize_gaussian(const test_ns::field_t fname)
+void slab_bc :: initialize_gaussian(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
+    std::cout << "slab_bc::initialize_gaussian" << std::endl;
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {
                 const twodads::real_t x{geom.get_x(n)};
                 const twodads::real_t y{geom.get_y(m)};
                 return(exp(-0.5 * (x * x + y * y)));
-            }, 0);
+            }, tlev);
 }
 
 
@@ -208,25 +209,12 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
                              t_src, t_dst);
 }
 
-
-//void slab_bc :: initialize_tint(const test_ns::field_t fname)
-//{
-//    cuda_arr_real* in_arr{get_field_by_name.at(fname)};
-//    if(!((*in_arr).is_transformed()))
-//    {
-//        dft_r2c(fname, 0);
-//    }
-//    (*tint).initialize_field(get_field_by_name.at(fname), 0);
-//    dft_c2r(fname, 0);
-//}
-
 // Integrate the field in time
-//void slab_bc :: integrate(const test_ns::field_t fname)
-//{
-//    //cuda_arr_real* in_arr = get_field_by_name.at(in);
-//    //(*tint).integrate();
-//    //(*tint).update_field(in_arr);
-//}
+void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    tint.integrate((*arr), tlev);
+}
 
 
 slab_bc :: ~slab_bc()
