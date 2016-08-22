@@ -4,11 +4,12 @@
  */
 
 
-#include "cuda_types.h"
+#include "2dads_typs.h"
+#include "solvers.h";
 #include "slab_config.h"
 
 
-#ifdef __CUDA_ARCH__
+#ifdef __CUDACC__
 /*
  * Stiffly stable time integration
  * temp = sum(k=1..level) alpha[T-2][level-k] * u^{T-k} + delta_t * beta[T-2][level -k - 1] * u_RHS^{T-k-1}
@@ -142,7 +143,7 @@ void d_integrate_stiff_map_4_debug(cuda::cmplx_t** A, cuda::cmplx_t** A_rhs, cud
 
 
 
-#endif // __CUDA_ARCH__
+#endif // __CUDACC__
 
 
 template <typename T>
@@ -168,9 +169,7 @@ class karniadakis
 
 
 template <typename T>
-karniadakis<T> :: karniadakis(const slab_config cfg) :
-    sl(cfg.get_xleft(), cfg.get_deltax(), cfg.get_ylo(), cfg.get_deltay(), cfg.get_deltat(), cfg.get_my(), cfg.get_nx()),
-    p(cfg.get_deltat(), cfg.get_lengthx(), cfg.get_lengthy(), cfg.get_init_params[0], cfg.get_init_params[1], cfg.get_my(), cfg.get_nx() / 2 + 1, 4)
+karniadakis<T> :: karniadakis(const slab_config cfg)
 {
     cout << "karniadakis :: karniadakis" << endl;
     cout << p << endl;
