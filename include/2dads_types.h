@@ -54,8 +54,15 @@ namespace twodads {
     constexpr int io_p{4}; //precision when printing with cout
 
     // Coefficients for stiffly stable time integration
+#ifdef __CUDACC__
+    __constant__ const real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
+    __constant__ const real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
+#endif //__CUDACC__
+
+#ifndef __CUDACC__
     constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
     constexpr real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
+#endif //__CUDACC__
 
     // Boundary conditions: Dirichlet, Neumann, periodic
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};

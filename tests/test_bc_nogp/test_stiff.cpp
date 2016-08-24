@@ -20,11 +20,11 @@ int main(void)
 
     const size_t tlevs{4};
 
-    const twodads::real_t deltat{0.001};
-    const twodads::real_t diff{0.01};
+    const twodads::real_t deltat{0.1};
+    const twodads::real_t diff{0.1};
     const twodads::real_t hv{0.0};
 
-    const twodads::real_t tsteps{10};
+    const twodads::real_t num_tsteps{50};
 
     cout << "Enter Nx:";
     cin >> Nx;
@@ -36,7 +36,7 @@ int main(void)
     twodads::slab_layout_t my_geom(x_l, Lx / double(Nx), y_l, Ly / double(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
     twodads::bvals_t<double> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
-    twodads::stiff_params_t params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, 4);
+    twodads::stiff_params_t params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, tlevs);
     {
         slab_bc my_slab(my_geom, my_bvals, params);
         my_slab.initialize_gaussian(test_ns::field_t::arr1, tlevs - 1);
@@ -72,7 +72,9 @@ int main(void)
             utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());      
         }
         
-        for(; tstep > tsteps; tstep++)
+        //tstep++;
+    
+        for(; tstep < num_tsteps; tstep++)
         {
             // Integrate with third order scheme now
             std::cout << "Integrating: t = " << tstep << std::endl;

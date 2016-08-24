@@ -39,14 +39,17 @@ int main(void)
     constexpr twodads::real_t Lx{2.0};
     constexpr twodads::real_t y_l{-1.0};
     constexpr twodads::real_t Ly{2.0};
+    constexpr twodads::real_t deltat{0.1};
+    constexpr twodads::real_t diff{0.1};
+    constexpr twodads::real_t hv{0};
 
     twodads::bvals_t<double> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, 0.0, 0.0, 0.0, 0.0};
     twodads::slab_layout_t my_geom(x_l, (Lx - x_l) / twodads::real_t(Nx), y_l, (Ly - y_l)  / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
-    twodads::stiff_params_t stiff_params(0.1, Lx, Ly, 0.1, 0.0, Nx, My / 2 + 1, 4);
+    twodads::stiff_params_t stiff_params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, 1);
 
     {
         slab_bc my_slab(my_geom, my_bvals, stiff_params);
-        my_slab.initialize_derivatives(test_ns::field_t::arr1, test_ns::field_t::arr2);
+        my_slab.initialize_derivatives(test_ns::field_t::arr1, test_ns::field_t::arr2, 0);
 
         // Initialize analytic solution for first derivative
         cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_an(my_geom, my_bvals, 1);
@@ -65,7 +68,7 @@ int main(void)
 
         fname.str(string(""));
         fname << "test_derivs_ddx1_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
 
         cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;
@@ -89,7 +92,7 @@ int main(void)
 
         fname.str(string(""));
         fname << "test_derivs_ddx2_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
 
         sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
         sol_num -= sol_an;
@@ -114,7 +117,7 @@ int main(void)
 
         fname.str(string(""));
         fname << "test_derivs_ddy1_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
 
         sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
         sol_num -= sol_an;
@@ -138,7 +141,7 @@ int main(void)
 
         fname.str(string(""));
         fname << "test_derivs_ddy2_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
 
         sol_num = my_slab.get_array_ptr(test_ns::field_t::arr3);
         sol_num -= sol_an;

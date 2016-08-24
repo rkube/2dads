@@ -57,11 +57,11 @@ void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
     }
 }
 
-
 void slab_bc :: initialize_invlaplace(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
-    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t
+    
+    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
                 {
                     const value_t x{geom.get_x(n)};
                     const value_t y{geom.get_y(m)};
@@ -204,10 +204,7 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
 {
     cuda_arr_real* in_arr{get_field_by_name.at(in)};
     cuda_arr_real* out_arr{get_field_by_name.at(out)};
-    my_derivs.invert_laplace((*in_arr), (*out_arr), 
-                             (*in_arr).get_bvals().get_bc_left(), (*in_arr).get_bvals().get_bv_left(),
-                             (*in_arr).get_bvals().get_bc_right(), (*in_arr).get_bvals().get_bv_right(),
-                             t_src, t_dst);
+    my_derivs.invert_laplace((*in_arr), (*out_arr), t_src, t_dst);
 }
 
 // Integrate the field in time
@@ -243,7 +240,7 @@ void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
     else if (tlev == 3)
     {
         std::cout << "Integrating fourth order" << std::endl;
-//        tint.integrate((*arr), tlevs - 1, tlevs - 2, 0, tlevs - 3, tlev);
+        tint.integrate((*arr), tlevs - 3, tlevs - 2, tlevs - 1, tlevs - 4, tlev);
     }
 }
 
@@ -251,7 +248,7 @@ void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
 void slab_bc :: advance()
 {
     arr1.advance();
-}
+} 
 
 
 slab_bc :: ~slab_bc()

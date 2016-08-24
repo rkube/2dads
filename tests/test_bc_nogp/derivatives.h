@@ -765,8 +765,8 @@ namespace detail
     template <typename T>
     void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_device>& src,
                              cuda_array_bc_nogp<T, allocator_device>& dst,
-                             const twodads::bc_t bc_t_left, const T bval_left,
-                             const twodads::bc_t bc_t_right, const T bval_right,
+                             //const twodads::bc_t bc_t_left, const T bval_left,
+                             //const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
                              //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
@@ -774,8 +774,8 @@ namespace detail
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
                              allocator_device<T>)                         
     {
-        const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
-        const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
+        //const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
+        //const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
 
         //if (dst.get_bvals() != src.get_bvals())
         //    throw assert_error(std::string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
@@ -1030,8 +1030,8 @@ namespace detail
     template <typename T>
     void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_host>& src,
                              cuda_array_bc_nogp<T, allocator_host>& dst,
-                             const twodads::bc_t bc_t_left, const T bval_left,
-                             const twodads::bc_t bc_t_right, const T bval_right,
+                             //const twodads::bc_t bc_t_left, const T bval_left,
+                             //const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
                              //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
@@ -1145,52 +1145,36 @@ class deriv_t
 
         void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
                             cuda_array_bc_nogp<T, allocator>& dst,
-                            const twodads::bc_t bc_t_left, const T bv_left,
-                            const twodads::bc_t bc_t_right, const T bv_right,
+                            //const twodads::bc_t bc_t_left, const T bv_left,
+                            //const twodads::bc_t bc_t_right, const T bv_right,
                             const size_t t_src, const size_t t_dst)
         {
             assert(src.get_geom() == dst.get_geom());
             assert(src.get_geom() == get_geom());
+            assert(src.get_bvals() == dst.get_bvals());
 
             if(!(src.is_transformed(t_src)))
             {
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
                 src.set_transformed(t_src, true);
             }
+            // When solving Ax=b, update the boundary terms in b
+            // The boundary conditions change the ky=0 mode of the n=0/Nx-1 row
 
-            // Update the main diagonal for ky=0 with the boundary terms
-            const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
-            const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
-            
-            // Update the ky=0 diagonal ()
-            // The diagonals are transposed, i.e.
-            // n = 0 ... My / 2 
-            // m = 0 ... Nx - 1
-            // The first row(n=0) is the line with the coefficients for ky=0
-            switch(bc_t_left)
+            // Note that we take the DFT of the boundary value. For a real boundary
+            // value, this is just the value multiplied by the number of Fourier modes.
+            // See http://fftw.org/fftw3_doc/The-1d-Real_002ddata-DFT.html#The-1d-Real_002ddata-DFT
+            T bval_left_hat{src.get_bvals().get_bv_left() * static_cast<T>(src.get_my())};
+            T bval_right_hat{src.get_bvals().get_bv_right() * static_cast<T>(src.get_my())};
+            T add_to_boundary_left{0.0};
+            T add_to_boundary_right{0.0};
+            switch(src.get_bvals().get_bc_left())
             {
                 case twodads::bc_t::bc_dirichlet:
-                    // The apply function updates ALL elements.
-                    // Let the lambda return the input itself unless we update the left boundary element
-                    // at n=m=0
-                    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
-                    {
-                        if(n == 0 && m == 0)
-                        {
-                            return(-3.0 * inv_dx2 + 2.0 * bv_left * twodads::TWOPI * delta_y);
-                        }
-                        return(input);
-                    }, 0);
+                    add_to_boundary_left = -2.0 * bval_left_hat;
                     break;
                 case twodads::bc_t::bc_neumann:
-                    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
-                    {
-                        if(n == 0 && m == geom.get_my() - 1)
-                        {
-                            return(-3.0 * inv_dx2 - bv_left * twodads::TWOPI * delta_y);
-                        }
-                        return(input);
-                    }, 0);
+                    add_to_boundary_left = -1.0 * src.get_geom().get_deltax() * bval_left_hat;
                     break;
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
@@ -1198,40 +1182,46 @@ class deriv_t
                     break;
             }
 
-            switch(bc_t_right)
+            switch(src.get_bvals().get_bc_right())
             {
                 case twodads::bc_t::bc_dirichlet:
-                    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
-                    {
-                        if(n == 0 && m == 0)
-                        {
-                            return(-3.0 * inv_dx2 + 2.0 * bv_right * twodads::TWOPI * delta_y);
-                        }
-                        return(input);
-                    }, 0);
+                    add_to_boundary_right = -2.0 * bval_right_hat;
                     break;
                 case twodads::bc_t::bc_neumann:
-                    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
-                    {
-                        if(n == 0 && m == geom.get_my() - 1)
-                        {
-                            return(-3.0 * inv_dx2 - bv_right * twodads::TWOPI * delta_y);
-                        }
-                        return(input);
-                    }, 0);
+                    add_to_boundary_right = -1.0 * src.get_geom().get_deltax() * bval_right_hat;
                     break;
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
                     std::cerr << "Treating as dirichlet, bval=0" << std::endl;
                     break;
-            }                
+            }    
 
-            detail :: impl_invert_laplace(src, dst, bc_t_left, bv_left, bc_t_right, bv_right, 
-                                          t_src, t_dst, 
-                                          //get_hdiag(), 
+            //Add boundary terms to b before solving Ax=b
+            src.apply([=] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+            {
+            if(n == 0  && m == 0)
+                return(input + add_to_boundary_left);
+            else if(n == geom.get_nx() - 1 && m == 0)
+                return(input + add_to_boundary_right);
+            else
+                return(input);
+            }, t_src);
+                
+            detail :: impl_invert_laplace(src, dst, t_src, t_dst,  
                                           get_diag(), get_diag_u(), get_diag_l(),
                                           allocator<T>{});
 
+            // Remove boundary terms after solving the system
+            src.apply([=] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+            {
+            if(n == 0  && m == 0)
+                return(input - add_to_boundary_left);
+            else if(n == geom.get_nx() - 1 && m == 0)
+                return(input - add_to_boundary_right);
+            else
+                return(input);
+            }, t_src);
+                
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(t_src, false);
             utility :: normalize(src, t_src); 

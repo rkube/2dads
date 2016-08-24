@@ -64,21 +64,21 @@ int main(void){
         utility :: print(sol_an, 0, fname.str());
 
         //cerr << "Initializing fields..." << endl;
-        my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2);
+        my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2, 0);
         // Print input to inv_laplace routine into array arr1_nx.dat
         fname.str(string(""));
         fname << "test_arakawa_f_" << Nx << "_in.dat";
-        my_slab.print_field(test_ns::field_t::arr1, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), 0, fname.str());
 
         fname.str(string(""));
         fname << "test_arakawa_g_" << Nx << "_in.dat";
-        my_slab.print_field(test_ns::field_t::arr2, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr2)), 0, fname.str());
 
         my_slab.arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2, test_ns::field_t::arr3, size_t(0), size_t(0));
 
         fname.str(string(""));
         fname << "test_arakawa_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
        
         cuda_array_bc_nogp<twodads::real_t, allocator_host> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;

@@ -125,7 +125,6 @@ namespace device
         for(size_t t = 0; t < tlevs; t++)
         {
             tlev_ptr[t] = &data[t * geom.get_nelem_per_t()];
-            //printf("I am kernel set_tlev_ptr: tlev_ptr[%u] at %p\n", t, tlev_ptr[t]);
         }
     }
 
@@ -169,14 +168,12 @@ namespace device
             const twodads::bvals_t<T> bvals)
     {
         *my_address = new address_t<T>(geom, bvals);
-        //printf("kernel_init_address: address_t at %p\n", *my_address);
     }
 
     template <typename T>
     __global__
     void kernel_free_address(address_t<T>** my_address)
     {
-        //printf("kernel_free_address: address_t at %p\n", *my_address);
         delete *my_address;
     }
 
@@ -347,9 +344,9 @@ namespace detail
     }
 
     template <typename T, typename F>
-    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& bloc, allocator_device<T>)
+    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_device<T>)
     {
-        device :: kernel_elmentwise<<<grid, block>>>(x, rhs, myfunc, geom)
+        device :: kernel_elementwise<<<grid, block>>>(x, rhs, myfunc, geom);
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -592,12 +589,12 @@ public:
         // Check for self-assignment
         if(this == &rhs)
             return(*this);
-        rhs.transformed(this -> is_transformed());
 
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
         for(size_t t = 0; t < get_tlevs(); t++)
         {
             my_alloc.copy(get_tlev_ptr(t), get_tlev_ptr(t) + get_geom().get_nelem_per_t(), rhs.get_tlev_ptr(t));
+            set_transformed(t, rhs.is_transformed(t));
         }
         return (*this);
     }

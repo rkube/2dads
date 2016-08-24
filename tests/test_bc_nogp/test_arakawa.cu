@@ -49,7 +49,9 @@ int main(void){
     twodads::stiff_params_t stiff_params(0.1, Lx, Ly, 0.1, 0.0, Nx, My / 2 + 1, 4);
 
     {
+        std::cout << "helleo?" << std::endl;
         slab_bc my_slab(my_geom, my_bvals, stiff_params);
+        std::cout << "slab created" << std::endl;
         cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_an(my_geom, my_bvals, 1);
         sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
                 {
@@ -63,22 +65,22 @@ int main(void){
         fname << "test_arakawa_solan_" << Nx << "_out.dat";
         utility :: print(sol_an, 0, fname.str());
 
-        //cerr << "Initializing fields..." << endl;
-        my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2);
+        my_slab.initialize_arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2, 0);
         // Print input to inv_laplace routine into array arr1_nx.dat
         fname.str(string(""));
         fname << "test_arakawa_f_" << Nx << "_in.dat";
-        my_slab.print_field(test_ns::field_t::arr1, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), 0, fname.str());
 
         fname.str(string(""));
         fname << "test_arakawa_g_" << Nx << "_in.dat";
-        my_slab.print_field(test_ns::field_t::arr2, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr2)), 0, fname.str());
 
+        std::cout << "computing poisson bracket" << std::endl;
         my_slab.arakawa(test_ns::field_t::arr1, test_ns::field_t::arr2, test_ns::field_t::arr3, size_t(0), size_t(0));
 
         fname.str(string(""));
         fname << "test_arakawa_solnum_" << Nx << "_out.dat";
-        my_slab.print_field(test_ns::field_t::arr3, fname.str());
+        utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr3)), 0, fname.str());
        
         cuda_array_bc_nogp<twodads::real_t, allocator_device> sol_num(my_slab.get_array_ptr(test_ns::field_t::arr3));
         sol_num -= sol_an;

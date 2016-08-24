@@ -60,12 +60,12 @@ class slab_bc
         void dft_r2c(const test_ns::field_t, const size_t);
         void dft_c2r(const test_ns::field_t, const size_t);
 
-        void initialize_invlaplace(const test_ns::field_t fname, const size_t tlev=0);
-        void initialize_sine(const test_ns::field_t fnam, const size_t tlev=0);
-        void initialize_arakawa(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev=0);
-        void initialize_derivatives(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev=0);
-        void initialize_dfttest(const test_ns::field_t fname, const size_t tlev=0);
-        void initialize_gaussian(const test_ns::field_t fname, const size_t tlev=0);
+        void initialize_invlaplace(const test_ns::field_t, const size_t);
+        void initialize_sine(const test_ns::field_t, const size_t);
+        void initialize_arakawa(const test_ns::field_t, const test_ns::field_t, const size_t);
+        void initialize_derivatives(const test_ns::field_t, const test_ns::field_t, const size_t);
+        void initialize_dfttest(const test_ns::field_t, const size_t);
+        void initialize_gaussian(const test_ns::field_t, const size_t);
 
         void invert_laplace(const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 

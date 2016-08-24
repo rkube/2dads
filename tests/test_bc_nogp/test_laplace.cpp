@@ -39,7 +39,7 @@ int main(void){
     {
         slab_bc my_slab(my_geom, my_bvals, params);
         my_slab.initialize_invlaplace(test_ns::field_t::arr1);
-        fname << "test_laplace_input_" << Nx << "host.dat";
+        fname << "test_laplace_input_" << Nx << "_host.dat";
         utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), 0, fname.str());
         fname.str(string(""));
 
