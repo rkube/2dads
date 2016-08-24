@@ -11,7 +11,8 @@
 
 // CUDACC has a quirk edit fftw3:
 // https://github.com/FFTW/fftw3/issues/18
-#include <fftw3.h>
+#include "error.h"
+#include "fftw3.h"
 
 #ifdef __CUDACC__
 #include <cuda.h>
@@ -19,7 +20,6 @@
 #include <cufft.h>
 #include "cucmplx.h"
 #include "cuda_types.h"
-#include "error.h"
 
 namespace cufft
 {
@@ -233,14 +233,14 @@ namespace fftw
 {
     template <typename T>
         inline void plan_dft(fftw_plan& plan_r2c, fftw_plan& plan_c2r, const twodads::dft_t dft_type,
-                const twodads::slab_layout_t geom, const T dummy)
+                const twodads::slab_layout_t& geom, const T dummy)
         {
             // Do nothing, the constructor should call a template specialization for T = float, double below
         }
 
     template <>
         inline void plan_dft<double>(fftw_plan& plan_r2c, fftw_plan& plan_c2r,
-                const twodads::dft_t dft_type, const twodads::slab_layout_t geom,
+                const twodads::dft_t dft_type, const twodads::slab_layout_t& geom,
                 const double dummy)
         {
             int rank{1};
@@ -303,7 +303,7 @@ namespace fftw
 
     template <>
         inline void plan_dft<float>(fftw_plan& plan_r2c, fftw_plan& plan_c2r,
-                const twodads::dft_t dft_type, const twodads::slab_layout_t geom,
+                const twodads::dft_t dft_type, const twodads::slab_layout_t& geom,
                 const float dummy)
         {
         }
@@ -397,7 +397,7 @@ template <typename T>
 class fftw_object_t : public dft_object_t<T>
 {
     public:
-        fftw_object_t(const twodads::slab_layout_t _geom, const twodads::dft_t _dft_type) :  geom(_geom), dft_type(_dft_type)
+        fftw_object_t(const twodads::slab_layout_t& _geom, const twodads::dft_t _dft_type) :  geom(_geom), dft_type(_dft_type)
         {
             fftw :: plan_dft(plan_r2c, plan_c2r, get_dft_t(), get_geom(), T{});
         }

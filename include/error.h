@@ -76,7 +76,7 @@ class cusparse_err : public std::exception
 class gpu_error : public std::exception
 {
     public:
-        gpu_error(const std::string err) : error(err) {};
+        gpu_error(const std::string& err) : error(err) {};
         ~gpu_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
@@ -90,7 +90,7 @@ class out_of_bounds_err : public std::exception
 {
     public:
         /// Error code encoded as a string
-        out_of_bounds_err(const std::string err) : error(err) {};
+        out_of_bounds_err(const std::string& err) : error(err) {};
         ~out_of_bounds_err() throw() {};
         virtual const char* what() const throw() {return error.data();};	
 
@@ -103,7 +103,7 @@ class out_of_bounds_err : public std::exception
 class operator_err : public std::exception
 {
     public:
-        operator_err(const std::string err) : error(err) {};
+        operator_err(const std::string& err) : error(err) {};
         ~operator_err() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
@@ -117,14 +117,14 @@ class invalid_size : public std::exception
 {
     public:
         /// Write error message 
-        invalid_size(const std::string err) : error(err) {};
+        invalid_size(const std::string& err) : error(err) {};
         ~invalid_size() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
     private:
-        int min_size;
-        int max_size;
-        int selected_size;
+        //int min_size;
+        //int max_size;
+        //int selected_size;
         const std::string error;
 };
 
@@ -132,7 +132,7 @@ class invalid_size : public std::exception
 /// Configuration file errors
 class config_error : public std::exception{
     public:
-        config_error(const std::string err) : error(err) {};
+        config_error(const std::string& err) : error(err) {};
         ~config_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
@@ -145,7 +145,7 @@ class config_error : public std::exception{
 class diagnostics_error : public std::exception
 {
     public:
-        diagnostics_error(const std::string err) : error(err) {};
+        diagnostics_error(const std::string& err) : error(err) {};
         ~diagnostics_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
@@ -158,7 +158,7 @@ class diagnostics_error : public std::exception
 class name_error : public std::exception
 {
     public:
-        name_error(const std::string err) : error(err) {};
+        name_error(const std::string& err) : error(err) {};
         ~name_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
@@ -173,7 +173,7 @@ class name_error : public std::exception
 class not_implemented_error : public std::exception
 {
     public:
-        not_implemented_error(const std::string err) : error(err) {};
+        not_implemented_error(const std::string& err) : error(err) {};
         ~not_implemented_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 

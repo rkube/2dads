@@ -384,7 +384,7 @@ void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_
 namespace host
 {
     template <typename T, typename O>
-    void apply_threepoint_center(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t geom)
+    void apply_threepoint_center(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t& geom)
     {
         const T inv_dx{1.0 / geom.get_deltax()};
         const T inv_dx2{inv_dx * inv_dx};
@@ -403,7 +403,7 @@ namespace host
 
 
     template <typename T, typename O> 
-    void apply_threepoint(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t geom,
+    void apply_threepoint(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t& geom,
                           std::vector<size_t>& row_vals, std::vector<size_t>& col_vals)
     {
         const T inv_dx{1.0 / geom.get_deltax()};
@@ -439,7 +439,7 @@ namespace host
     template <typename T>
     void arakawa_center(const T* u, address_t<T>* address_u, 
                         const T* v, address_t<T>* address_v, 
-                        T* result, const twodads::slab_layout_t geom)
+                        T* result, const twodads::slab_layout_t& geom)
     {
         const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
         size_t index{0};
@@ -515,7 +515,7 @@ namespace host
     template <typename T>
     void arakawa_single(const T* u, address_t<T>* address_u, 
                         const T* v, address_t<T>* address_v, 
-                        T* result, const twodads::slab_layout_t geom,
+                        T* result, const twodads::slab_layout_t& geom,
                         std::vector<size_t> row_vals,
                         std::vector<size_t> col_vals)
     {
@@ -768,7 +768,7 @@ namespace detail
                              const twodads::bc_t bc_t_left, const T bval_left,
                              const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
-                             CuCmplx<T>* h_diag,
+                             //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
@@ -788,7 +788,7 @@ namespace detail
                             reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
                             reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
 
-        dst.set_transformed(true);
+        dst.set_transformed(t_dst, true);
     }
 
 #endif //__CUDACC__
@@ -796,7 +796,7 @@ namespace detail
     template <typename T>
     void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
                           cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
-                          const twodads::slab_layout_t geom_my21,
+                          const twodads::slab_layout_t& geom_my21,
                           allocator_host<T>)
     {
         const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
@@ -906,8 +906,6 @@ namespace detail
                                  out.get_geom(), row_vals, col_vals);
     }
 
-
-   
 
     template <typename T>
     void impl_dx2(const cuda_array_bc_nogp<T, allocator_host>& in,
@@ -1035,14 +1033,14 @@ namespace detail
                              const twodads::bc_t bc_t_left, const T bval_left,
                              const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
-                             CuCmplx<T>* h_diag,
+                             //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
                              allocator_host<T>)
     {
-        const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
-        const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
+        //const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
+        //const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
 
         solvers :: elliptic my_ell_solver(src.get_geom());
         // Copy input data for solver into dst.
@@ -1055,7 +1053,7 @@ namespace detail
                             reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)), 
                             reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));
 #endif //__CUDACC__
-        dst.set_transformed(true);
+        dst.set_transformed(t_dst, true);
     }    
 }
 
@@ -1081,7 +1079,8 @@ class deriv_t
         deriv_t(const twodads::slab_layout_t);    
         ~deriv_t()
         {
-            delete [] h_diag;   
+            delete myfft;
+            //delete [] h_diag;   
         };
 
         void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
@@ -1103,21 +1102,21 @@ class deriv_t
                   const size_t t_src, const size_t t_dst)
         {
             // DFT r2c
-            if(!(src.is_transformed()))
+            if(!(src.is_transformed(t_src)))
             {
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(true);
+                src.set_transformed(t_src, true);
             }
             // Multiply with ky coefficients
             detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
 
             // DFT c2r and normalize
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(false);
+            dst.set_transformed(t_dst, false);
             utility :: normalize(dst, t_dst);
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(false);
+            src.set_transformed(t_src, false);
             utility :: normalize(src, t_src);
         }
 
@@ -1126,21 +1125,21 @@ class deriv_t
                   const size_t t_src, const size_t t_dst)
         {
             // DFT r2c
-            if(!(src.is_transformed()))
+            if(!(src.is_transformed(t_src)))
             {
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(true);
+                src.set_transformed(t_src, true);
             }
             // Multiply with ky^2 coefficients
             detail :: impl_dy2(src, dst, t_src, t_dst, get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
 
             // DFT c2r and normalize
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(false);
+            dst.set_transformed(t_dst, false);
             utility :: normalize(dst, t_dst);
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(false);
+            src.set_transformed(t_src, false);
             utility :: normalize(src, t_src);            
         }
 
@@ -1153,10 +1152,10 @@ class deriv_t
             assert(src.get_geom() == dst.get_geom());
             assert(src.get_geom() == get_geom());
 
-            if(!(src.is_transformed()))
+            if(!(src.is_transformed(t_src)))
             {
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(true);
+                src.set_transformed(t_src, true);
             }
 
             // Update the main diagonal for ky=0 with the boundary terms
@@ -1229,15 +1228,16 @@ class deriv_t
 
             detail :: impl_invert_laplace(src, dst, bc_t_left, bv_left, bc_t_right, bv_right, 
                                           t_src, t_dst, 
-                                          get_hdiag(), get_diag(), get_diag_u(), get_diag_l(),
+                                          //get_hdiag(), 
+                                          get_diag(), get_diag_u(), get_diag_l(),
                                           allocator<T>{});
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(false);
+            src.set_transformed(t_src, false);
             utility :: normalize(src, t_src); 
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(false);
+            dst.set_transformed(t_dst, false);
             utility :: normalize(dst, t_dst);
         }
 
@@ -1256,7 +1256,7 @@ class deriv_t
         cmplx_arr& get_diag() {return(diag);};
         cmplx_arr& get_diag_u() {return(diag_u);};
         cmplx_arr& get_diag_l() {return(diag_l);};
-        cmplx_t* get_hdiag() {return(h_diag);};
+        //cmplx_t* get_hdiag() {return(h_diag);};
         // Layout of the real fields, i.e. Nx * My
         twodads::slab_layout_t get_geom() const {return(geom);};
         // Layout of complex fields, i.e. Nx * My21
@@ -1277,7 +1277,7 @@ class deriv_t
         cmplx_arr   diag;
         cmplx_arr   diag_l;
         cmplx_arr   diag_u;
-        cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions passed to invert_laplace routine.
+        //cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions passed to invert_laplace routine.
 };
 
 
@@ -1316,8 +1316,8 @@ deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
            twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_u(get_geom_transpose(), 
-           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
-    h_diag{new cmplx_t[get_geom().get_nx()]} 
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1)
+    //h_diag{new cmplx_t[get_geom().get_nx()]} 
 {
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.

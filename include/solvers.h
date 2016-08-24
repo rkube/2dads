@@ -178,10 +178,6 @@ namespace solvers
                 {
                     throw cublas_err(cublas_status);
                 }
-                //delete [] dp;
-                //delete [] dp_l;
-                //delete [] dp_u;
-                //delete [] ep;
             }
     };
 
@@ -192,10 +188,11 @@ namespace solvers
     // Class wrapper for zgtsv routine
     {
         public:
-            elliptic(const twodads::slab_layout_t _geom) : My_int(static_cast<int>(_geom.get_my())),
-                                                          My21_int(static_cast<int>(_geom.get_my() + _geom.get_pad_y()) / 2),
-                                                          Nx_int(static_cast<int>(_geom.get_nx()))
-                                                          {};
+            elliptic(const twodads::slab_layout_t& _geom) : 
+                My_int(static_cast<int>(_geom.get_my())),
+                My21_int(static_cast<int>(_geom.get_my() + _geom.get_pad_y()) / 2),
+                Nx_int(static_cast<int>(_geom.get_nx()))
+                {};
             
             void solve(lapack_complex_double* dummy, lapack_complex_double* dst,
                        lapack_complex_double* diag_l, lapack_complex_double* diag, lapack_complex_double* diag_u)
@@ -205,7 +202,7 @@ namespace solvers
                            // In contrast to the cublas library, it accepts the input in row-major
                            // format. Thus do not transpose but solve directly.
  
-                            lapack_int res{0};
+
                             
                             // Temporary copy of the diagonals. They get overwritten when
                             // calling LAPACKE_zgtsv
@@ -214,6 +211,7 @@ namespace solvers
                             lapack_complex_double* diag_copy = new lapack_complex_double[get_nx()];
                             for(size_t m = 0; m < static_cast<size_t>(get_my21()); m++)
                             { 
+                                lapack_int res{0};
                                 // Create dummy copies iof the diagonals in each iteration
                                 memcpy(diag_l_copy, diag_l, static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
                                 memcpy(diag_u_copy, diag_u, static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));

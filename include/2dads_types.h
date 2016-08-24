@@ -5,6 +5,10 @@
 #ifndef TWODADS_TYPES
 #define TWODADS_TYPES
 
+#include <iostream>
+#include <cassert>
+#include <vector>
+
 #ifdef __CUDACC__
 #define CUDAMEMBER __host__ __device__
 #else
@@ -20,9 +24,6 @@
 #include <fftw3.h>
 #endif //HOST
 
-#include <vector>
-#include <cassert>
-#include <iostream>
 
 namespace twodads {
     using real_t = double;
@@ -30,10 +31,14 @@ namespace twodads {
 
     #ifdef DEVICE
     using fft_handle_t = cufftHandle;
+    //using real_arr = cuda_array_bc_nogp<T, allocator_device>;
+    //using cmplx_arr = cuda_array_bc_nogp<CuCmplx<T>, allocator_device>;
     #endif //DEVICE
 
     #ifdef HOST
     using fft_handle_t = fftw_plan;
+    //using real_arr = cuda_array_bc_nogp<T, allocator_host>;
+    //using cmplx_arr = cuda_array_bc_nogp<CuCmplx<T>, allocator_host>;
     #endif //HOST
 
     // Use PI from math.h
@@ -176,7 +181,7 @@ namespace twodads {
             CUDAMEMBER inline T get_bv_top() const {return(bval_top);};
             CUDAMEMBER inline T get_bv_bottom() const {return(bval_bottom);};
 
-            CUDAMEMBER inline bool operator==(const bvals_t rhs) const
+            CUDAMEMBER inline bool operator==(const bvals_t& rhs) const
             {
                 if((bc_left  == rhs.bc_left) 
                    && (bc_right == rhs.bc_right)
@@ -192,7 +197,7 @@ namespace twodads {
                 return (false);
             }
 
-            CUDAMEMBER inline bool operator!=(const bvals_t rhs) const
+            CUDAMEMBER inline bool operator!=(const bvals_t& rhs) const
             {
                 return(!(*this == rhs));
             }

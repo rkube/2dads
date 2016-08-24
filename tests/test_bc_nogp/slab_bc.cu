@@ -30,10 +30,10 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
 void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr{get_field_by_name.at(fname)};
-    if(!((*arr).is_transformed()))
+    if(!((*arr).is_transformed(tlev)))
     {
         (*myfft).dft_r2c((*arr).get_tlev_ptr(tlev), reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tlev)));
-        (*arr).set_transformed(true);
+        (*arr).set_transformed(tlev, true);
     }
     else
     {
@@ -45,10 +45,11 @@ void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
 void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
 {
     cuda_arr_real* arr{get_field_by_name.at(fname)};
-    if((*arr).is_transformed())
+    if((*arr).is_transformed(tlev))
     {
         (*myfft).dft_c2r(reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tlev)), (*arr).get_tlev_ptr(tlev));
         utility :: normalize(*arr, tlev);
+        (*arr).set_transformed(tlev, false);
     }
     else
     {
@@ -210,10 +211,46 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
 }
 
 // Integrate the field in time
+// t_dst is the time level where the result is stored
+// t_src is the source
+// tlev is the time level of the integration
 void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
 {
+    const size_t tlevs{get_tint_params().get_tlevs()};
+    assert(tlev > 0 && tlev < tlevs);
     cuda_arr_real* arr = get_field_by_name.at(fname);
-    tint.integrate((*arr), tlev);
+
+    for(size_t t  = 0; t < arr -> get_tlevs(); t++)
+        assert(arr -> is_transformed(t) == false);
+
+    // Pass real arrays to the time integration routine
+    // tint leaves gives the newest time step transformed.
+    if(tlev == 1)
+    {
+        // second order integration: Source is at tlevs - 1,
+        // next time step data is writte to tlevs - 2 
+        tint.integrate((*arr), tlevs - 1, 0, 0, tlevs - 2, tlev);
+
+    }
+    else if (tlev == 2)
+    {
+        // Third order:
+        // Sources at tlevs - 1, tlevs - 2
+        // Next time step data is written to tlevs - 3
+        std::cout << "Integrating third order" << std::endl;
+        tint.integrate((*arr), tlevs - 2, tlevs - 1, 0, tlevs - 3, tlev);
+    }
+    else if (tlev == 3)
+    {
+        std::cout << "Integrating fourth order" << std::endl;
+//        tint.integrate((*arr), tlevs - 1, tlevs - 2, 0, tlevs - 3, tlev);
+    }
+}
+
+// Advance the fields in time
+void slab_bc :: advance()
+{
+    arr1.advance();
 }
 
 

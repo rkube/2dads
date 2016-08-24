@@ -82,14 +82,10 @@ template <typename T>
 class address_t
 {
     public:
-        CUDA_MEMBER address_t(const twodads::slab_layout_t _sl, const twodads::bvals_t<T> _bv) : Nx(_sl.get_nx()), 
-                                                                                           My(_sl.get_my()), 
-                                                                                           pad_My(_sl.get_pad_y()), 
-                                                                                           deltax(_sl.get_deltax()), 
-                                                                                           deltay(_sl.get_deltay()), 
-                                                                                           bv(_bv),
-                                                                                           gp_interpolator_left{nullptr},
-                                                                                           gp_interpolator_right{nullptr}
+        CUDA_MEMBER address_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv) : 
+            Nx(_sl.get_nx()), My(_sl.get_my()), pad_My(_sl.get_pad_y()), 
+            deltax(_sl.get_deltax()), deltay(_sl.get_deltay()), bv(_bv),
+            gp_interpolator_left{nullptr}, gp_interpolator_right{nullptr}
             {
                 switch(bv.get_bc_left())
                 {
@@ -121,6 +117,43 @@ class address_t
                         break;
                 }
             };
+        
+        CUDA_MEMBER address_t(const address_t<T>& src) :
+        Nx(src.get_nx()), My(src.get_my()), pad_My(src.get_pad_my()), 
+        deltax(src.get_deltax()), deltay(src.get_deltay()), 
+        bv(src.get_bval()),
+        gp_interpolator_left{nullptr}, gp_interpolator_right{nullptr}
+        {
+            switch(bv.get_bc_left())
+            {
+                case twodads::bc_t::bc_dirichlet:
+                    gp_interpolator_left = new bval_interpolator_dirichlet_left<T>(bv.get_bv_left());
+                    break;
+
+                case twodads::bc_t::bc_neumann:
+                    gp_interpolator_left = new bval_interpolator_neumann_left<T>(bv.get_bv_left());
+                    break;
+                // Periodic BCs in x are not implemented with FDs. set a nullptr and hope it fails somewhere down the line
+                // with an illegal memory access :)
+                case twodads::bc_t::bc_periodic:
+                default:
+                    break;
+            }
+       
+            switch(bv.get_bc_right())
+            {
+                case twodads::bc_t::bc_dirichlet:
+                    gp_interpolator_right = new bval_interpolator_dirichlet_right<T>(bv.get_bv_right());
+                    break;
+
+                case twodads::bc_t::bc_neumann:
+                    gp_interpolator_right = new bval_interpolator_neumann_right<T>(bv.get_bv_right());
+                    break;
+                case twodads::bc_t::bc_periodic:
+                default:
+                    break;
+            }
+        }
 
         CUDA_MEMBER ~address_t() 
         {

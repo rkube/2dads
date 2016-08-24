@@ -40,6 +40,8 @@ class slab_bc
 {
     public:
         using value_t = twodads::real_t;
+        using cmplx_t = CuCmplx<twodads::real_t>;
+        using cmplx_ptr_t = CuCmplx<twodads::real_t>*;
 
 #ifdef DEVICE
         using cuda_arr_real = cuda_array_bc_nogp<twodads::real_t, allocator_device>;
@@ -72,13 +74,13 @@ class slab_bc
         void arakawa(const test_ns::field_t, const test_ns::field_t, const test_ns::field_t, const size_t, const size_t);
 
         void integrate(const test_ns::field_t, const size_t);
-        //void print_field(const test_ns::field_t) const;
-        //void print_field(const test_ns::field_t, const std::string) const;
 
+        void advance();
 
         cuda_arr_real* get_array_ptr(const test_ns::field_t fname) const {return(get_field_by_name.at(fname));};
         inline twodads::slab_layout_t get_geom() const {return(geom);};
         inline twodads::bvals_t<twodads::real_t> get_bvals() const {return(boundaries);};
+        inline twodads::stiff_params_t get_tint_params() const {return(tint_params);};
     private:
 
         const twodads::bvals_t<twodads::real_t> boundaries;

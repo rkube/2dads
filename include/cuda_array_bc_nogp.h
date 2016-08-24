@@ -172,22 +172,6 @@ namespace device
         //printf("kernel_init_address: address_t at %p\n", *my_address);
     }
 
-
-    template <typename T>
-    __global__
-    void kernel_use_address(const T* u, address_t<T>** address_u, const twodads::slab_layout_t geom)
-    {
-        //printf("kernel_use_address: address_t at %p\n", address_u);
-        const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
-        for(int n = 0; n < geom.get_nx(); n++)
-        {
-            for(int m = 0; m < geom.get_my(); m++)
-            {
-                printf("n=%d, m=%d: val = %f\n", n, m, (**address_u)(u, n, m));
-            }
-        }   
-    }
-
     template <typename T>
     __global__
     void kernel_free_address(address_t<T>** my_address)
@@ -264,7 +248,7 @@ template <typename T, template <typename> class allocator> class cuda_array_bc_n
 namespace host
 {
     template <typename T, typename O>
-    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t geom)
+    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -279,7 +263,7 @@ namespace host
     }
 
     template <typename T, typename O>
-    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t geom)
+    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
         for(size_t n = 0; n < geom.get_nx(); n++)
@@ -362,6 +346,13 @@ namespace detail
         gpuErrchk(cudaPeekAtLastError());
     }
 
+    template <typename T, typename F>
+    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& bloc, allocator_device<T>)
+    {
+        device :: kernel_elmentwise<<<grid, block>>>(x, rhs, myfunc, geom)
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
 
     template <typename T>
     inline void impl_advance(T** tlev_ptr, const size_t tlevs, allocator_device<T>)
@@ -422,7 +413,7 @@ namespace detail
 #endif //__CUDACC__
 
     template <typename T>
-    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t sl, allocator_host<T>)
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& sl, allocator_host<T>)
     {
         for(size_t t = 0; t < tlevs; t++)
         {
@@ -432,7 +423,7 @@ namespace detail
 
     
     template <typename T>
-    inline void impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t geom, const twodads::bvals_t<T> bvals, allocator_host<T>)
+    inline void impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t& geom, const twodads::bvals_t<T>& bvals, allocator_host<T>)
     {
         address_ptr = new address_t<T>(geom, bvals);
         //std::cerr << "impl_init_address(host): address_ptr -> " << address_ptr << std::endl;
@@ -458,18 +449,24 @@ namespace detail
 
 
     template <typename T>
-    void impl_initialize(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_initialize(T* data_ptr, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         host :: host_apply(data_ptr, [] (T value, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(T(0.0));}, geom);
     }
 
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         host :: host_apply(data_ptr, myfunc, geom);
     }
 
+
+    template <typename T, typename F>
+    inline void impl_elementwise(T* lhs, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
+    {
+        host :: host_elementwise(lhs, rhs, myfunc, geom);
+    }
 
     template <typename T>
     inline void impl_advance(T** tlev_ptr, const size_t tlevs, allocator_host<T>)
@@ -484,14 +481,14 @@ namespace detail
 
 
     template <typename T>
-    void impl_op_plus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_plus_equal(T* lhs, T* rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [] (T a, T b) -> T {return(a + b);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_plus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_plus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         // Lambda captures local rhs
         host :: host_apply(lhs, [=] (T value, size_t n, size_t m, twodads::slab_layout_t geom){return (value + rhs);}, geom);
@@ -499,28 +496,28 @@ namespace detail
 
 
     template <typename T>
-    void impl_op_minus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_minus_equal(T* lhs, T* rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [] (T a, T b) -> T {return(a - b);}, geom);
     }
  
 
     template <typename T>
-    void impl_op_minus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_minus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         // Lambda captures local rhs
         host :: host_apply(lhs, [=] (T value, size_t n, size_t m, twodads::slab_layout_t geom){return (value - rhs);}, geom);
     }
 
     template <typename T>
-    void impl_op_mult_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_mult_equal(T* lhs, T* rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         host :: host_elementwise(lhs, rhs, [] (T a, T b) -> T {return(a * b);}, geom);
     } 
 
 
     template <typename T>
-    void impl_op_mult_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_host<T>)
+    void impl_op_mult_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
     {
         // Lambda captures local rhs
         host :: host_apply(lhs, [=](T value, size_t n, size_t m, twodads::slab_layout_t geom){return (value * rhs);}, geom);
@@ -558,6 +555,22 @@ public:
         detail :: impl_apply(get_tlev_ptr(tlev), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
     }
 
+
+    template<typename F> inline void elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs,
+                                                 const size_t t_rhs, const size_t t_lhs)
+    {
+        check_bounds(t_rhs, 0, 0);
+        check_bounds(t_lhs, 0, 0);
+        assert(rhs.get_geom() == get_geom());
+        detail :: impl_elementwise(myfunc, get_tlev_ptr(t_lhs), rhs.get_tlev_ptr(t_rhs), get_geom(), get_grid(), get_block(), allocator_type{});
+    }
+
+    template<typename F> inline void elementwise(F myfunc, const size_t t_lhs, const size_t t_rhs)
+    {
+        check_bounds(t_rhs, 0, 0);
+        check_bounds(t_lhs, 0, 0);
+        detail :: impl_elementwise(get_tlev_ptr(t_lhs), get_tlev_ptr(t_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
+    }
     /// Initialize all elements to zero. Making this private results in compile error:
     /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
     //cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
@@ -579,6 +592,7 @@ public:
         // Check for self-assignment
         if(this == &rhs)
             return(*this);
+        rhs.transformed(this -> is_transformed());
 
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
         for(size_t t = 0; t < get_tlevs(); t++)
@@ -719,11 +733,11 @@ public:
 	inline void check_bounds(size_t n, size_t m) const {array_bounds(n, m);};
 
     // Set true if transformed
-    inline bool is_transformed() const {return(transformed);};
-    inline bool set_transformed(bool val) 
+    inline bool is_transformed(const size_t tlev) const {return(transformed[tlev]);};
+    inline bool set_transformed(const size_t tlev, const bool val) 
     {
-        transformed = val; 
-        return(transformed);
+        transformed[tlev] = val; 
+        return(transformed[tlev]);
     };
 
 private:
@@ -731,7 +745,7 @@ private:
     const twodads::slab_layout_t geom;
     const size_t tlevs;
     const bounds array_bounds;
-    bool transformed;
+    std::vector<bool> transformed;
 
     allocator_type my_alloc;
     p_allocator_type my_palloc;
@@ -761,7 +775,7 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         geom(_geom), 
         tlevs(_tlevs),
         array_bounds(get_tlevs(), get_nx(), get_my()),
-        transformed{false},
+        transformed{std::vector<bool>(get_tlevs(), 0)},
         address_2ptr{nullptr},
         address_ptr{nullptr},
 #ifdef __CUDACC__

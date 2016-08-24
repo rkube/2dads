@@ -3,6 +3,7 @@
 
 #include "cuda_array_bc_nogp.h"
 
+
 namespace utility
 {
     template <typename T>
@@ -114,6 +115,8 @@ namespace utility
     {
         print(create_host_vector(vec), tlev, os);
     }
+
+
 
     template <typename T>
     T L2(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev)
