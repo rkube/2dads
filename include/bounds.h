@@ -8,7 +8,7 @@
 #include "error.h"
 #include <sstream>
 
-/// Functor class that checks if arguments are within initialized bounds
+/// Class that checks if arguments are within initialized bounds
 
 class bounds{
     public:

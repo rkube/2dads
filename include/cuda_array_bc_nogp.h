@@ -439,9 +439,9 @@ namespace detail
 
 
     template <typename T>
-    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tlev, const size_t tlevs, allocator_host<T>)
+    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tidx, const size_t tlevs, allocator_host<T>)
     {
-        return(data_tlev_ptr[tlev]);
+        return(data_tlev_ptr[tidx]);
     }
 
 
@@ -535,7 +535,6 @@ public:
     using p_deleter_type = typename my_allocator_traits<T*, allocator> :: deleter_type;
     using pptr_type = std::unique_ptr<T*, p_deleter_type>;
 
-	//cuda_array_bc_nogp(twodads::slab_layout_t, twodads::bvals_t<T>, size_t _tlevs);
 	cuda_array_bc_nogp(const twodads::slab_layout_t, const twodads::bvals_t<T>, size_t _tlevs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>* rhs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs);
@@ -546,27 +545,27 @@ public:
     };
 
     /// Evaluate the function F on the grid
-    template <typename F> inline void apply(F myfunc, const size_t tlev)
+    template <typename F> inline void apply(F myfunc, const size_t tidx)
     {
-        check_bounds(tlev, 0, 0);
-        detail :: impl_apply(get_tlev_ptr(tlev), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
+        check_bounds(tidx + 1, 0, 0);
+        detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
     }
 
 
     template<typename F> inline void elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs,
-                                                 const size_t t_rhs, const size_t t_lhs)
+                                                 const size_t tidx_rhs, const size_t tidx_lhs)
     {
-        check_bounds(t_rhs, 0, 0);
-        check_bounds(t_lhs, 0, 0);
+        check_bounds(tidx_rhs + 1, 0, 0);
+        check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
-        detail :: impl_elementwise(myfunc, get_tlev_ptr(t_lhs), rhs.get_tlev_ptr(t_rhs), get_geom(), get_grid(), get_block(), allocator_type{});
+        detail :: impl_elementwise(myfunc, get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), get_geom(), get_grid(), get_block(), allocator_type{});
     }
 
-    template<typename F> inline void elementwise(F myfunc, const size_t t_lhs, const size_t t_rhs)
+    template<typename F> inline void elementwise(F myfunc, const size_t tidx_lhs, const size_t tidx_rhs)
     {
-        check_bounds(t_rhs, 0, 0);
-        check_bounds(t_lhs, 0, 0);
-        detail :: impl_elementwise(get_tlev_ptr(t_lhs), get_tlev_ptr(t_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
+        check_bounds(tidx_rhs + 1, 0, 0);
+        check_bounds(tidx_lhs + 1, 0, 0);
+        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), get_tlev_ptr(tidx_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
     }
     /// Initialize all elements to zero. Making this private results in compile error:
     /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
@@ -579,9 +578,9 @@ public:
         }
     }
 
-    inline void initialize(const size_t tlev)
+    inline void initialize(const size_t tidx)
     {
-        detail :: impl_initialize(get_tlev_ptr(tlev), get_geom(), get_grid(), get_block(), allocator_type{});
+        detail :: impl_initialize(get_tlev_ptr(tidx), get_geom(), get_grid(), get_block(), allocator_type{});
     }
 
     cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
@@ -668,27 +667,29 @@ public:
 	//inline void normalize(const size_t);
 
 	///@brief Copy data from t_src to t_dst
-	inline void copy(const size_t t_dst, const size_t t_src)
+	inline void copy(const size_t tidx_dst, const size_t tidx_src)
     {
-        check_bounds(t_dst, 0, 0);
-        check_bounds(t_src, 0, 0);
-        my_alloc.copy(get_tlev_ptr(t_src), get_tlev_ptr(t_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(t_dst));
+        check_bounds(tidx_dst + 1, 0, 0);
+        check_bounds(tidx_src + 1, 0, 0);
+        my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
     }
 
 	///@brief Copy data from src, t_src to t_dst
-    inline void copy(size_t t_dst, const cuda_array_bc_nogp<T, allocator>& src, size_t t_src)
+    inline void copy(size_t tidx_dst, const cuda_array_bc_nogp<T, allocator>& src, size_t tidx_src)
     {
-        check_bounds(t_dst, 0, 0);
-        src.check_bounds(t_src, 0, 0);
+        check_bounds(tidx_dst + 1, 0, 0);
+        src.check_bounds(tidx_src + 1, 0, 0);
         assert(get_geom() == src.get_geom());
-        my_alloc.copy(src.get_tlev_ptr(t_src), src.get_tlev_ptr(t_src) + src.get_geom().get_nelem_per_t(), get_tlev_ptr(t_dst));
+        my_alloc.copy(src.get_tlev_ptr(tidx_src), src.get_tlev_ptr(tidx_src) + src.get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
     }
 
 	///@brief Move data from t_src to t_dst, zero out t_src
-	inline void move(const size_t t_dst, const size_t t_src)
+	inline void move(const size_t tidx_dst, const size_t tidx_src)
     {
-        my_alloc.copy(get_tlev_ptr(t_src), get_tlev_ptr(t_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(t_dst));
-        detail :: impl_initialize(get_tlev_ptr(t_src), get_geom(), get_grid(), get_block(), allocator_type{});
+        check_bounds(tidx_dst + 1, 0, 0);
+        check_bounds(tidx_src + 1, 0, 0);
+        my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
+        detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
     }
 
 	// Advance time levels
@@ -720,9 +721,10 @@ public:
 	// Pointer to array of pointers, corresponding to time levels
 	inline T** get_tlev_ptr() const {return data_tlev_ptr.get();};
 	// Pointer to device data at time level t
-    inline T* get_tlev_ptr(const size_t tlev) const
+    inline T* get_tlev_ptr(const size_t tidx) const
     {
-        return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tlev, get_tlevs(), allocator_type{}));   
+        check_bounds(tidx + 1, 0, 0);
+        return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tidx, get_tlevs(), allocator_type{}));   
     };
 
 	// Check bounds

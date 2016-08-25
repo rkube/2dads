@@ -1039,9 +1039,6 @@ namespace detail
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
                              allocator_host<T>)
     {
-        //const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
-        //const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
-
         solvers :: elliptic my_ell_solver(src.get_geom());
         // Copy input data for solver into dst.
         dst.copy(t_dst, src, t_src);

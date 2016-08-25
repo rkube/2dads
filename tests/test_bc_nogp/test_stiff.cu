@@ -1,5 +1,5 @@
 /*
- * Solve the diffusion eqation
+ * Test time integration 
  */
 
 #include <iostream>
@@ -7,41 +7,86 @@
 #include "slab_bc.h"
 
 using namespace std;
+
 int main(void)
 {
-    size_t Nx{16};
-    size_t My{16};
-    const size_t num_tsteps{1000};
+    size_t Nx{0};
+    size_t My{0};
 
-    cout << "Enter Nx: ";
+    const twodads::real_t x_l{-10.0};
+    const twodads::real_t Lx{20.0};
+    const twodads::real_t y_l{-10.0};
+    const twodads::real_t Ly{20.0};
+
+    const size_t tlevs{4};
+
+    const twodads::real_t deltat{0.1};
+    const twodads::real_t diff{0.1};
+    const twodads::real_t hv{0.0};
+
+    const twodads::real_t num_tsteps{50};
+
+    cout << "Enter Nx:";
     cin >> Nx;
-
-    cout << "Enter My: ";
+    cout << "Enter My:";
     cin >> My;
 
-    stringstream fname;
-
-    cuda::bvals_t<double> my_bvals{cuda::bc_t::bc_dirichlet, cuda::bc_t::bc_dirichlet,
-                                   cuda::bc_t::bc_periodic, cuda::bc_t::bc_periodic,
+    stringstream(fname);
+    
+    twodads::slab_layout_t my_geom(x_l, Lx / double(Nx), y_l, Ly / double(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
+    twodads::bvals_t<double> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic,
                                    0.0, 0.0, 0.0, 0.0};
-    cuda::slab_layout_t my_geom(-10.0, 20.0 / double(Nx), -10.0, 20.0 / double(My), Nx, 0, My, 2, cuda::grid_t::cell_centered);
-    cuda::stiff_params_t stiff_params(0.01, 20.0, 20.0, 0.1, 0.0, My, Nx / 2 + 1, 2);
+    twodads::stiff_params_t params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, tlevs);
     {
-        slab_bc my_slab(my_geom, my_bvals, stiff_params);
-        //cuda_array_bc_nogp<my_allocator_device<cuda::real_t>> sol(my_geom, my_bvals, 1);
+        slab_bc my_slab(my_geom, my_bvals, params);
+        my_slab.initialize_gaussian(test_ns::field_t::arr1, tlevs - 1);
 
-        my_slab.initialize_gaussian(test_ns::field_t::arr1);
-        my_slab.initialize_tint(test_ns::field_t::arr1);
+        size_t tstep{0};
+        for(size_t tl = 0; tl < tlevs; tl++)
+        {
+            fname.str(string(""));
+            fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_device.dat";
+            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());        
+        }
 
-        //my_slab.integrate((cuDoubleComplex*) sol.get_array_d(0));
-        //size_t t{0};
-        //for(t = 0; t < num_tsteps; t++)
-        //{
-        //    my_slab.integrate(test_ns::field_t::arr1);
-        //}
+        // Integrate first time step
+        std::cout << "Integrating: t = " << tstep << std::endl;
+        tstep = 1;
+        my_slab.integrate(test_ns::field_t::arr1, 1);
+        for(size_t tl = 0; tl < tlevs; tl++)
+        {
+            fname.str(string(""));
+            fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_device.dat";
+            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());  
+        }
 
-        //fname.str(string(""));
-        //fname << "test_diffusion_Nx" << Nx << "_t" << t << "_out.dat";
-        //my_slab.print_field(test_ns::field_t::arr1, fname.str());
+
+        // Integrate second time step
+        std::cout << "Integrating: t = " << tstep << std::endl;
+        tstep = 2;
+        my_slab.integrate(test_ns::field_t::arr1, 2);
+        for(size_t tl = 0; tl < tlevs; tl++)
+        {
+            fname.str(string(""));
+            fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_device.dat";
+            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());      
+        }
+        
+        //tstep++;
+    
+        for(; tstep < num_tsteps; tstep++)
+        {
+            // Integrate with third order scheme now
+            std::cout << "Integrating: t = " << tstep << std::endl;
+            my_slab.integrate(test_ns::field_t::arr1, 3);
+            for(size_t tl = 0; tl < tlevs; tl++)
+            {
+                fname.str(string(""));
+                fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_device.dat";
+                utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());        
+            }
+            my_slab.advance();
+        }
     }
 }
+

@@ -12,17 +12,23 @@
 // CUDACC has a quirk edit fftw3:
 // https://github.com/FFTW/fftw3/issues/18
 #include "error.h"
+#include "cucmplx.h"
+
+#ifndef __CUDACC__
 #include "fftw3.h"
+#endif //__CUDACC__
 
 #ifdef __CUDACC__
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <cufft.h>
-#include "cucmplx.h"
 #include "cuda_types.h"
+#endif //__CUDACC__
+
 
 namespace cufft
 {
+#ifdef DEVICE
     // Inline this template function and its specialization as to avoid having multiple definitions of the
     // function when linking:
     //
@@ -101,6 +107,7 @@ namespace cufft
                         err_str << "Error planning 1d Z2D DFT: " << err << "\n";
                         throw gpu_error(err_str.str());
                     }
+                    std::cout << "...done" << std::endl;
                     break;
 
                 case twodads::dft_t::dft_2d:
@@ -223,14 +230,13 @@ namespace cufft
                 throw gpu_error(err_str.str());
             }
         }
-
+#endif //DEVICE
 }
 
 
-#endif //__CUDACC__
-
 namespace fftw
 {
+#ifdef HOST
     template <typename T>
         inline void plan_dft(fftw_plan& plan_r2c, fftw_plan& plan_c2r, const twodads::dft_t dft_type,
                 const twodads::slab_layout_t& geom, const T dummy)
@@ -341,6 +347,7 @@ namespace fftw
         inline void call_dft_c2r<float>(fftw_plan& plan_c2r, CuCmplx<float>* arr_in, float* arr_out)
         {
         }
+#endif //HOST
 }
 
 template <typename T>
@@ -353,7 +360,7 @@ class dft_object_t
 };
 
 
-#ifdef __CUDACC__
+#ifdef DEVICE
 template <typename T>
 class cufft_object_t : public dft_object_t<T>
 {
@@ -393,6 +400,8 @@ class cufft_object_t : public dft_object_t<T>
 };
 #endif //__CUDACC__
 
+
+#ifdef HOST
 template <typename T>
 class fftw_object_t : public dft_object_t<T>
 {
@@ -432,5 +441,6 @@ class fftw_object_t : public dft_object_t<T>
         fftw_plan plan_r2c;
         fftw_plan plan_c2r;
 };
+#endif //HOST
 
 #endif //DFT_TYPE_H

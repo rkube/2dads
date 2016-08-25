@@ -39,37 +39,40 @@ int main(void)
     twodads::stiff_params_t params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, tlevs);
     {
         slab_bc my_slab(my_geom, my_bvals, params);
-        my_slab.initialize_gaussian(test_ns::field_t::arr1, tlevs - 1);
+        my_slab.initialize_gaussian(twodads::field_t::theta, tlevs - 1);
+
+        my_slab.update_derivatives();
+
 
         size_t tstep{0};
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());        
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());        
         }
 
         // Integrate first time step
         std::cout << "Integrating: t = " << tstep << std::endl;
         tstep = 1;
-        my_slab.integrate(test_ns::field_t::arr1, 1);
+        my_slab.integrate(twodads::field_t::theta, 1);
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());  
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());  
         }
 
 
         // Integrate second time step
         std::cout << "Integrating: t = " << tstep << std::endl;
         tstep = 2;
-        my_slab.integrate(test_ns::field_t::arr1, 2);
+        my_slab.integrate(twodads::field_t::theta, 2);
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());      
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());      
         }
         
         //tstep++;
@@ -78,12 +81,12 @@ int main(void)
         {
             // Integrate with third order scheme now
             std::cout << "Integrating: t = " << tstep << std::endl;
-            my_slab.integrate(test_ns::field_t::arr1, 3);
+            my_slab.integrate(twodads::field_t::theta, 3);
             for(size_t tl = 0; tl < tlevs; tl++)
             {
                 fname.str(string(""));
                 fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-                utility :: print((*my_slab.get_array_ptr(test_ns::field_t::arr1)), tl, fname.str());        
+                utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());        
             }
             my_slab.advance();
         }

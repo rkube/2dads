@@ -113,7 +113,8 @@ namespace utility
     template <typename T>
     void print(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev, std::ostream& os)
     {
-        print(create_host_vector(vec), tlev, os);
+        cuda_array_bc_nogp<T, allocator_host> tmp = create_host_vector(vec);
+        print(tmp, tlev, os);
     }
 
 

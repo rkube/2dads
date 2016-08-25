@@ -28,13 +28,13 @@ int main(void)
     {
         slab_bc my_slab(my_geom, my_bvals, my_stiff_params);
 
-        my_slab.initialize_dfttest(test_ns::field_t::arr1);
-        my_slab.print_field(test_ns::field_t::arr1);
+        my_slab.initialize_dfttest(twodads::field_t::f_theta, 0);
+        utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), 0, std::cout);
 
-        my_slab.dft_r2c(test_ns::field_t::arr1, 0);
+        my_slab.dft_r2c(twodads::field_t::f_theta, 0);
         cout << "===========================================================================================" << endl;
 
-        //my_slab.dft_c2r(test_ns::field_t::arr1, 0);
-        my_slab.print_field(test_ns::field_t::arr1);
-    } // Let managed memory go out of scope before calling cudaDeviceReset()
+        //my_slab.dft_c2r(twodads::field_t::theta, 0);
+        utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), 0, std::cout);
+    } // Let managed memory go out of scope
 }

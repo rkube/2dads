@@ -8,32 +8,45 @@ using namespace std;
 
 slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) : 
     boundaries(_bc), geom(_sl), tint_params(_sp),
-    myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
+    myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs(get_geom()),
     tint(get_geom(), get_bvals(),  _sp),
-    arr1(_sl, _bc, tint_params.get_tlevs()), arr1_x(_sl, _bc, 1), arr1_y(_sl, _bc, 1),
-    arr2(_sl, _bc, tint_params.get_tlevs()), arr2_x(_sl, _bc, 1), arr2_y(_sl, _bc, 1),
-    arr3(_sl, _bc, tint_params.get_tlevs()), arr3_x(_sl, _bc, 1), arr3_y(_sl, _bc, 1),
-    get_field_by_name{ {test_ns::field_t::arr1,     &arr1},
-                       {test_ns::field_t::arr1_x,   &arr1_x},
-                       {test_ns::field_t::arr1_y,   &arr1_y},
-                       {test_ns::field_t::arr2,     &arr2},
-                       {test_ns::field_t::arr2_x,   &arr2_x},
-                       {test_ns::field_t::arr2_y,   &arr2_y},
-                       {test_ns::field_t::arr3,     &arr3},
-                       {test_ns::field_t::arr3_x,   &arr3_x},
-                       {test_ns::field_t::arr3_y,   &arr3_y}}
+    theta(_sl, _bc, tint_params.get_tlevs()), theta_x(_sl, _bc, 1), theta_y(_sl, _bc, 1),
+    omega(_sl, _bc, tint_params.get_tlevs()), omega_x(_sl, _bc, 1), omega_y(_sl, _bc, 1),
+    tau(_sl, _bc, tint_params.get_tlevs()),   tau_x(_sl, _bc, 1),   tau_y(_sl, _bc, 1),
+    strmf(_sl, _bc, tint_params.get_tlevs()), strmf_x(_sl, _bc, 1), strmf_y(_sl, _bc, 1),
+    theta_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
+    omega_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
+    tau_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
+    get_field_by_name{ {twodads::field_t::f_theta,     &theta},
+                       {twodads::field_t::f_theta_x,   &theta_x},
+                       {twodads::field_t::f_theta_y,   &theta_y},
+                       {twodads::field_t::f_omega,     &omega},
+                       {twodads::field_t::f_omega_x,   &omega_x},
+                       {twodads::field_t::f_omega_y,   &omega_y},
+                       {twodads::field_t::f_tau,       &tau},
+                       {twodads::field_t::f_tau_x,     &tau_x},
+                       {twodads::field_t::f_tau_y,     &tau_y},
+                       {twodads::field_t::f_strmf,     &strmf},
+                       {twodads::field_t::f_strmf_x,   &strmf_x},
+                       {twodads::field_t::f_strmf_y,   &strmf_y},
+                       {twodads::field_t::f_theta_rhs, &theta_rhs},
+                       {twodads::field_t::f_omega_rhs, &omega_rhs}}
 {
+    std::cout << "theta at " << &theta << std::endl;
+    std::cout << "theta_x at " << &theta_x << std::endl;
+    std::cout << "theta_y at " << &theta_y << std::endl;
 }
 
 
-void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: dft_r2c(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr{get_field_by_name.at(fname)};
-    if(!((*arr).is_transformed(tlev)))
+
+    if(!((*arr).is_transformed(tidx)))
     {
-        (*myfft).dft_r2c((*arr).get_tlev_ptr(tlev), reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tlev)));
-        (*arr).set_transformed(tlev, true);
+        (*myfft).dft_r2c((*arr).get_tlev_ptr(tidx), reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)));
+        (*arr).set_transformed(tidx, true);
     }
     else
     {
@@ -42,14 +55,15 @@ void slab_bc :: dft_r2c(const test_ns::field_t fname, const size_t tlev)
 }
 
 
-void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: dft_c2r(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr{get_field_by_name.at(fname)};
-    if((*arr).is_transformed(tlev))
+
+    if((*arr).is_transformed(tidx))
     {
-        (*myfft).dft_c2r(reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tlev)), (*arr).get_tlev_ptr(tlev));
-        utility :: normalize(*arr, tlev);
-        (*arr).set_transformed(tlev, false);
+        (*myfft).dft_c2r(reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)), (*arr).get_tlev_ptr(tidx));
+        utility :: normalize(*arr, tidx);
+        (*arr).set_transformed(tidx, false);
     }
     else
     {
@@ -57,7 +71,7 @@ void slab_bc :: dft_c2r(const test_ns::field_t fname, const size_t tlev)
     }
 }
 
-void slab_bc :: initialize_invlaplace(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: initialize_invlaplace(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     
@@ -66,22 +80,22 @@ void slab_bc :: initialize_invlaplace(const test_ns::field_t fname, const size_t
                     const value_t x{geom.get_x(n)};
                     const value_t y{geom.get_y(m)};
                     return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
-                    //return(-1.0 * (twodads::TWOPI) * (twodads::TWOPI) * sin(twodads::TWOPI * y));
-                }, tlev);
+                }, tidx);
 }
 
 
-void slab_bc :: initialize_sine(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: initialize_sine(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
                  {
                     return(sin(twodads::TWOPI * geom.get_x(n)) + 0.0 * sin(twodads::TWOPI * geom.get_y(m)));
-                 }, tlev);
+                 }, tidx);
 }
 
 
-void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev)
+/*
+void slab_bc :: initialize_arakawa(const twodads::field_t fname1, const twodads::field_t fname2, const size_t tlev)
 {
     cuda_arr_real* arr1 = get_field_by_name.at(fname1);
     cuda_arr_real* arr2 = get_field_by_name.at(fname2);
@@ -100,51 +114,53 @@ void slab_bc :: initialize_arakawa(const test_ns::field_t fname1, const test_ns:
                     return(sin(twodads::PI * geom.get_x(n)) * sin(twodads::PI * geom.get_y(m)));
                   }, tlev);
 }
+*/
 
-
-void slab_bc :: initialize_derivatives(const test_ns::field_t fname1, const test_ns::field_t fname2, const size_t tlev)
+void slab_bc :: initialize_derivativesx(const twodads::field_t fname, const size_t tidx)
 {
-    cuda_arr_real* arr1 = get_field_by_name.at(fname1);
-    cuda_arr_real* arr2 = get_field_by_name.at(fname2);
+    cuda_arr_real* arr = get_field_by_name.at(fname);
 
-    (*arr1).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
+    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 return(sin(twodads::TWOPI * geom.get_x(n)));
-            }, tlev);
+            }, tidx);
+}
 
-    (*arr2).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
+void slab_bc :: initialize_derivativesy(const twodads::field_t fname, const size_t tidx)
+{
+    cuda_arr_real* arr = get_field_by_name.at(fname);
+    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {       
                 value_t y{geom.get_y(m)};
-                return(exp(-50.0 * (y - 0.5) * (y - 0.5))); 
-            }, tlev);
+                return(exp(-50.0 * y * y)); 
+            }, tidx);
 }
 
 
-void slab_bc :: initialize_dfttest(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: initialize_dfttest(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
            {       
                return(sin(twodads::TWOPI * geom.get_y(m)));
-           }, tlev);
+           }, tidx);
 }
 
 
-void slab_bc :: initialize_gaussian(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: initialize_gaussian(const twodads::field_t fname, const size_t tidx)
 {
     cuda_arr_real* arr = get_field_by_name.at(fname);
-    std::cout << "slab_bc::initialize_gaussian" << std::endl;
     (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
             {
                 const twodads::real_t x{geom.get_x(n)};
                 const twodads::real_t y{geom.get_y(m)};
                 return(exp(-0.5 * (x * x + y * y)));
-            }, tlev);
+            }, tidx);
 }
 
 
 // Compute x-derivative
-void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
+void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fname_dst,
                      const size_t d, const size_t t_src, const size_t t_dst)
 {
     cuda_arr_real* arr_src{get_field_by_name.at(fname_src)};
@@ -152,18 +168,19 @@ void slab_bc :: d_dx(const test_ns::field_t fname_src, const test_ns::field_t fn
 
     if(d == 1)
     {
-        cout << "slab_bc :: computing d_dx" << endl;
+        std::cout << "dx1, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
     }
     else if (d == 2)
     {
+        std::cout << "dx2, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dx_2((*arr_src), (*arr_dst), t_src, t_dst);
     }
 }
 
 
 // Compute y-derivative
-void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fname_dst,
+void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fname_dst,
                      const size_t d, const size_t t_src, const size_t t_dst)
 {
     cuda_arr_real* arr_src = get_field_by_name.at(fname_src);
@@ -171,10 +188,12 @@ void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fn
 
     if(d == 1)
     {
+        std::cout << "dy1, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
     }
     else if (d == 2)
     {
+        std::cout << "dy2, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dy_2((*arr_src), (*arr_dst), t_src, t_dst);
     }
 }
@@ -188,7 +207,7 @@ void slab_bc :: d_dy(const test_ns::field_t fname_src, const test_ns::field_t fn
 // fname_arr_res: array where we store the result
 // t_src: time level at which f and g are taken
 // t_dst: time level where we store the result in res
-void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field_t fname_arr_g, const test_ns::field_t fname_arr_res,
+void slab_bc :: arakawa(const twodads::field_t fname_arr_f, const twodads::field_t fname_arr_g, const twodads::field_t fname_arr_res,
                         const size_t t_src, const size_t t_dst)
 {
     cuda_arr_real* f_arr = get_field_by_name.at(fname_arr_f);
@@ -200,7 +219,7 @@ void slab_bc :: arakawa(const test_ns::field_t fname_arr_f, const test_ns::field
 
 
 // Invert the laplace equation
-void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t out, const size_t t_src, const size_t t_dst)
+void slab_bc :: invert_laplace(const twodads::field_t in, const twodads::field_t out, const size_t t_src, const size_t t_dst)
 {
     cuda_arr_real* in_arr{get_field_by_name.at(in)};
     cuda_arr_real* out_arr{get_field_by_name.at(out)};
@@ -211,7 +230,7 @@ void slab_bc :: invert_laplace(const test_ns::field_t in, const test_ns::field_t
 // t_dst is the time level where the result is stored
 // t_src is the source
 // tlev is the time level of the integration
-void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
+void slab_bc :: integrate(const twodads::field_t fname, const size_t tlev)
 {
     const size_t tlevs{get_tint_params().get_tlevs()};
     assert(tlev > 0 && tlev < tlevs);
@@ -247,7 +266,9 @@ void slab_bc :: integrate(const test_ns::field_t fname, const size_t tlev)
 // Advance the fields in time
 void slab_bc :: advance()
 {
-    arr1.advance();
+    theta.advance();
+    omega.advance();
+    tau.advance();
 } 
 
 

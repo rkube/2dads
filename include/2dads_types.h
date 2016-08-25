@@ -50,19 +50,19 @@ namespace twodads {
 
     constexpr size_t max_initc{6}; /// < Maximal number of initial conditions
     
-    constexpr int io_w{10}; //width of fields used in cout
-    constexpr int io_p{4}; //precision when printing with cout
+    constexpr int io_w{12}; //width of fields used in cout
+    constexpr int io_p{8}; //precision when printing with cout
+
 
     // Coefficients for stiffly stable time integration
-#ifdef __CUDACC__
-    __constant__ const real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
-    __constant__ const real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
-#endif //__CUDACC__
-
-#ifndef __CUDACC__
     constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
     constexpr real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
-#endif //__CUDACC__
+
+    // To access the alpha and beta arrays in cuda, we need a wrapper crutch.
+    // Accessing alpha and beta in vec.apply in device code fails without error :/
+    // http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
+    //constexpr __device__ real_t get_alpha(size_t t, size_t k) {return(alpha[t][k]);};
+    //constexpr __device__ real_t get_beta(size_t t, size_t k) {return(beta[t][k]);};
 
     // Boundary conditions: Dirichlet, Neumann, periodic
     enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};

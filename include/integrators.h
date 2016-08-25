@@ -27,16 +27,14 @@ namespace detail
                                 const size_t t_dst, 
                                 allocator_device<T>)
     {
-        /*
+        
         solvers :: elliptic my_ell_solver(field.get_geom());
-        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(src.get_tlev_ptr(t_src)), 
-                            reinterpret_cast<cuDoubleComplex*>(dst.get_tlev_ptr(t_dst)),
+        
+        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(field.get_tlev_ptr(t_dst)), 
+                            reinterpret_cast<cuDoubleComplex*>(field.get_tlev_ptr(t_dst)),
                             reinterpret_cast<cuDoubleComplex*>(diag_l.get_tlev_ptr(0)), 
                             reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
                             reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
-        */
-        std::cerr << "integrator_karniadakis :: detail :: impl_solve_tridiagonal: Not implemented yet" << std::endl;
-        
     }
 
 #endif //__CUDACC__
@@ -69,11 +67,11 @@ class integrator_karniadakis
 {
     public:
 #ifdef DEVICE
-    using dft_library_t = cufft_object_t<twodads::real_t>;
+    using dft_t = cufft_object_t<T>;
 #endif // DEVICE
 
 #ifdef HOST
-    using dft_library_t = fftw_object_t<twodads::real_t>;
+    using dft_t = fftw_object_t<T>;
 #endif // HOST
         integrator_karniadakis(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
             geom{_sl}, bvals{_bv}, stiff_params{_sp},  
@@ -84,7 +82,7 @@ class integrator_karniadakis
                            (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0,
                            get_geom().get_nx(), 0,
                            get_geom().get_grid()},
-            myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},   
+            myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},   
             My_int{static_cast<int>(get_geom().get_my())},
             My21_int{static_cast<int>(get_geom().get_my() + get_geom().get_pad_y()) / 2},
             Nx_int{static_cast<int>(get_geom().get_nx())},
@@ -137,7 +135,7 @@ class integrator_karniadakis
 
         // Fourier transformation happens in the time integration where we solve
         // in each fourier mode
-        dft_object_t<twodads::real_t>* myfft;
+        dft_t* myfft;
 
         // Array boundaries etc.
         const int My_int;
@@ -157,57 +155,22 @@ class integrator_karniadakis
 template <typename T, template<typename> class allocator>
 void integrator_karniadakis<T, allocator> :: init_diagonal(const size_t tlev)
 {
-    const T Lx{get_geom().get_deltax() * 2 * (get_geom().get_nx() - 1)};
-    //const CuCmplx<T> inv_dx2{1.0 / (get_geom().get_deltay() * get_geom().get_deltay())};
-    //const CuCmplx<T> rx{get_params().get_diff() * get_params().get_deltat() / (get_geom().get_deltax() * get_geom().get_deltax())};
-    //const CuCmplx<T> dx{get_geom().get_deltax()};
-    //const CuCmplx<T> bv_left{get_bvals().get_bv_left()};
-    //const CuCmplx<T> bv_right{get_bvals().get_bv_right()};
-
-    std::cout << "Initializing diagonal for level " << tlev << ": rx = " << get_rx() << ", alpha0 = " << twodads::alpha[tlev - 1][0] << std::endl;
-    CuCmplx<T> first_element{0.0, 0.0};
-    CuCmplx<T> last_element{0.0, 0.0};
-
-    switch(get_bvals().get_bc_left())
-    {
-        case twodads::bc_t::bc_dirichlet:
-            first_element = CuCmplx<T>(twodads::alpha[tlev - 1][0] + 3.0 * get_rx(), 0.0);
-            break;
-        case twodads::bc_t::bc_neumann:
-            first_element = CuCmplx<T>(twodads::alpha[tlev - 1][0] + get_rx(), 0.0);
-            break;
-        case twodads::bc_t::bc_periodic:
-        default:
-            throw not_implemented_error(std::string("Periodic boundary conditions not supported by this integrator"));
-            //break;
-    }
-
-    switch(get_bvals().get_bc_left())
-    {
-        case twodads::bc_t::bc_dirichlet:
-            last_element = CuCmplx<T>(twodads::alpha[tlev - 1][0] + 3.0 * get_rx(), 0.0);
-            break;
-        case twodads::bc_t::bc_neumann:
-            last_element = CuCmplx<T>(twodads::alpha[tlev - 1][0] + get_rx(), 0.0);
-            break;
-        case twodads::bc_t::bc_periodic:
-        default:
-            throw not_implemented_error(std::string("Periodic boundary conditions not supported by this integrator"));
-            //break;
-    }
-
+    // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
+    const T alpha{twodads::alpha[tlev - 1][0]};
+    
     diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
         // ky runs with index n (the kernel addressing function, see cuda::thread_idx)
+        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
         const T ky2{twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx)};
-        if(n == 0 || n == geom.get_nx() - 1)
+        if(m == 0 && (n == 0 || n == geom.get_nx() - 1))
         {
-            return(CuCmplx<T>{2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + twodads::alpha[tlev - 1][0], 0.0});    
+            return(CuCmplx<T>{3.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0});    
         }
-        return(CuCmplx<T>{2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + twodads::alpha[tlev - 1][0], 0.0});
+        return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
     }, 0);
-
+    
     set_diag_order(tlev);
 }
 
@@ -256,8 +219,6 @@ void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, all
                                                        const size_t t_src1, const size_t t_src2, const size_t t_src3, 
                                                        const size_t t_dst, const size_t tlev) 
 {
-    std::cout << "Integrating, tlev = " << tlev << std::endl;
-
     assert(field.is_transformed(t_src1) == false);
     assert(field.is_transformed(t_src2) == false);
     assert(field.is_transformed(t_src3) == false);
@@ -269,26 +230,20 @@ void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, all
     // Call tridiagonal solver
 
 
-
     if(tlev == 1)
     {
-        //std::cout << "tlev = 1. t_src1 = " << t_src1 << ", t_dst = " << t_dst << std::endl;
         // The field needs to be transformed
         if(get_diag_order() != 1)
         {
             init_diagonal(1);
-            //std::cout << "======= Integrating level 1: diagonal" << std::endl;
-            //utility :: print(diag, 0, std::cout);
+
         }
-        //std::cout << "======= Integrating level 1: start" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[0][1]);}, t_dst, t_src1);
-        //std::cout << "======= Integrating level 1: added t_src1" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
+
+        const T alpha1{twodads::alpha[0][1]};
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
     }
     else if(tlev == 2)
     {
-        //std::cout << "tlev = 2. t_src1 = " << t_src1 << ", t_src2 = " << t_src2 << ", t_dst = " << t_dst << std::endl;
         // Initialize main diagonal for second order time step
         if(get_diag_order() != 2)
         {
@@ -301,12 +256,14 @@ void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, all
         //std::cout << "======= Integrating level 2: start" << std::endl;
         //utility :: print(field, t_dst, std::cout);
 
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * twodads::alpha[1][2]);}, t_dst, t_src2);
+        const T alpha2{twodads::alpha[1][2]};
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
         //std::cout << "======= Integrating level 2: added t_src2" << std::endl;
         //utility :: print(field, t_dst, std::cout);
 
         // t_dst += alpha_1 * u_1
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * twodads::alpha[1][1]);}, t_dst, t_src1);
+        const T alpha1{twodads::alpha[1][1]};
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
         //std::cout << "======= Integrating level 2: added t_src1" << std::endl;
         //utility :: print(field, t_dst, std::cout);
     }
@@ -324,15 +281,18 @@ void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, all
         // t_dst = alpha_3 * u^{-3}
         //std::cout << "======= Integrating level 3: start" << std::endl;
         //utility :: print(field, t_dst, std::cout);
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * twodads::alpha[2][3]);}, t_dst, t_src3);
+        const T alpha3{twodads::alpha[2][3]};
+        const T alpha2{twodads::alpha[2][2]};
+        const T alpha1{twodads::alpha[2][1]};
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);}, t_dst, t_src3);
         //std::cout << "======= Integrating level 3:  add t_src3" << std::endl;
         //utility :: print(field, t_dst, std::cout);
         // t_dst = alpha_2 * u^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * twodads::alpha[2][2]);}, t_dst, t_src2);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, t_dst, t_src2);
         //std::cout << "======= Integrating level 3:  add t_src2" << std::endl;
         //utility :: print(field, t_dst, std::cout);
         // t_dst += alpha_1 * u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * twodads::alpha[2][1]);}, t_dst, t_src1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
         //std::cout << "======= Integrating level 3:  add t_src1" << std::endl;
         //utility :: print(field, t_dst, std::cout);
     }
