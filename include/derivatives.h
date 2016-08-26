@@ -1,37 +1,317 @@
-/*******************************************************************************
- *
- * Implementation of spectral derivatives
- *
- * Initial version 2015-03-16
- *
- ******************************************************************************/
+/*
+ * Interface to derivation functions
+ */
 
-#ifndef DERIVS_H
-#define DERIVS_H
+#ifndef DERIVATIVES_H
+#define DERIVATIVES_H
 
 
-#include <iostream>
-#include <fstream>
-#include <cmath>
-#include "error.h"
+#include "cuda_array_bc_nogp.h"
 #include "cucmplx.h"
-#include "cuda_array4.h"
-#include "cuda_types.h"
-#include "cufft.h"
+#include "error.h"
+#include "dft_type.h"
+#include "solvers.h"
 
+#include <cassert>
+#include <fstream>
 
 #ifdef __CUDACC__
-/*****************************************************************************
- *
- * Kernel implementation
- *
-  ****************************************************************************/
+#include "cuda_types.h"
+#include <cusolverSp.h>
+#include <cublas_v2.h>
+#endif //__CUDACC__
 
+namespace device
+{
+#ifdef __CUDACC__
+// Apply three point stencil to points within the domain, rows 1..Nx-2
+template <typename T, typename O>
+__global__
+void kernel_threepoint_center(const T* u, address_t<T>** address_u,
+                              T* result, O stencil_func, const twodads::slab_layout_t geom)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
+    const T inv_dx{1.0 / geom.get_deltax()};
+    const T inv_dx2{inv_dx * inv_dx};
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col >= 0 && col < static_cast<int>(geom.get_my()))
+    {
+        result[index] = stencil_func((**address_u).get_elem(u, row - 1, col),
+                                     (**address_u).get_elem(u, row    , col),
+                                     (**address_u).get_elem(u, row + 1, col),
+                                     inv_dx, inv_dx2);
+    }
+}
+
+
+// Apply three point stencil at a single row. Use address_t<T>.operator() for element access
+template <typename T, typename O>
+__global__
+void kernel_threepoint_single_row(const T* u, address_t<T>** address_u,
+                                  T* result, O stencil_func, 
+                                  const twodads::slab_layout_t geom, const int row)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
+    const T inv_dx{1.0 / geom.get_deltax()};
+    const T inv_dx2{inv_dx * inv_dx};
+
+    if(col >= 0 && col < static_cast<int>(geom.get_my()))
+    {
+        result[index] = stencil_func((**address_u)(u, row - 1, col),
+                                     (**address_u)(u, row    , col),
+                                     (**address_u)(u, row + 1, col),
+                                     inv_dx, inv_dx2);
+    }
+}
+
+
+/// T* u is the data pointed to by a cuda_array u, address_u its address object
+/// T* u is the data pointed to by a cuda_array v, address_v its address object
+/// Assume that u and v have the same geometry
+template <typename T>
+__global__
+void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
+                           const T* v, address_t<T>** address_v, 
+                           T* result, const twodads::slab_layout_t geom)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+    // This checks whether we are at an inside point when calling this kernel with a thread layout
+    // that covers the entire grid
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col > 0 && col < static_cast<int>(geom.get_my() - 1))
+    {
+        //printf("threadIdx.x = %d, blockIdx.x = %d, blockDim.x = %d, threadIdx.y = %d, blockIdx.y = %d, blockDim.y = %d,row = %d, col = %d, Nx = %d, My = %d\n", 
+        //        threadIdx.x, blockIdx.x, blockDim.x, threadIdx.y, blockIdx.y, blockDim.y,
+        //        row, col, static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_my()));
+        result[index] = 
+        ((((**address_u).get_elem(u, row    , col - 1) + 
+           (**address_u).get_elem(u, row + 1, col - 1) - 
+           (**address_u).get_elem(u, row    , col + 1) - 
+           (**address_u).get_elem(u, row + 1, col + 1))
+          *
+          ((**address_v).get_elem(v, row + 1, col    ) + 
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row - 1, col - 1) +
+           (**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col + 1) -
+           (**address_u).get_elem(u, row    , col + 1))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col    )))
+         +
+         (((**address_u).get_elem(u, row + 1, col    ) +
+           (**address_u).get_elem(u, row + 1, col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col + 1))
+          *
+          ((**address_v).get_elem(v, row    , col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row + 1, col - 1) +
+           (**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row    , col - 1)))
+         +
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col + 1))
+          *
+          ((**address_v).get_elem(v, row + 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         
+         -
+         (((**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col - 1)))
+
+         +
+         (((**address_u).get_elem(u, row    , col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row - 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col - 1))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row + 1, col - 1)))
+         )
+         * inv_dx_dy;
+    }
+};
+
+
+// Kernel operates on elements with n = 0, m = 0..My-1. Extrapolate left ghost points (n = -1) of u and v on the fly
+// address_u and address_v provide operator() which wrap the index and interpolate to ghost points
+// when n = -1 or n = Nx.
+template <typename T> 
+__global__
+void kernel_arakawa_single_row(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
+                               T* result, const twodads::slab_layout_t geom,
+                               const int row)
+{
+    // Use int for col and row to pass them into address<T>::operator()
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    const T inv_dx_dy{1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+
+    if(col < static_cast<int>(geom.get_my()))
+    {
+        result[index] =  
+        (
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
+        *
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
+        -
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
+        +
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
+        *
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
+        -
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
+        +
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
+        * 
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
+        +
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
+    }
+}
+
+
+// Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
+                               T* result, const twodads::slab_layout_t geom, const int col)
+{
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1))
+    {
+        result[index] = 
+        (
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
+        *
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
+        -
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
+        +
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
+        *
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
+        -
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
+        +
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
+        * 
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
+        +
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
+    }
+}
+
+
+// Store coefficients for derivation in Fourier-space 
 //    d/dy: Compute spectral y-derivative for frequencies 0 .. My/2 - 1,
 //          stored in the columns 0..My/2-1
-//    Call:  d_d_dy_lo<<<grid_dy_half, block_nx21>>>(arr_in -> get_array_d(t_src), arr_out -> get_array_d(0), My, Nx21, Ly);
-//    block_nx21    = dim3(cuda::blockdim_x, 1)
-//    grid_dy_half  = dim3(((Nx / 2 + 1) + cuda::blockdim_nx - 1) / cuda::blockdim_nx, My / 2)
 //
 // Generate multiplicators to use for x- and y-derivatives
 // kmap[index].re = kx
@@ -42,844 +322,1158 @@
 //
 template <typename T>
 __global__
-void gen_kmap_dx1_dy1(CuCmplx<T>* kmap, const T two_pi_Lx, const T two_pi_Ly,
-                       const uint My, const uint Nx21)
+void kernel_gen_coeffs(CuCmplx<T>* kmap_dx1, CuCmplx<T>* kmap_dx2, twodads::slab_layout_t geom)
 {
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * Nx21 + col;
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+    const T two_pi_Lx{twodads::TWOPI / geom.get_Lx()};
+    const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom.get_my() - 1) * 2) * geom.get_deltay())}; 
+    //const size_t My{(geom.get_my() - 1) * 2};
 
-    CuCmplx<T> tmp(0.0, 0.0);
+    CuCmplx<T> tmp1(0.0, 0.0);
+    CuCmplx<T> tmp2(0.0, 0.0);
 
-    if(row < My / 2)
-        tmp.set_im(two_pi_Ly * double(row));
-    else if (row == My / 2)
-        tmp.set_im(0.0);
+    if(row < geom.get_nx() / 2)
+        tmp1.set_re(two_pi_Lx * T(row));
+
+    else if (row == geom.get_nx() / 2)
+        tmp1.set_re(0.0);
     else
-        tmp.set_im(two_pi_Ly * (double(row) - double(My)));
+        tmp1.set_re(two_pi_Lx * (T(row) - T(geom.get_nx())));
 
-    if(col < Nx21 - 1)
-        tmp.set_re(two_pi_Lx * double(col));
-    else
-        tmp.set_re(0.0);
-
-    if((col < Nx21) && (row < My))
-        kmap[index] = tmp;
-}
-
-
-
-// Generate wave-number coefficients. These can be used for second order-derivatives
-// in diffusion terms, computed in stiffk. See "Notes on FFT-based differentiation
-// S.G. Johnson
-// invert two dimensional laplace equation.
-// In spectral space, 
-//                              / 4 pi^2 ((ky/Ly)^2 + (kx/Lx)^2 )  for ky, kx  <= N/2
-// phi(ky, kx) = omega(ky, kx)  
-//                              \ 4 pi^2 (((ky-My)/Ly)^2 + (kx/Lx)^2) for ky > N/2 and kx <= N/2
-//
-// and phi(0,0) = 0 (to avoid division by zero)
-// Divide into 4 sectors:
-//
-//            Nx/2 + 1
-//         ^<------>|
-//  My/2+1 |        |
-//         |   I    |
-//         |        |
-//         v        |
-//         ==========
-//         ^        |
-//         |        |
-//  My/2-1 |  II    |
-//         |        |
-//         v<------>|
-//           Nx/2 + 1
-//
-// 
-// sector I    : ky <= My/2, kx < Nx/2   BS = (cuda_blockdim_nx, 1), GS = (((Nx / 2 + 1) + cuda_blockdim_nx - 1) / cuda_blockdim_nx, My / 2 + 1)
-// sector II   : ky >  My/2, kx < Nx/2   BS = (cuda_blockdim_nx, 1), GS = (((Nx / 2 - 1) + cuda_blockdim_nx - 1) / cuda_blockdim_nx, My / 2 - 1)
-
-template <typename T>
-__global__
-void gen_kmap_dx2_dy2(CuCmplx<T>* k2map, const T two_pi_Lx, const T two_pi_Ly,
-                       const uint My, const uint Nx21)
-{
-    const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-    const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint index = row * Nx21 + col;
-
-    CuCmplx<T> tmp(0.0, 0.0);
-
-    if(row < My / 2 + 1)
-        tmp.set_im(-1.0 * two_pi_Ly * two_pi_Ly * double(row * row));
-    else
-        tmp.set_im(-1.0 * two_pi_Ly * two_pi_Ly * (double(row) - double(My)) * (double(row) - double(My)));
-
-    if(col < Nx21)
-        tmp.set_re(-1.0 * two_pi_Lx * two_pi_Lx * double(col * col));
-
-    if((col < Nx21) && (row < My))
-        k2map[index] = tmp;
-}
-
-// Elementwise multiplication of
-// in_arr[index] * kmap[index] for spatial derivatives
-//
-// kmap is coefficient wise, i.e. pass
-// kmap_dx1_dy1 for 1st derivatives and
-// kmap_dx2_dy2 for 2nd derivatives
-//
-// Load T elements of in_arr and kmap in shared memory,
-// each thread processes T elements.
-// see tests/test_perf/test_perf_derivs_map.cu for benchmarking
-
-
-// Create mode multiplier for first derivative,
-// i.e. d_x -> * i k
-
-template <typename T>
-__global__
-void d_compute_dx_dy(CuCmplx<T>* in_arr, 
-        CuCmplx<T>* out_x_arr, 
-        CuCmplx<T>* out_y_arr,
-		CuCmplx<T>* kmap, 
-        int order, const uint My, const uint Nx21)
-{
-	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-    
-    if(row < My && col < Nx21)
+    if(col < geom.get_my() - 1)
     {
-        if(order == 1)
-        {
-            out_x_arr[idx] = in_arr[idx] * CuCmplx<T>(0.0, kmap[idx].re());
-            out_y_arr[idx] = in_arr[idx] * CuCmplx<T>(0.0, kmap[idx].im());
-        } else if (order == 2)
-        {
-            out_x_arr[idx] = in_arr[idx] * kmap[idx].re();
-            out_y_arr[idx] = in_arr[idx] * kmap[idx].im();
-        }
+        tmp1.set_im(two_pi_Ly * T(col));
+        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
+    }
+    else
+    {
+        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
+        tmp1.set_im(0.0);
+    }
+
+    if(col < geom.get_my() && row < geom.get_nx())
+    {
+        kmap_dx1[index] = tmp1;
+        kmap_dx2[index] = tmp2;
     }
 }
 
 
-template <typename T>
+// Multiply the input array with the imaginary part of the map. Store result in output
+template <typename T, typename O>
 __global__
-void d_compute_laplace(CuCmplx<T>* in_arr, CuCmplx<T>* out_arr, CuCmplx<T>* kmap, const uint My, const uint Nx21)
+void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
+                            twodads::slab_layout_t geom)
 {
-	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-    
-    if(row < My && col < Nx21)
-        out_arr[idx] = in_arr[idx] * (kmap[idx].re() + kmap[idx].im());
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    if(col < geom.get_my() && row < geom.get_nx())
+    {
+        out[index] = op_func(in[index], map[index]);
+    }
+}
+#endif //__CUDACC__
 }
 
 
-template <typename T>
-__global__
-void d_inv_laplace(CuCmplx<T>* in_arr, CuCmplx<T>* out_arr, CuCmplx<T>* kmap, const uint My, const uint Nx21)
+
+namespace host
 {
-	const uint row = blockIdx.y * blockDim.y + threadIdx.y;
-	const uint col = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint idx = row * Nx21 + col;
-    
-    if(row < My && col < Nx21)
-        out_arr[idx] = in_arr[idx] / (kmap[idx].re() + kmap[idx].im());
-}
+    template <typename T, typename O>
+    void apply_threepoint_center(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t& geom)
+    {
+        const T inv_dx{1.0 / geom.get_deltax()};
+        const T inv_dx2{inv_dx * inv_dx};
 
-
-template <typename T>
-__global__
-void d_inv_laplace_zero(CuCmplx<T>* out)
-{
-    out[0] = cuda::cmplx_t(0.0, 0.0);
-}
-
-
-template <typename T, int S>
-__global__
-void d_compute_dx_dy(CuCmplx<T>* in_arr, CuCmplx<T>* out_x_arr, CuCmplx<T>* out_y_arr,
-		CuCmplx<T>* kmap, int order, const uint My, const uint Nx21)
-{
-	extern __shared__ CuCmplx<T> shmem[];
-	const uint row_offset = (blockIdx.y * blockDim.y + threadIdx.y) * Nx21;
-	uint col = blockIdx.x * blockDim.x + threadIdx.x;
-
-	const uint offset_s = 2 * threadIdx.x;
-	uint s;
-
-//#pragma unroll 1
-	for(s = 0; s < S; s++)
-	{
-		if(col < Nx21)
-		{
-			shmem[offset_s + 2 * s    ] = in_arr[row_offset + col];
-			shmem[offset_s + 2 * s + 1] = kmap[row_offset + col];
-		}
-		col++;
-	}
-	col = blockIdx.x * blockDim.x + threadIdx.x;
-
-//#pragma unroll 4
-	for(s = 0; s < S; s++)
-	{
-		if(col < Nx21)
-		{
-            if (order == 1)
+        for(size_t n = 0; n < geom.get_nx(); n++)
+        {
+            for(size_t m = 0; m < geom.get_my(); m++)
             {
-                out_x_arr[row_offset + col] = shmem[offset_s + 2 * s] * CuCmplx<T>(0.0, shmem[offset_s + 2 * s + 1].re());
-                out_y_arr[row_offset + col] = shmem[offset_s + 2 * s] * CuCmplx<T>(0.0, shmem[offset_s + 2 * s + 1].im());
+                res[n * (geom.get_my() + geom.get_pad_y()) + m] = stencil_func((*address_u).get_elem(u, n - 1, m),
+                                                                               (*address_u).get_elem(u, n    , m),
+                                                                               (*address_u).get_elem(u, n + 1, m),
+                                                                               inv_dx, inv_dx2);
             }
-            else if (order == 2)
+        }
+    }
+
+
+    template <typename T, typename O> 
+    void apply_threepoint(T* u, address_t<T>* address_u, T* res, O stencil_func, const twodads::slab_layout_t& geom,
+                          std::vector<size_t>& row_vals, std::vector<size_t>& col_vals)
+    {
+        const T inv_dx{1.0 / geom.get_deltax()};
+        const T inv_dx2{inv_dx * inv_dx};
+
+        for(auto row : row_vals)
+        {
+            for(auto col : col_vals)
             {
-                out_x_arr[row_offset + col] = shmem[offset_s + 2 * s] * CuCmplx<T>(shmem[offset_s + 2 * s + 1].re(), 0.0);
-                out_y_arr[row_offset + col] = shmem[offset_s + 2 * s] * CuCmplx<T>(shmem[offset_s + 2 * s + 1].im(), 0.0);
+                res[row * (geom.get_my() + geom.get_pad_y()) + col] = stencil_func((*address_u)(u, row - 1, col),
+                                                                                   (*address_u)(u, row    , col),
+                                                                                   (*address_u)(u, row + 1, col),
+                                                                                   inv_dx, inv_dx2);
             }
-		}
-		col++;
-	}
+        }
+    }
+
+
+    template <typename T, typename O>
+    void multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func, twodads::slab_layout_t geom)
+    {
+        size_t index{0};
+        for(size_t row = 0; row < geom.get_nx(); row++)
+        {
+            for(size_t col = 0; col < geom.get_my(); col++)
+            {
+                index = row * (geom.get_my() + geom.get_pad_y()) + col; 
+                out[index] = op_func(in[index], map[index]);
+                //std::cout << map[index] << "\t";
+            }
+            //std::cout << std::endl;
+        }
+    }
+
+    template <typename T>
+    void arakawa_center(const T* u, address_t<T>* address_u, 
+                        const T* v, address_t<T>* address_v, 
+                        T* result, const twodads::slab_layout_t& geom)
+    {
+        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+        size_t index{0};
+        for(size_t row = 1; row < geom.get_nx() - 1; row++)
+        {
+           for(size_t col = 1; col < geom.get_my() - 1; col++)
+            {
+            index = (row * (geom.get_my() + geom.get_pad_y()) + col);
+            result[index] = 
+                ((((*address_u).get_elem(u, row    , col - 1) + 
+                   (*address_u).get_elem(u, row + 1, col - 1) - 
+                   (*address_u).get_elem(u, row    , col + 1) - 
+                   (*address_u).get_elem(u, row + 1, col + 1))
+                  *
+                  ((*address_v).get_elem(v, row + 1, col    ) + 
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row - 1, col - 1) +
+                   (*address_u).get_elem(u, row    , col - 1) -
+                   (*address_u).get_elem(u, row - 1, col + 1) -
+                   (*address_u).get_elem(u, row    , col + 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row - 1, col    )))
+                 +
+                 (((*address_u).get_elem(u, row + 1, col    ) +
+                   (*address_u).get_elem(u, row + 1, col + 1) -
+                   (*address_u).get_elem(u, row - 1, col    ) -
+                   (*address_u).get_elem(u, row - 1, col + 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row + 1, col - 1) +
+                   (*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row - 1, col - 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row    , col - 1)))
+                 +
+                 (((*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row    , col + 1))
+                  *
+                  ((*address_v).get_elem(v, row + 1, col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+
+                 -
+                 (((*address_u).get_elem(u, row    , col - 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row - 1, col - 1)))
+
+                 +
+                 (((*address_u).get_elem(u, row    , col + 1) -
+                   (*address_u).get_elem(u, row - 1, col    ))
+                  *
+                  ((*address_v).get_elem(v, row - 1, col + 1) +
+                   (*address_v).get_elem(v, row    , col    )))
+                 -
+                 (((*address_u).get_elem(u, row + 1, col    ) -
+                   (*address_u).get_elem(u, row    , col - 1))
+                  *
+                  ((*address_v).get_elem(v, row    , col    ) +
+                   (*address_v).get_elem(v, row + 1, col - 1)))
+         )
+         * inv_dx_dy;
+        }
+            }
+    }
+
+    template <typename T>
+    void arakawa_single(const T* u, address_t<T>* address_u, 
+                        const T* v, address_t<T>* address_v, 
+                        T* result, const twodads::slab_layout_t& geom,
+                        std::vector<size_t> row_vals,
+                        std::vector<size_t> col_vals)
+    {
+        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+        size_t index{0};
+        for(size_t row : row_vals)
+        {
+            for(size_t col : col_vals)
+            {
+                index = (row * (geom.get_my() + geom.get_pad_y()) + col);
+                result[index] = 
+                   ((((*address_u)(u, row    , col - 1) + 
+                      (*address_u)(u, row + 1, col - 1) - 
+                      (*address_u)(u, row    , col + 1) - 
+                      (*address_u)(u, row + 1, col + 1))
+                     *
+                     ((*address_v)(v, row + 1, col    ) + 
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row - 1, col - 1) +
+                      (*address_u)(u, row    , col - 1) -
+                      (*address_u)(u, row - 1, col + 1) -
+                      (*address_u)(u, row    , col + 1))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row - 1, col    )))
+                    +
+                    (((*address_u)(u, row + 1, col    ) +
+                      (*address_u)(u, row + 1, col + 1) -
+                      (*address_u)(u, row - 1, col    ) -
+                      (*address_u)(u, row - 1, col + 1))
+                     *
+                     ((*address_v)(v, row    , col + 1) +
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row + 1, col - 1) +
+                      (*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row - 1, col - 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row    , col - 1)))
+                    +
+                    (((*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row    , col + 1))
+                     *
+                     ((*address_v)(v, row + 1, col + 1) +
+                      (*address_v)(v, row    , col    )))
+
+                    -
+                    (((*address_u)(u, row    , col - 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row - 1, col - 1)))
+
+                    +
+                    (((*address_u)(u, row    , col + 1) -
+                      (*address_u)(u, row - 1, col    ))
+                     *
+                     ((*address_v)(v, row - 1, col + 1) +
+                      (*address_v)(v, row    , col    )))
+                    -
+                    (((*address_u)(u, row + 1, col    ) -
+                      (*address_u)(u, row    , col - 1))
+                     *
+                     ((*address_v)(v, row    , col    ) +
+                      (*address_v)(v, row + 1, col - 1)))
+                    )
+                 * inv_dx_dy;
+           }    
+        }
+    }
 }
 
-#endif
+namespace detail
+{
+#ifdef __CUDACC__
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
+                          const twodads::slab_layout_t geom_my21,
+                          allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+
+        device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
+        gpuErrchk(cudaPeekAtLastError());    
+    }
 
 
-// Class to be used to calculate spectral derivatives on the slab, defined by
-// slab_layout.
-//
-// typename T is either double or float
-//
-//
-template <typename T>
-class derivs
+    template <typename T>
+    void impl_dx1(const cuda_array_bc_nogp<T, allocator_device>& in,
+                  cuda_array_bc_nogp<T, allocator_device>& out,
+                  const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+        static dim3 block_single_row(cuda::blockdim_row, 1);
+        static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+        // Call kernel that accesses elements with get_elem; no wrapping around
+        device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom());
+        gpuErrchk(cudaPeekAtLastError());
+        // Call kernel that accesses elements with operator(); interpolates ghost point values
+        device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom(), 0);
+        gpuErrchk(cudaPeekAtLastError());
+
+        // Call kernel that accesses elements with operator(); interpolates ghost point values
+        device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+                out.get_tlev_ptr(t_dst), 
+                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                {return(0.5 * (u_right - u_left) * inv_dx);},
+                out.get_geom(), out.get_geom().get_nx() - 1);
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
+
+    template <typename T>
+    void impl_dx2(const cuda_array_bc_nogp<T, allocator_device>& in,
+                  cuda_array_bc_nogp<T, allocator_device>& out,
+                  const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+    static dim3 block_single_row(cuda::blockdim_row, 1);
+    static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+    // Call kernel that accesses elements with get_elem; no wrapping around
+    device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+              out.get_geom());
+    gpuErrchk(cudaPeekAtLastError());
+
+    // Call kernel that accesses elements with operator(); interpolates ghost point values
+    device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);}, 
+              out.get_geom(), 0);
+    gpuErrchk(cudaPeekAtLastError());
+
+    // Call kernel that accesses elements with operator(); interpolates ghost point values
+    device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
+              out.get_tlev_ptr(t_dst), 
+              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+              out.get_geom(), out.get_geom().get_nx() - 1);
+    gpuErrchk(cudaPeekAtLastError());
+    }
+
+
+    template <typename T>
+    void impl_dy1(const cuda_array_bc_nogp<T, allocator_device>& src,
+                  cuda_array_bc_nogp<T, allocator_device>& dst,
+                  const size_t t_src, const size_t t_dst, 
+                  const cuda_array_bc_nogp<twodads::cmplx_t, allocator_device>& coeffs_dy1, 
+                  twodads::slab_layout_t geom_my21, allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+        // Multiply with coefficients for ky
+        device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                coeffs_dy1.get_tlev_ptr(0), 
+                reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                [=] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
+                geom_my21);
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
+
+
+
+    template <typename T>
+    void impl_dy2(const cuda_array_bc_nogp<T, allocator_device>& src, 
+                  cuda_array_bc_nogp<T, allocator_device>& dst,
+                  const size_t t_src, const size_t t_dst,
+                  const cuda_array_bc_nogp<twodads::cmplx_t, allocator_device>& coeffs_dy2,
+                  twodads::slab_layout_t geom_my21, allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+
+        // Multiply with coefficients for ky
+        device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                coeffs_dy2.get_tlev_ptr(0), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                [=] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                {return(val_in * val_map.im());},
+                geom_my21);
+        gpuErrchk(cudaPeekAtLastError());
+
+    }
+
+
+    template <typename T>
+    void impl_arakawa(const cuda_array_bc_nogp<T, allocator_device>& u,
+                           const cuda_array_bc_nogp<T, allocator_device>& v,
+                           cuda_array_bc_nogp<T, allocator_device> res,
+                           const size_t t_src, const size_t t_dst, allocator_device<T>)
+    {
+        // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
+        static dim3 block_single_row(cuda::blockdim_row, 1);
+        static dim3 grid_single_row((u.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
+
+        // Thread layout for accessing a single column (m = 0, My - 1, n = 0...Nx-1)
+        static dim3 block_single_col(1, cuda::blockdim_col);
+        static dim3 grid_single_col(1, (u.get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
+
+        device :: kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom());
+        gpuErrchk(cudaPeekAtLastError());
+
+        // Create address objects to access ghost points 
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), 0);
+        gpuErrchk(cudaPeekAtLastError());
+
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_nx() - 1);
+        gpuErrchk(cudaPeekAtLastError());
+
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), 0);
+        gpuErrchk(cudaPeekAtLastError());
+
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+                res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_my() - 1);
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
+    template <typename T>
+    void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_device>& src,
+                             cuda_array_bc_nogp<T, allocator_device>& dst,
+                             //const twodads::bc_t bc_t_left, const T bval_left,
+                             //const twodads::bc_t bc_t_right, const T bval_right,
+                             const size_t t_src, const size_t t_dst,
+                             //CuCmplx<T>* h_diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
+                             allocator_device<T>)                         
+    {
+        //const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
+        //const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
+
+        //if (dst.get_bvals() != src.get_bvals())
+        //    throw assert_error(std::string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
+
+        solvers :: elliptic my_ell_solver(src.get_geom());
+
+        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(src.get_tlev_ptr(t_src)), 
+                            reinterpret_cast<cuDoubleComplex*>(dst.get_tlev_ptr(t_dst)),
+                            reinterpret_cast<cuDoubleComplex*>(diag_l.get_tlev_ptr(0)), 
+                            reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
+                            reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
+
+        dst.set_transformed(t_dst, true);
+    }
+
+#endif //__CUDACC__
+
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
+                          const twodads::slab_layout_t& geom_my21,
+                          allocator_host<T>)
+    {
+        const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
+        const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
+
+        size_t n{0};
+        size_t m{0};
+        // Access data in coeffs_dy via T get_elem function below.
+        address_t<CuCmplx<T>>* arr_dy1{coeffs_dy1.get_address_ptr()};
+        address_t<CuCmplx<T>>* arr_dy2{coeffs_dy2.get_address_ptr()};
+  
+        CuCmplx<T>* dy1_data = coeffs_dy1.get_tlev_ptr(0);
+        CuCmplx<T>* dy2_data = coeffs_dy2.get_tlev_ptr(0);
+        
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = 0..nx/2-1
+        for(n = 0; n < geom_my21.get_nx() / 2; n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2
+        n = geom_my21.get_nx() / 2;
+        for(m = 0; m < geom_my21.get_my() - 1; m++)
+        {
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        m = geom_my21.get_my() - 1;
+
+        (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
+        (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+        (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+        (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2+1 .. Nx-2
+        for(n = geom_my21.get_nx() / 2 + 1; n < geom_my21.get_nx(); n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+    }
+
+
+    template <typename T>
+    void impl_dx1(const cuda_array_bc_nogp<T, allocator_host>& in,
+                  cuda_array_bc_nogp<T, allocator_host>& out,
+                  const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(in.get_geom().get_my());
+        std::vector<size_t> row_vals(1);
+
+        row_vals[0] = 0;
+        for(size_t m = 0; m < in.get_geom().get_my(); m++)
+            col_vals[m] = m;
+
+        // Apply threepoint stencil in interior domain, no interpolation here
+        host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                        [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                        {return(0.5 * (u_right - u_left) * inv_dx);}, 
+                                        out.get_geom());
+
+        // Call expensive interpolation routine only for 2 columns
+        std::cout << "dx1(host): apply_threepoint" << std::endl;
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                 [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return(0.5 * (u_right - u_left) * inv_dx);},
+                                 out.get_geom(), row_vals, col_vals);
+
+        row_vals[0] = in.get_geom().get_nx() - 1;
+        std::cout << "dx1(host): apply_threepoint" << std::endl;
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                 [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return(0.5 * (u_right - u_left) * inv_dx);},
+                                 out.get_geom(), row_vals, col_vals);
+    }
+
+
+    template <typename T>
+    void impl_dx2(const cuda_array_bc_nogp<T, allocator_host>& in,
+                  cuda_array_bc_nogp<T, allocator_host>& out,
+                  const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(in.get_geom().get_my());
+        std::vector<size_t> row_vals(1);
+
+        row_vals[0] = 0;
+        for(size_t m = 0; m < in.get_geom().get_my(); m++)
+            col_vals[m] = m;
+
+        // Apply threepoint stencil in interior domain, no interpolation here
+        host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
+                                        [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                        {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                        out.get_geom());
+
+        // Call expensive interpolation routine only for 2 columns
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst),
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                 out.get_geom(), row_vals, col_vals);
+
+        row_vals[0] = in.get_geom().get_nx() - 1;
+        host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst),
+                                 [=] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                 {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
+                                 out.get_geom(), row_vals, col_vals);
+    }
+
+
+    template <typename T>
+    void impl_dy1(const cuda_array_bc_nogp<T, allocator_host>& src,
+                  cuda_array_bc_nogp<T, allocator_host>& dst,
+                  const size_t t_src, const size_t t_dst, 
+                  const cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_dy1, 
+                  twodads::slab_layout_t geom_my21, allocator_host<T>)
+    {
+        host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                             coeffs_dy1.get_tlev_ptr(0),
+                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                             [=] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                             {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
+                             geom_my21); 
+    }
+
+
+    template <typename T>
+    void impl_dy2(const cuda_array_bc_nogp<T, allocator_host>& src,
+                  cuda_array_bc_nogp<T, allocator_host>& dst,
+                  const size_t t_src, const size_t t_dst, 
+                  const cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_dy2, 
+                  twodads::slab_layout_t geom_my21, allocator_host<T>)
+    {
+        host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                             coeffs_dy2.get_tlev_ptr(0),
+                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                             [=] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                             {return(val_in * val_map.im());},
+                             geom_my21);
+        
+    }
+
+
+    template <typename T>
+    void impl_arakawa(const cuda_array_bc_nogp<T, allocator_host>& u,
+            const cuda_array_bc_nogp<T, allocator_host>& v,
+            cuda_array_bc_nogp<T, allocator_host> res,
+            const size_t t_src, const size_t t_dst, allocator_host<T>)
+    {
+        std::vector<size_t> col_vals(0);
+        std::vector<size_t> row_vals(0);
+
+        // Uses address with direct element access avoiding ifs etc.
+        host :: arakawa_center(u.get_tlev_ptr(t_src), u.get_address_ptr(),
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_dst),
+                               u.get_geom());
+
+        // Arakawa kernel for col 0, n = 0..Nx-1
+        col_vals.resize(1);
+        col_vals[0] = 0;
+        row_vals.resize(u.get_geom().get_nx());
+        for(size_t n = 0; n < u.get_geom().get_nx(); n++)
+            row_vals[n] = n;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+
+        //Arakawa kernel for col = My-1, n = 0..Nx-1
+        col_vals[0] = u.get_geom().get_my() - 1;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+
+        // Arakawa kernel for col 0..My-1, row n = 0
+        col_vals.resize(u.get_geom().get_my());
+        row_vals.resize(1);
+        row_vals[0] = 0;
+        for(size_t m = 0; m < u.get_geom().get_my(); m++)
+            col_vals[m] = m;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+        // Arakawa kernel for col 0..My-1, row n = Nx - 1
+        row_vals[0] = u.get_geom().get_nx() - 1;
+        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_src),
+                               u.get_geom(),
+                               row_vals, col_vals);
+    }
+
+    template <typename T>
+    void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_host>& src,
+                             cuda_array_bc_nogp<T, allocator_host>& dst,
+                             //const twodads::bc_t bc_t_left, const T bval_left,
+                             //const twodads::bc_t bc_t_right, const T bval_right,
+                             const size_t t_src, const size_t t_dst,
+                             //CuCmplx<T>* h_diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
+                             cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
+                             allocator_host<T>)
+    {
+        solvers :: elliptic my_ell_solver(src.get_geom());
+        // Copy input data for solver into dst.
+        dst.copy(t_dst, src, t_src);
+
+#ifndef __CUDACC__
+        my_ell_solver.solve(nullptr,
+                            reinterpret_cast<lapack_complex_double*>(dst.get_tlev_ptr(t_dst)),
+                            reinterpret_cast<lapack_complex_double*>(diag_l.get_tlev_ptr(0)) + 1, 
+                            reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)), 
+                            reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));
+#endif //__CUDACC__
+        dst.set_transformed(t_dst, true);
+    }    
+}
+
+
+
+/*
+ * Interface to derivation and elliptical solvers
+ *
+ */
+
+
+
+template <typename T, template <typename> class allocator>
+class deriv_base_t
 {
     public:
-        derivs(const cuda::slab_layout_t);
-        ~derivs();
 
-        /// @brief Compute first order x- and y-derivatives
-        /// @detailed Allocates memory for Fourier coefficients.
-        /// @detailed If spectral representation is available, use
-        /// @d_dx1_dy1 where they are passed as arguments instead
-        void d_dx1_dy1(cuda_array<T>&, cuda_array<T>&, cuda_array<T>&);
-        void d_dx1_dy1(const cuda_array<CuCmplx<T> >&,  cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-        void d_dx1_dy1(const cuda_array<CuCmplx<T> >*,  cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
-        /// @brief Compute second order x- and y-derivatives
-        void d_dx2_dy2(cuda_array<T>&, cuda_array<T>&, cuda_array<T>&);
-        void d_dx2_dy2(cuda_array<CuCmplx<T> >&,  cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-        /// @brief Compute Laplacian
-        void d_laplace(cuda_array<T>&, cuda_array<T>&, const uint);
-        void d_laplace(cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-        void d_laplace(cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
-        /// @brief Invert Laplace equation
-        void inv_laplace(cuda_array<T>&, cuda_array<T>&, const uint);
-        void inv_laplace(cuda_array<CuCmplx<T> >&, cuda_array<CuCmplx<T> >&, const uint);
-        void inv_laplace(cuda_array<CuCmplx<T> >*, cuda_array<CuCmplx<T> >*, const uint);
+    deriv_base_t() {}
 
-        void dft_r2c(T* in, CuCmplx<T>* out);
-        void dft_c2r(CuCmplx<T>* in, T* out);
+    virtual void dx_1(const cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
 
-    private:
-        const unsigned int Nx;
-        const unsigned int My;
-        const T Lx;
-        const T Ly;
-        const T dx;
-        const T dy;
+    virtual void dx_2(const cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
 
-        dim3 grid_my_nx21;
-        dim3 block_my_nx21;
+    virtual void dy_1(cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
 
-        cuda_array<CuCmplx<T> > kmap_dx1_dy1;
-        cuda_array<CuCmplx<T> > kmap_dx2_dy2;
+    virtual void dy_2(cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
+                      
+    virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>&,
+                                cuda_array_bc_nogp<T, allocator>&,
+                                const size_t, const size_t) = 0;
 
-        cufftHandle plan_r2c;
-        cufftHandle plan_c2r;
-
-        void init_dft();
+    virtual void arakawa(const cuda_array_bc_nogp<T, allocator>&,
+                         const cuda_array_bc_nogp<T, allocator>&,
+                         cuda_array_bc_nogp<T, allocator>&,
+                         const size_t, const size_t) = 0;
 };
 
 
-#ifdef __CUDACC__
 
-template <typename T>
-derivs<T> :: derivs(const cuda::slab_layout_t sl) :
-    Nx(sl.Nx), My(sl.My),
-    Lx(T(sl.Nx) * T(sl.delta_x)),
-    Ly(T(sl.My) * T(sl.delta_y)),
-    dx(T(sl.delta_x)), dy(T(sl.delta_y)),
-    kmap_dx1_dy1(1, My, Nx / 2 + 1),
-    kmap_dx2_dy2(1, My, Nx / 2 + 1)
+/*
+ * Implmentation of finite difference, spectral derivation and elliptical solvers for
+ * 1d semi-periodic boundary geometries
+ */
+
+template <typename T, template <typename> class allocator>
+class deriv_fd_t : public deriv_base_t<T, allocator>
 {
-    init_dft();
-    // Generate first and second derivative map;
-    gen_kmap_dx1_dy1<<<kmap_dx1_dy1.get_grid(), kmap_dx1_dy1.get_block()>>>(kmap_dx1_dy1.get_array_d(), cuda::TWOPI / Lx,
-                                                                            cuda::TWOPI / Ly, My, Nx / 2 + 1);
-    gen_kmap_dx2_dy2<<<kmap_dx2_dy2.get_grid(), kmap_dx2_dy2.get_block()>>>(kmap_dx2_dy2.get_array_d(), cuda::TWOPI / Lx,
-                                                                            cuda::TWOPI / Ly, My, Nx / 2 + 1);
-    //ostream of;
-    //of.open("k2map.dat");
-    //of << kmap_dx2_dy2 << endl;
-    //of.close()
-    gpuStatus();
-}
+    public:
+        using cmplx_t = CuCmplx<T>;
+        using cmplx_arr = cuda_array_bc_nogp<cmplx_t, allocator>;
 
+        #ifdef HOST
+        using dft_library_t = fftw_object_t<T>;
+        #endif //HOST
 
-// Generic template for DFT planning, should not be called. But
-// standard is double precision
-template <typename T> inline void plan_dft_r2c(cufftHandle& plan, int My, int Nx, cufftResult& err, const T dummy)
-{
-    //err = cufftPlan2d(&plan_r2c, My, Nx, CUFFT_D2Z);
-}
+        #ifdef DEVICE
+        using dft_library_t = cufft_object_t<T>;
+        #endif //DEVICE
 
-template <typename T> inline void plan_dft_c2r(cufftHandle& plan, int My, int Nx, cufftResult& err, const T dummy)
-{
-    //err = cufftPlan2d(&plan_r2c, My, Nx, CUFFT_Z2D);
-}
-
-
-// DFT r2c planning for double precision
-template <> inline void plan_dft_r2c<cuda::real_t>(cufftHandle& plan_r2c, int My, int Nx, cufftResult& err, const cuda::real_t dummy)
-{
-    err = cufftPlan2d(&plan_r2c, My, Nx, CUFFT_D2Z);
-}
-
-// DFT c2r planning for double precision
-template <> inline void plan_dft_c2r<cuda::real_t>(cufftHandle& plan_c2r, int My, int Nx, cufftResult& err, const cuda::real_t dummy)
-{
-    err = cufftPlan2d(&plan_c2r, My, Nx, CUFFT_Z2D);
-}
-
-// DFT r2c planning for single precision
-template <> inline void plan_dft_r2c<float>(cufftHandle& plan_r2c, int My, int Nx, cufftResult& err, const float dummy)
-{
-    err = cufftPlan2d(&plan_r2c, My, Nx, CUFFT_R2C);
-}
-
-// DFT c2r planning for single precision
-template <> inline void plan_dft_c2r<float>(cufftHandle& plan_c2r, int My, int Nx, cufftResult& err, const float dummy)
-{
-    err = cufftPlan2d(&plan_c2r, My, Nx, CUFFT_C2R);
-}
-
-
-// Calls the explicit function templates specizalizations above
-// Create dummy variable, so that we can use type inference to call the
-// correct planning routine, i.e. CUFFT_R2C/C2R for float and
-// CUFFT_D2Z, Z2D for double
-template<typename T>
-void derivs<T> :: init_dft()
-{
-    cufftResult err;
-    T dummy{0.0};
-    plan_dft_r2c(plan_r2c, My, Nx, err, dummy);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error planning D2Z DFT: " << err << endl;
-        throw gpu_error(err_str.str());
-    }
-
-    plan_dft_c2r(plan_c2r, My, Nx, err, dummy);
-    if (err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error planning D2Z DFT: " << err << endl;
-        throw gpu_error(err_str.str());
-    }
-}
-
-
-
-template <typename T>
-derivs<T> :: ~derivs()
-{
-    cufftDestroy(plan_r2c);
-    cufftDestroy(plan_c2r);
-}
-
-// Generic function template for r2c transformation
-template <typename T>
-inline void call_dft_r2c(cufftHandle& plan, T* in, CuCmplx<T>* out, cufftResult& err, T dummy)
-{
-    err = cufftExecD2Z(plan, in, (cufftDoubleComplex*) out);
-}
-
-// Inline template specialization, called from derivs::dft_r2c for T = cuda::real_t
-template <>
-inline void call_dft_r2c<cuda::real_t>(cufftHandle& plan, cuda::real_t* in, CuCmplx<cuda::real_t>* out, cufftResult& err, cuda::real_t dummy)
-{
-    err = cufftExecD2Z(plan, in, (cufftDoubleComplex*) out);
-}
-
-// Inline template specialization, called from derivs::dft_r2c for T = float
-template <>
-inline void call_dft_r2c<float>(cufftHandle& plan, float* in, CuCmplx<float>* out, cufftResult& err, float dummy)
-{
-    err = cufftExecR2C(plan, in, (cufftComplex*) out);
-}
-
-
-template <typename T>
-void derivs<T> :: dft_r2c(T* in, CuCmplx<T>* out)
-{
-#ifdef DEBUG
-    cerr << "derivs<T> :: dft_r2c " << endl;
-    cerr << "\treal data at " << in << "\tcomplex data at " << out << endl;
-#endif
-    // compute dft of each field 
-    cufftResult err;
-    T dummy{0.0};
-    call_dft_r2c(plan_r2c, in, out, err, dummy);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error planning D2Z DFT: " << cufftGetErrorString.at(err) << endl;
-        throw gpu_error(err_str.str());
-    }
-
-    // Verify Parseval's theorem
-#ifdef DEBUG
-    T* in_h = new T[My * Nx];
-    CuCmplx<T>* out_h = new CuCmplx<T>[My * (Nx / 2 + 1)];
-
-    gpuErrchk(cudaMemcpy(in_h, in, sizeof(T) * My * Nx, cudaMemcpyDeviceToHost));
-    gpuErrchk(cudaMemcpy(out_h, out, sizeof(CuCmplx<T>) * My * (Nx / 2 + 1), cudaMemcpyDeviceToHost));
-    T sum_r2{0.0};
-    T sum_c2{0.0};
-
-    int idx;
-    for(uint m = 0; m < My; m++)
-    {
-        for(uint n = 0; n < Nx; n++)
+        deriv_fd_t(const twodads::slab_layout_t);    
+        ~deriv_fd_t()
         {
-            sum_r2 += in_h[(m * Nx) + n] * in_h[(m * Nx) + n];
-            // Take care of hermitian symmetry
-            if(n < Nx / 2 + 1)
-                idx = m * (Nx / 2 + 1) + n;
-            else
-                idx = ((My - m) % My) * (Nx / 2 + 1) + (Nx - n);
+            delete myfft;
+        };
 
-            sum_c2 += out_h[idx].abs() * out_h[idx].abs();
+        void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
+                  cuda_array_bc_nogp<T, allocator>& dst,
+                  const size_t t_src, const size_t t_dst)
+        {
+            detail :: impl_dx1(src, dst, t_src, t_dst, allocator<T>{}); 
         }
-    }
-    sum_c2 = sum_c2 / T(My * Nx);
-    T rel_err;
 
-    // check if sums are not zero and are good numbers
-    bool good_sum = true;
-    if(std::isnan(sum_r2))
-        good_sum = false;
-    if(std::isinf(sum_r2))
-        good_sum = false;
-    if(std::isnan(sum_c2))
-        good_sum = false;
-    if(std::isinf(sum_c2))
-        good_sum = false;
-
-    if(sum_r2 > 1e-10 && sum_c2 > 1e-10)
-       rel_err = abs(sum_r2 - sum_c2) / abs(sum_r2);
-    else
-        rel_err = 0.0;
-
-    if(rel_err > 1e-8)
-        good_sum = false;
-
-
-    // In case, we did not take the dft of zero, checkt he relative error
-    //if(abs(sum_r2) > 1e-10 && abs(sum_c2) > 1e-10)
-    //{
-
-    //    T rel_err = abs(sum_r2 - sum_c2) / abs(sum_r2);
-    //    if(rel_err > 1e-8)
-    //    {
-    if(!good_sum)
-    {
-        cerr << "!!!!!!!!!!!!!!! dft_r2c: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
-        ofstream of_r, of_c;
-        of_r.open("derivs_arr_r.dat", ios::trunc);
-        of_c.open("derivs_arr_c.dat", ios::trunc);
-
-        for(uint m = 0; m < My; m++)
+        void dx_2(const cuda_array_bc_nogp<T, allocator>& src,
+                  cuda_array_bc_nogp<T, allocator>& dst,
+                  const size_t t_src, const size_t t_dst)
         {
-            for(uint n = 0; n < Nx; n++)
+            detail :: impl_dx2(src, dst, t_src, t_dst, allocator<T>{});
+        }
+
+        void dy_1(cuda_array_bc_nogp<T, allocator>& src,
+                  cuda_array_bc_nogp<T, allocator>& dst,
+                  const size_t t_src, const size_t t_dst)
+        {
+            // DFT r2c
+            if(!(src.is_transformed(t_src)))
             {
-                of_r << in_h[(m * Nx) + n] << "\t";
-                if(n < Nx / 2 + 1)
-                    of_c << out_h[m * (Nx / 2 + 1) + n] << "\t";
+                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+                src.set_transformed(t_src, true);
             }
-            of_r << "\n";
-            of_c << "\n";
+
+            // Multiply with ky coefficients
+            detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
+
+            // DFT c2r and normalize
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            dst.set_transformed(t_dst, false);
+            utility :: normalize(dst, t_dst);
+
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            src.set_transformed(t_src, false);
+            utility :: normalize(src, t_src);
         }
-        of_r.close();
-        of_c.close();
 
-        stringstream err_msg;
-        err_msg << "Error in dft_r2c" << endl;
-        err_msg << "real data at " << in << "\tcomplex data at " << out << endl;
-        err_msg << "Rel. error in parsevals theorem: " << rel_err << endl;
-
-        throw assert_error(err_msg.str());
-    }
-    else
-    {
-        cerr << "                dft_r2c: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
-    }
-    //assert(rel_err < 1e-3);
-    delete [] in_h;
-    delete [] out_h;
-#endif // DEBUG
-
-}
-
-// Generic function template for r2c transformation
-template <typename T>
-inline void call_dft_c2r(cufftHandle& plan, CuCmplx<T>* in, T* out, cufftResult& err)
-{
-    err = cufftExecZ2D(plan, in, (cufftDoubleComplex*) out);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error executing cufftExecZ2D: " << cufftGetErrorString.at(err) << endl;
-        throw gpu_error(err_str.str());
-    }
-}
-
-// Inline template specialization, called from derivs::dft_r2c for T = cuda::real_t
-template <>
-inline void call_dft_c2r<cuda::real_t>(cufftHandle& plan, CuCmplx<cuda::real_t>* in, cuda::real_t* out, cufftResult& err)
-{
-    err = cufftExecZ2D(plan, (cufftDoubleComplex*) in, out);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error executing cufftExecZ2D: " << cufftGetErrorString.at(err) << endl;
-        throw gpu_error(err_str.str());
-    }
-}
-
-// Inline template specialization, called from derivs::dft_r2c for T = float
-template <>
-inline void call_dft_c2r<float>(cufftHandle& plan, CuCmplx<float>* in, float* out, cufftResult& err)
-{
-    err = cufftExecC2R(plan,(cufftComplex*) in, out);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error executing cufftExecZ2D: " << cufftGetErrorString.at(err) << endl;
-        throw gpu_error(err_str.str());
-    }
-}
-
-
-
-template <typename T>
-void derivs<T> :: dft_c2r(CuCmplx<T>* in, T* out)
-{
-#ifdef DEBUG
-    cerr << "derivs<T> :: dft_c2r " << endl;
-    cerr << "\tcomplex data at " << in << "\treal data at " << out << endl;
-#endif
-    // compute dft of each field 
-    cufftResult err;
-    call_dft_c2r(plan_c2r, in, out, err);
-    if(err != CUFFT_SUCCESS)
-    {
-        stringstream err_str;
-        err_str << "Error planning D2Z DFT: " << cufftGetErrorString.at(err) << endl;
-        throw gpu_error(err_str.str());
-    }
-    // Verify Parseval's theorem
-#ifdef DEBUG
-    CuCmplx<T>* in_h = new CuCmplx<T>[My * (Nx / 2 + 1)];
-    T* out_h = new T[My * Nx];
-
-    gpuErrchk(cudaMemcpy(in_h, in, sizeof(CuCmplx<T>) * My * (Nx / 2 + 1), cudaMemcpyDeviceToHost));
-    gpuErrchk(cudaMemcpy(out_h, out, sizeof(T) * My * Nx, cudaMemcpyDeviceToHost));
-    T sum_r2{0.0};
-    T sum_c2{0.0};
-
-    int idx;
-    for(uint m = 0; m < My; m++)
-    {
-        for(uint n = 0; n < Nx; n++)
+        void dy_2(cuda_array_bc_nogp<T, allocator>& src,
+                  cuda_array_bc_nogp<T, allocator>& dst,
+                  const size_t t_src, const size_t t_dst)
         {
-            sum_r2 += out_h[(m * Nx) + n] * out_h[(m * Nx) + n];
-            // Take care of hermitian symmetry
-            if(n < Nx / 2 + 1)
-                idx = m * (Nx / 2 + 1) + n;
-            else
-                idx = ((My - m) % My) * (Nx / 2 + 1) + (Nx - n);
-
-            sum_c2 += in_h[idx].abs() * in_h[idx].abs();
-        }
-    }
-
-    // Account for normalization. Do two divisions, to avoid division overflow:
-    // const unsigned int Nx, My;  <- max value is 256*256*256*256-1 !
-    sum_r2 = sum_r2 / T(Nx * My);
-    sum_r2 = sum_r2 / T(Nx * My);
-    sum_c2 = sum_c2 / T(Nx * My);
-    T rel_err;
-
-    // check if sums are not zero and are good numbers
-    bool good_sum = true;
-    if(std::isnan(sum_r2))
-        good_sum = false;
-    if(std::isinf(sum_r2))
-        good_sum = false;
-    if(std::isnan(sum_c2))
-        good_sum = false;
-    if(std::isinf(sum_c2))
-        good_sum = false;
-
-    if(sum_r2 > 1e-10 && sum_c2 > 1e-10)
-       rel_err = abs(sum_r2 - sum_c2) / abs(sum_r2);
-    else
-        rel_err = 0.0;
-
-    if(rel_err > 1e-8)
-        good_sum = false;
-
-    // check relative error in case we didn't take DFT of zero
-    //if(abs(sum_r2) > 1e-10 && abs(sum_c2) > 1e-10)
-    //{
-    //    T rel_err = abs(sum_r2 - sum_c2) / abs(sum_r2);
-    //    if(rel_err > 1e-8)
-    if(!good_sum)
-    {
-        cerr << "!!!!!!!!!!!!!!! dft_c2r: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
-        ofstream of_r, of_c;
-        of_r.open("derivs_arr_r.dat", ios::trunc);
-        of_c.open("derivs_arr_c.dat", ios::trunc);
-
-        for(uint m = 0; m < My; m++)
-        {
-            for(uint n = 0; n < Nx; n++)
+            // DFT r2c
+            if(!(src.is_transformed(t_src)))
             {
-                of_r << out_h[(m * Nx) + n] << "\t";
-                if(n < Nx / 2 + 1)
-                    of_c << in_h[m * (Nx / 2 + 1) + n] << "\t";
+                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+                src.set_transformed(t_src, true);
             }
-            of_r << "\n";
-            of_c << "\n";
+            // Multiply with ky^2 coefficients
+            detail :: impl_dy2(src, dst, t_src, t_dst, get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+
+            // DFT c2r and normalize
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            dst.set_transformed(t_dst, false);
+            utility :: normalize(dst, t_dst);
+
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            src.set_transformed(t_src, false);
+            utility :: normalize(src, t_src);            
         }
-        of_r.close();
-        of_c.close();
 
-        stringstream err_msg;
-        err_msg << "Error in dft_c2r" << endl;
-        err_msg << "real data at " << in << "\tcomplex data at " << out << endl;
-        err_msg << "Rel. error in parsevals theorem: " << rel_err << endl;
-        throw assert_error(err_msg.str());
-    }
-    else
+        void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
+                            cuda_array_bc_nogp<T, allocator>& dst,
+                            //const twodads::bc_t bc_t_left, const T bv_left,
+                            //const twodads::bc_t bc_t_right, const T bv_right,
+                            const size_t t_src, const size_t t_dst)
+        {
+            assert(src.get_geom() == dst.get_geom());
+            assert(src.get_geom() == get_geom());
+            assert(src.get_bvals() == dst.get_bvals());
+
+            if(!(src.is_transformed(t_src)))
+            {
+                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+                src.set_transformed(t_src, true);
+            }
+            // When solving Ax=b, update the boundary terms in b
+            // The boundary conditions change the ky=0 mode of the n=0/Nx-1 row
+
+            // Note that we take the DFT of the boundary value. For a real boundary
+            // value, this is just the value multiplied by the number of Fourier modes.
+            // See http://fftw.org/fftw3_doc/The-1d-Real_002ddata-DFT.html#The-1d-Real_002ddata-DFT
+            T bval_left_hat{src.get_bvals().get_bv_left() * static_cast<T>(src.get_my())};
+            T bval_right_hat{src.get_bvals().get_bv_right() * static_cast<T>(src.get_my())};
+            T add_to_boundary_left{0.0};
+            T add_to_boundary_right{0.0};
+            switch(src.get_bvals().get_bc_left())
+            {
+                case twodads::bc_t::bc_dirichlet:
+                    add_to_boundary_left = -2.0 * bval_left_hat;
+                    break;
+                case twodads::bc_t::bc_neumann:
+                    add_to_boundary_left = -1.0 * src.get_geom().get_deltax() * bval_left_hat;
+                    break;
+                case twodads::bc_t::bc_periodic:
+                    std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
+                    std::cerr << "Treating as dirichlet, bval=0" << std::endl;
+                    break;
+            }
+
+            switch(src.get_bvals().get_bc_right())
+            {
+                case twodads::bc_t::bc_dirichlet:
+                    add_to_boundary_right = -2.0 * bval_right_hat;
+                    break;
+                case twodads::bc_t::bc_neumann:
+                    add_to_boundary_right = -1.0 * src.get_geom().get_deltax() * bval_right_hat;
+                    break;
+                case twodads::bc_t::bc_periodic:
+                    std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
+                    std::cerr << "Treating as dirichlet, bval=0" << std::endl;
+                    break;
+            }    
+
+            //Add boundary terms to b before solving Ax=b
+            src.apply([=] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+            {
+            if(n == 0  && m == 0)
+                return(input + add_to_boundary_left);
+            else if(n == geom.get_nx() - 1 && m == 0)
+                return(input + add_to_boundary_right);
+            else
+                return(input);
+            }, t_src);
+                
+            detail :: impl_invert_laplace(src, dst, t_src, t_dst,  
+                                          get_diag(), get_diag_u(), get_diag_l(),
+                                          allocator<T>{});
+
+            // Remove boundary terms after solving the system
+            src.apply([=] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+            {
+            if(n == 0  && m == 0)
+                return(input - add_to_boundary_left);
+            else if(n == geom.get_nx() - 1 && m == 0)
+                return(input - add_to_boundary_right);
+            else
+                return(input);
+            }, t_src);
+                
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            src.set_transformed(t_src, false);
+            utility :: normalize(src, t_src); 
+
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            dst.set_transformed(t_dst, false);
+            utility :: normalize(dst, t_dst);
+        }
+
+        void arakawa(const cuda_array_bc_nogp<T, allocator>& u,
+                     const cuda_array_bc_nogp<T, allocator>& v,
+                     cuda_array_bc_nogp<T, allocator>& dst,
+                     const size_t t_src, const size_t t_dst)
+        {
+            detail :: impl_arakawa(u, v, dst, t_src, t_dst, allocator<T>{});
+        }
+
+        void init_diagonals();
+
+        cmplx_arr& get_coeffs_dy1() {return(coeffs_dy1);};
+        cmplx_arr& get_coeffs_dy2() {return(coeffs_dy2);};
+        cmplx_arr& get_diag() {return(diag);};
+        cmplx_arr& get_diag_u() {return(diag_u);};
+        cmplx_arr& get_diag_l() {return(diag_l);};
+        //cmplx_t* get_hdiag() {return(h_diag);};
+        // Layout of the real fields, i.e. Nx * My
+        twodads::slab_layout_t get_geom() const {return(geom);};
+        // Layout of complex fields, i.e. Nx * My21
+        twodads::slab_layout_t get_geom_my21() const {return(geom_my21);};
+        // Layouf of the diagonals, i.e. My21 * Nx
+        twodads::slab_layout_t get_geom_transpose() const {return(geom_transpose);};
+
+    private:
+        const twodads::slab_layout_t geom;          // Layout for Nx * My arrays
+        const twodads::slab_layout_t geom_my21;     // Layout for spectrally transformed NX * My21 arrays
+        const twodads::slab_layout_t geom_transpose;     // Transposed complex layout (My21 * Nx) for the tridiagonal solver
+        dft_object_t<twodads::real_t>* myfft;
+
+        // Coefficient storage for spectral derivation
+        cmplx_arr coeffs_dy1;
+        cmplx_arr coeffs_dy2;
+        // Matrix storage for solving tridiagonal equations
+        cmplx_arr   diag;
+        cmplx_arr   diag_l;
+        cmplx_arr   diag_u;
+};
+
+
+template <typename T, template <typename> class allocator>
+deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t _geom) :
+    geom{_geom},
+    geom_my21{get_geom().get_xleft(), 
+              get_geom().get_deltax(), 
+              get_geom().get_ylo(), 
+              get_geom().get_deltay(), 
+              get_geom().get_nx(), get_geom().get_pad_x(),
+              (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0, 
+              get_geom().get_grid()},
+    geom_transpose{get_geom().get_ylo(),
+                   get_geom().get_deltay(),
+                   get_geom().get_xleft(),
+                   get_geom().get_deltax(),
+                   (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0,
+                   get_geom().get_nx(), 0,
+                   get_geom().get_grid()},
+    myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    coeffs_dy1{get_geom_my21(), 
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}),
+               1},
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    coeffs_dy2{get_geom_my21(),
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
+               1},
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag(get_geom_transpose(), 
+         twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
+         1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag_l(get_geom_transpose(), 
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
+    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
+    diag_u(get_geom_transpose(), 
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1)
+{
+    // Initialize the diagonals in a function as CUDA currently doesn't allow to call
+    // Lambdas in the constructor.
+
+    detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+    init_diagonals();
+}
+
+// Remember that the diagonals are transposed:
+// The normal layout has the columns contiguous in memory.
+// After a fourier transformation, contiguous elements correspond to different fourier modes.
+// The tridiagonal solver however solves one linear system for one fourier mode at a time
+// Thus, the diagonals have a layout in memory where contiguous values correspond to a single fourier mode
+
+template <typename T, template <typename> class allocator>
+void deriv_fd_t<T, allocator> :: init_diagonals() 
+{
+    diag.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
-        cerr << "                dft_c2r: sum_r2 = " << sum_r2 << "\tsum_c2 / (N*M)= " << sum_c2 << "\tRel. err: " << rel_err << endl;
-    }
+        // ky runs with index n (the kernel addressing function, see cuda::thread_idx
+        // We are transposed, Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
+        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
+        const CuCmplx<T> ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx);
+        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltay() * geom.get_deltay())};
+        if(m > 0 && m < geom.get_my() - 1)
+        {
+            // Use shitty notation ... * (-2.0) because operator* is not a friend of CuCmplx<T>
+            return (inv_dx2 * (-2.0) - ky2);
+        }
+        else if (m == 0)
+        {
+            return(inv_dx2 * (-3.0) - ky2);
+        }
+        else if (m == geom.get_my() - 1)
+        {
+            return(inv_dx2 * (-3.0) - ky2);
+        }
+        return(-1.0);
+    }, 0);
 
-    delete [] in_h;
-    delete [] out_h;
-#endif // DEBUG
+    diag_l.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        // CUBLAS requires the first element in the lower diagonal to be zero.
+        // Remember to shift the pointer in the MKL implementation when passing to the
+        // MKL caller routine in solver
+        const CuCmplx<T> inv_dx2 = 1.0 / (geom.get_deltax() * geom.get_deltax());
+        if(m > 0)
+            //return(inv_dx2);
+            return(inv_dx2);
+        else if(m == 0)
+            return(0.0);
+        return(-1.0);
+    }, 0);
+
+    diag_u.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        // CUBLAS requires the last element in the upper diagonal to be zero.
+        // Remember to shift the pointer in the MKL implementation when passing to the
+        // MKL caller routine in solver
+        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
+        if(m < geom.get_my() - 1)
+            return(inv_dx2);
+        else if(m == geom.get_my() - 1)
+            return(0.0);  
+        return(-1.0);  
+    }, 0);
 }
 
 
-// Compute spectral derivatives of in
-template <typename T>
-void derivs<T> :: d_dx1_dy1(cuda_array<T>& in,
-                            cuda_array<T>& out_x,
-                            cuda_array<T>& out_y)
+template <typename T, template <typename> class allocator>
+class deriv_bs_t : public deriv_base_t<T, allocator>
 {
-    static cuda_array<CuCmplx<T> > in_hat(1, My, Nx / 2 + 1);
-    static cuda_array<CuCmplx<T> > out_x_hat(1, My, Nx / 2 + 1);
-    static cuda_array<CuCmplx<T> > out_y_hat(1, My, Nx / 2 + 1);
-  
-    dft_r2c(in.get_array_d(), in_hat.get_array_d());
-   
-    d_dx1_dy1(in_hat, out_x_hat, out_y_hat, 0);
-
-    dft_c2r(out_x_hat.get_array_d(), out_x.get_array_d());
-    dft_c2r(out_y_hat.get_array_d(), out_y.get_array_d());
-
-    out_x.normalize();
-    out_y.normalize();
-}
+    public:
+        deriv_bs_t() {}
 
 
-// Compute spectral derivatives of in
-template <typename T>
-void derivs<T> :: d_dx2_dy2(cuda_array<T>& in,
-                            cuda_array<T>& out_x,
-                            cuda_array<T>& out_y)
-{
-    static cuda_array<CuCmplx<T> > in_hat(1, My, Nx / 2 + 1);
-    static cuda_array<CuCmplx<T> > out_x_hat(1, My, Nx / 2 + 1);
-    static cuda_array<CuCmplx<T> > out_y_hat(1, My, Nx / 2 + 1);
-  
-    dft_r2c(in.get_array_d(), in_hat.get_array_d());
-   
-    d_dx2_dy2(in_hat, out_x_hat, out_y_hat, 0);
+     void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dx_1: not implemented yet" << std::endl;
+    };   
 
-    dft_c2r(out_x_hat.get_array_d(), out_x.get_array_d());
-    dft_c2r(out_y_hat.get_array_d(), out_y.get_array_d());
-
-    out_x.normalize();
-    out_y.normalize();
-}
-
-// Call derivation kernel
-template <typename T>
-void derivs<T> :: d_dx1_dy1(const cuda_array<CuCmplx<T> >& in_hat,
-        cuda_array<CuCmplx<T> >& out_x_hat,
-        cuda_array<CuCmplx<T> >& out_y_hat,
-        const uint t_src)
-{
-    //int elem_per_thread{4};
-    //size_t shmem_size = 2 * elem_per_thread * block_my_nx21.x * sizeof(CuCmplx<T>);
-
-    d_compute_dx_dy<<<in_hat.get_grid(), in_hat.get_block()>>>(in_hat.get_array_d(t_src),
-            out_x_hat.get_array_d(),
-            out_y_hat.get_array_d(),
-            kmap_dx1_dy1.get_array_d(), 
-            1, My, Nx / 2 + 1);
-    //d_compute_dx_dy<elem_per_thread><<<in_hat.get_grid(), in_hat.get_block(), shmem_size>>>
-    //    (in_hat.get_array_d(t_src), out_x_hat.get_array_d(), out_y_hat.get_array_d(),
-    //     kmap_dx1_dy1.get_array_d(), 1, My, Nx / 2 + 1);
-}
-
-// Call derivation kernel
-template <typename T>
-void derivs<T> :: d_dx1_dy1(const cuda_array<CuCmplx<T> >* in_hat,
-        cuda_array<CuCmplx<T> >* out_x_hat,
-        cuda_array<CuCmplx<T> >* out_y_hat,
-        const uint t_src)
-{
-    //int elem_per_thread{4};
-    //size_t shmem_size = 2 * elem_per_thread * block_my_nx21.x * sizeof(CuCmplx<T>);
-
-    d_compute_dx_dy<<<in_hat -> get_grid(), in_hat -> get_block()>>>(in_hat -> get_array_d(t_src),
-            out_x_hat -> get_array_d(),
-            out_y_hat -> get_array_d(),
-            kmap_dx1_dy1.get_array_d(), 
-            1, My, Nx / 2 + 1);
-    //d_compute_dx_dy<elem_per_thread><<<in_hat.get_grid(), in_hat.get_block(), shmem_size>>>
-    //    (in_hat.get_array_d(t_src), out_x_hat.get_array_d(), out_y_hat.get_array_d(),
-    //     kmap_dx1_dy1.get_array_d(), 1, My, Nx / 2 + 1);
-}
+     void dx_2(const cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dx_2: not implemented yet" << std::endl;
+    };   
 
 
-template <typename T>
-void derivs<T> :: d_dx2_dy2(cuda_array<CuCmplx<T> >& in_hat,
-        cuda_array<CuCmplx<T> >& out_x_hat,
-        cuda_array<CuCmplx<T> >& out_y_hat,
-        const uint t_src)
-{
-    //int elem_per_thread{4};
-    //size_t shmem_size = 2 * elem_per_thread * block_my_nx21.x * sizeof(CuCmplx<T>);
-    
-    d_compute_dx_dy<<<in_hat.get_grid(), in_hat.get_block()>>>(in_hat.get_array_d(t_src),
-            out_x_hat.get_array_d(),
-            out_y_hat.get_array_d(),
-            kmap_dx2_dy2.get_array_d(), 
-            2, My, Nx / 2 + 1);
-
-//    d_compute_dx_dy<elem_per_thread><<<in_hat.get_grid(), in_hat.get_block(), shmem_size>>>
-//        (in_hat.get_array_d(t_src), out_x_hat.get_array_d(), out_y_hat.get_array_d(),
-//         kmap1_dx_dy1.get_array_d(), 2, My, Nx / 2 + 1);
-}
+     void dy_1(cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dy_1: not implemented yet" << std::endl;
+    };   
 
 
-template <typename T>
-void derivs<T> :: d_laplace(cuda_array<T>& in, cuda_array<T>& out, const uint t_src)
-{
-    static cuda_array<CuCmplx<T> > in_hat(1, My, Nx / 2 + 1);
-    static cuda_array<CuCmplx<T> > out_hat(1, My, Nx / 2 + 1);
-  
-    dft_r2c(in.get_array_d(t_src), in_hat.get_array_d());
- 
-    d_laplace(in_hat, out_hat, t_src);    
+     void dy_2(cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dy_2: not implemented yet" << std::endl;
+    };   
 
-    dft_c2r(out_hat.get_array_d(), out.get_array_d());
-
-    out.normalize();
-}
-
-template <typename T>
-void derivs<T> :: d_laplace(cuda_array<CuCmplx<T> >* in, cuda_array<CuCmplx<T> >* out, const uint t_src)
-{
-    d_compute_laplace<<<in -> get_grid(), in -> get_block()>>>(in -> get_array_d(t_src), 
-                                                               out -> get_array_d(), 
-                                                               kmap_dx2_dy2.get_array_d(), My, Nx / 2 + 1);
-    d_inv_laplace_zero<<<1, 1>>>(out -> get_array_d());
-}
+                      
+     void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
+                         cuda_array_bc_nogp<T, allocator>& dst,
+                         const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::invert_laplace: not implemented yet" << std::endl;
+    };   
 
 
-template <typename T>
-void derivs<T> :: d_laplace(cuda_array<CuCmplx<T> >& in, cuda_array<CuCmplx<T> >& out, const uint t_src)
-{
-    d_compute_laplace<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), 
-                                                         out.get_array_d(), 
-                                                         kmap_dx2_dy2.get_array_d(), My, Nx / 2 + 1);
-    gpuStatus();
-    d_inv_laplace_zero<<<1, 1>>>(out.get_array_d());
-    gpuStatus();
-}
+     void pbracket(const cuda_array_bc_nogp<T, allocator>& f,
+                   const cuda_array_bc_nogp<T, allocator>&g ,
+                   cuda_array_bc_nogp<T, allocator>& dst,
+                   const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::pbracket: not implemented yet" << std::endl;
+    };   
 
-template <typename T>
-void derivs<T> :: inv_laplace(cuda_array<T>& in, cuda_array<T>& out, const uint t_src)
-{
-    cuda_array<CuCmplx<T> > in_hat(1, My, Nx / 2 + 1);
-    cuda_array<CuCmplx<T> > out_hat(1, My, Nx / 2 + 1);
+};
 
-    dft_r2c(in.get_array_d(t_src), in_hat.get_array_d());
-
-    d_inv_laplace<<<in_hat.get_grid(), in_hat.get_block()>>>(in_hat.get_array_d(), 
-                                                             out_hat.get_array_d(), 
-                                                             kmap_dx2_dy2.get_array_d(), My, Nx / 2 + 1);
-    gpuStatus();
-    d_inv_laplace_zero<<<1, 1>>>(out_hat.get_array_d());
-    gpuStatus();
-
-    dft_c2r(out_hat.get_array_d(), out.get_array_d());
-    out.normalize();
-}
-
-
-template <typename T>
-void derivs<T> :: inv_laplace(cuda_array<CuCmplx<T> >* in, cuda_array<CuCmplx<T> >* out, const uint t_src)
-{
-    //cout << "derivs :: inv_laplace(cuda_array<..>* in, cuda_array<..>* out,...)" << endl;
-    //cout << "derivs::inv_laplace... t_src = " << t_src << endl;
-    //cout << "in_arr at " << in -> get_array_d(t_src) << "\tout_arr at " << out -> get_array_d() << endl;
-
-    d_inv_laplace<<<in -> get_grid(), in -> get_block()>>>(in -> get_array_d(t_src), 
-                                                           out -> get_array_d(), 
-                                                           kmap_dx2_dy2.get_array_d(), My, Nx / 2 + 1);
-    gpuStatus();
-    d_inv_laplace_zero<<<1, 1>>>(out -> get_array_d());
-    gpuStatus();
-}
-
-
-template <typename T>
-void derivs<T> :: inv_laplace(cuda_array<CuCmplx<T> >& in, cuda_array<CuCmplx<T> >& out, const uint t_src)
-{
-    //cout << "derivs :: inv_laplace(cuda_array<..>& in, cuda_array<..>& out,...)" << endl;
-    //cout << "derivs::inv_laplace... t_src = " << t_src << endl;
-    //cout << "in_arr at " << in.get_array_d(t_src) << "\tout_arr at " << out.get_array_d() << endl;
-
-    d_inv_laplace<<<in.get_grid(), in.get_block()>>>(in.get_array_d(t_src), 
-                                                     out.get_array_d(), 
-                                                     kmap_dx2_dy2.get_array_d(), My, Nx / 2 + 1);
-    gpuStatus();
-    d_inv_laplace_zero<<<1, 1>>>(out.get_array_d());
-    gpuStatus();
-}
-
-
-
-
-
-#endif // CUDACC
-#endif // DERIVS_H
+#endif //DERIVATIVES_H
+// End of file derivatives.h

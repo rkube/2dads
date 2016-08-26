@@ -23,6 +23,7 @@ using namespace std;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
+
 // Split string params at whitespaces and put values in vector values
 void slab_config :: split_at_whitespace(const string params_str, vector<double>* result)
 {
@@ -110,6 +111,18 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
 };
 
 
+
+slab_config_js :: slab_config_js(std::string fname) :
+	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
+	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
+	tout(0.0), log_theta(false), log_tau(false), do_dealiasing(false), particle_tracking(0), 
+	nprobes(0), chunksize(0)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_json(fname, pt);
+
+}
+
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
 slab_config :: slab_config(string cfg_file) :
@@ -144,20 +157,20 @@ slab_config :: slab_config(string cfg_file) :
     // Add recognized options to cf_opts
 	try{
 	cf_opts.add_options()
-		("runnr", po::value<unsigned int>(&runnr), "run number")
+		("runnr", po::value<size_t>(&runnr), "run number")
 		("xleft", po::value<double>(&xleft), "left x boundary")
 		("xright", po::value<double>(&xright), "right x boundary")
 		("ylow", po::value<double>(&ylow), "lower y boundary")
 		("yup", po::value<double>(&yup), "upper y boundary")
-		("Nx", po::value<unsigned int>(&Nx), "Resolution in x direction")
-		("My", po::value<unsigned int>(&My), "Resolution in y direction")
+		("Nx", po::value<size_t>(&Nx), "Resolution in x direction")
+		("My", po::value<size_t>(&My), "Resolution in y direction")
 		("scheme", po::value<string>(&scheme), "Time integration scheme")
-		("tlevs", po::value<unsigned int>(&tlevs), "Precision of time integration scheme")
+		("tlevs", po::value<size_t>(&tlevs), "Precision of time integration scheme")
 		("deltat", po::value<double>(&deltat), "Time step length")
 		("tend", po::value<double>(&tend), "End of simulation")
 		("tdiag", po::value<double>(&tdiag), "Distance between diagnostic output")
 		("tout", po::value<double>(&tout), "Distance between full output")
-        ("nthreads", po::value<unsigned int>(&nthreads), "Number of threads for diagnostic arrays")
+        ("nthreads", po::value<size_t>(&nthreads), "Number of threads for diagnostic arrays")
 		("model_params", po::value<string> (&model_params_str) , "Model parameters")
 		("theta_rhs", po::value<string> (&theta_rhs_str), "Right hand side function of theta")
 		("tau_rhs", po::value<string> (&tau_rhs_str), "Right hand side function of tau")
@@ -176,7 +189,7 @@ slab_config :: slab_config(string cfg_file) :
         ("strmf_solver", po::value<string> (&strmf_solver_str), "Stream function solver")
         ("do_particle_tracking", po::value<int> (&particle_tracking), "Track particles")
         ("dealias", po::value<bool> (&do_dealiasing), "Set ambiguous frequencies to zero")
-        ("nprobes", po::value<unsigned int> (&nprobes), "Number of radial probes");
+        ("nprobes", po::value<size_t> (&nprobes), "Number of radial probes");
         //("shift_modes", po::value<string> (&shift_modes_str), "Modes whose phase is shifted randomly");
 	}
 	catch(exception& e)

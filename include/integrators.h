@@ -61,9 +61,23 @@ namespace detail
 }
 
 
+
+/*
+ * Interface to time integrator routines
+ *
+ */
+template <typename T, template<typename> class allocator>
+class integrator_base_t
+{
+    public:
+        integrator_base_t(){}
+        virtual void integrate(cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
+};
+
+
 // Karniadakis stiffly-stable time integrator. Sub-class of integrator
 template <typename T, template<typename> class allocator>
-class integrator_karniadakis
+class integrator_karniadakis_t : public integrator_base_t<T, allocator>
 {
     public:
 #ifdef DEVICE
@@ -73,7 +87,8 @@ class integrator_karniadakis
 #ifdef HOST
     using dft_t = fftw_object_t<T>;
 #endif // HOST
-        integrator_karniadakis(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
+
+        integrator_karniadakis_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
             geom{_sl}, bvals{_bv}, stiff_params{_sp},  
             geom_transpose{get_geom().get_ylo(),
                            get_geom().get_deltay(),
@@ -95,7 +110,7 @@ class integrator_karniadakis
             init_diagonal(1);
             init_diagonals_ul();
         }
-        ~integrator_karniadakis();
+        ~integrator_karniadakis_t() {}
         
         void integrate(cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t);
 
@@ -153,7 +168,7 @@ class integrator_karniadakis
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis<T, allocator> :: init_diagonal(const size_t tlev)
+void integrator_karniadakis_t<T, allocator> :: init_diagonal(const size_t tlev)
 {
     // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
@@ -176,7 +191,7 @@ void integrator_karniadakis<T, allocator> :: init_diagonal(const size_t tlev)
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis<T, allocator> :: init_diagonals_ul()
+void integrator_karniadakis_t<T, allocator> :: init_diagonals_ul()
 {
     // diag_[lu] are transposed. Use m = 0..Nx-1, n = 0..My/2 and interchange x and y
     // ->  Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
@@ -215,7 +230,7 @@ void integrator_karniadakis<T, allocator> :: init_diagonals_ul()
 // Routine returns data in real space
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field, 
+void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field, 
                                                        const size_t t_src1, const size_t t_src2, const size_t t_src3, 
                                                        const size_t t_dst, const size_t tlev) 
 {
@@ -360,12 +375,6 @@ void integrator_karniadakis<T, allocator> :: integrate(cuda_array_bc_nogp<T, all
     //utility :: print(field, t_dst, std::cout);
 }
 
-
-template <typename T, template<typename> class allocator>
-integrator_karniadakis<T, allocator> :: ~integrator_karniadakis()
-{
-
-}
 
 #endif //INTEGRATORS_H
 // End of file integrators.h

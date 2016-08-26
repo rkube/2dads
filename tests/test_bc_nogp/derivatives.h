@@ -1057,11 +1057,56 @@ namespace detail
 }
 
 
+
 /*
- * Datatype that provides derivation routines and elliptic solver
+ * Interface to derivation and elliptical solvers
+ *
  */
+
+
+
 template <typename T, template <typename> class allocator>
-class deriv_t
+class deriv_base_t
+{
+    public:
+
+    deriv_base_t() {}
+
+    virtual void dx_1(const cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
+
+    virtual void dx_2(const cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
+
+    virtual void dy_1(cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
+
+    virtual void dy_2(cuda_array_bc_nogp<T, allocator>&,
+                      cuda_array_bc_nogp<T, allocator>&,
+                      const size_t, const size_t) = 0;
+                      
+    virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>&,
+                                cuda_array_bc_nogp<T, allocator>&,
+                                const size_t, const size_t) = 0;
+
+    virtual void arakawa(const cuda_array_bc_nogp<T, allocator>&,
+                         const cuda_array_bc_nogp<T, allocator>&,
+                         cuda_array_bc_nogp<T, allocator>&,
+                         const size_t, const size_t) = 0;
+};
+
+
+
+/*
+ * Implmentation of finite difference, spectral derivation and elliptical solvers for
+ * 1d semi-periodic boundary geometries
+ */
+
+template <typename T, template <typename> class allocator>
+class deriv_fd_t : public deriv_base_t<T, allocator>
 {
     public:
         using cmplx_t = CuCmplx<T>;
@@ -1075,11 +1120,10 @@ class deriv_t
         using dft_library_t = cufft_object_t<T>;
         #endif //DEVICE
 
-        deriv_t(const twodads::slab_layout_t);    
-        ~deriv_t()
+        deriv_fd_t(const twodads::slab_layout_t);    
+        ~deriv_fd_t()
         {
             delete myfft;
-            //delete [] h_diag;   
         };
 
         void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
@@ -1100,11 +1144,6 @@ class deriv_t
                   cuda_array_bc_nogp<T, allocator>& dst,
                   const size_t t_src, const size_t t_dst)
         {
-            //std::cout << "deriv_t: ddy1" << std::endl;
-            //std::cout << "input (real):" << std::endl;
-            //utility :: print(src, t_src, std::cout);
-            //std::cout << std::endl;
-
             // DFT r2c
             if(!(src.is_transformed(t_src)))
             {
@@ -1112,14 +1151,8 @@ class deriv_t
                 src.set_transformed(t_src, true);
             }
 
-            //std::cout << "input (freq):" << std::endl;
-            //utility :: print(src, t_src, std::cout);
-            //std::cout << std::endl;
             // Multiply with ky coefficients
             detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
-            //std::cout << "output (freq): " << std::endl;
-            //utility :: print(dst, t_dst, std::cout);
-            //std::cout << std::endl;
 
             // DFT c2r and normalize
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
@@ -1129,10 +1162,6 @@ class deriv_t
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(t_src, false);
             utility :: normalize(src, t_src);
-
-            //std::cout << "output (real): " << std::endl;
-            //utility :: print(dst, t_dst, std::cout);
-            //std::cout << std::endl;
         }
 
         void dy_2(cuda_array_bc_nogp<T, allocator>& src,
@@ -1282,12 +1311,11 @@ class deriv_t
         cmplx_arr   diag;
         cmplx_arr   diag_l;
         cmplx_arr   diag_u;
-        //cmplx_t* h_diag;     // Main diagonal, host copy. This one is updated with the boundary conditions passed to invert_laplace routine.
 };
 
 
 template <typename T, template <typename> class allocator>
-deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
+deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t _geom) :
     geom{_geom},
     geom_my21{get_geom().get_xleft(), 
               get_geom().get_deltax(), 
@@ -1322,7 +1350,6 @@ deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_u(get_geom_transpose(), 
            twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1)
-    //h_diag{new cmplx_t[get_geom().get_nx()]} 
 {
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.
@@ -1338,7 +1365,7 @@ deriv_t<T, allocator> :: deriv_t(const twodads::slab_layout_t _geom) :
 // Thus, the diagonals have a layout in memory where contiguous values correspond to a single fourier mode
 
 template <typename T, template <typename> class allocator>
-void deriv_t<T, allocator> :: init_diagonals() 
+void deriv_fd_t<T, allocator> :: init_diagonals() 
 {
     diag.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
@@ -1390,6 +1417,63 @@ void deriv_t<T, allocator> :: init_diagonals()
         return(-1.0);  
     }, 0);
 }
+
+
+template <typename T, template <typename> class allocator>
+class deriv_bs_t : public deriv_base_t<T, allocator>
+{
+    public:
+        deriv_bs_t() {}
+
+
+     void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dx_1: not implemented yet" << std::endl;
+    };   
+
+     void dx_2(const cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dx_2: not implemented yet" << std::endl;
+    };   
+
+
+     void dy_1(cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dy_1: not implemented yet" << std::endl;
+    };   
+
+
+     void dy_2(cuda_array_bc_nogp<T, allocator>& src,
+               cuda_array_bc_nogp<T, allocator>& dst,
+               const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::dy_2: not implemented yet" << std::endl;
+    };   
+
+                      
+     void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
+                         cuda_array_bc_nogp<T, allocator>& dst,
+                         const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::invert_laplace: not implemented yet" << std::endl;
+    };   
+
+
+     void pbracket(const cuda_array_bc_nogp<T, allocator>& f,
+                   const cuda_array_bc_nogp<T, allocator>&g ,
+                   cuda_array_bc_nogp<T, allocator>& dst,
+                   const size_t t_src, const size_t t_dst)
+    {
+        std::cerr << "derivs_bs_t::pbracket: not implemented yet" << std::endl;
+    };   
+
+};
 
 #endif //DERIVATIVES_H
 // End of file derivatives.h

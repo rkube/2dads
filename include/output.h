@@ -14,8 +14,8 @@
 #include <map>
 #include <H5Cpp.h>
 #include "2dads_types.h"
-#include "cuda_types.h"
-#include "slab_cuda.h"
+//#include "cuda_types.h"
+//#include "slab_cuda.h"
 #include "slab_config.h"
 
 #ifndef H5_NO_NAMESPACE
@@ -35,7 +35,8 @@ public:
     // Interface to write output in given output resource
     // write_output is purely virtual and will only be defined in the derived class
     //virtual void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t) = 0;
-    virtual void write_output(slab_cuda&, twodads::real_t) = 0;
+    
+    //virtual void write_output(slab_cuda&, twodads::real_t) = 0;
 
     //void update_array(slab_cuda&);
     // Output counter and array dimensions
@@ -61,10 +62,10 @@ public:
     /// @brief Call this routine to write output
     /// @detailed Note that get_field_by_name, when called with a twodads::output_t
     /// @detailed also calls cuda_array<%>.copy_device_to_host
-    void write_output(slab_cuda&, twodads::real_t);
+    //void write_output(slab_cuda&, twodads::real_t);
     /// @brief Write output field
     /// @detailed This assumes that the host data src points to is up-to-date. 
-    void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t);
+    //void surface(twodads::output_t, cuda_array<cuda::real_t>*, const cuda::real_t);
 
 private:
     string filename;

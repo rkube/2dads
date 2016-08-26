@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include "slab_bc.h"
+//#include "output.h"
 
 using namespace std;
 
@@ -24,7 +25,7 @@ int main(void)
     const twodads::real_t diff{0.1};
     const twodads::real_t hv{0.0};
 
-    const twodads::real_t num_tsteps{50};
+    const twodads::real_t num_tsteps{10};
 
     cout << "Enter Nx:";
     cin >> Nx;
@@ -39,40 +40,52 @@ int main(void)
     twodads::stiff_params_t params(deltat, Lx, Ly, diff, hv, my_geom.get_nx(), (my_geom.get_my() + my_geom.get_pad_y()) / 2, tlevs);
     {
         slab_bc my_slab(my_geom, my_bvals, params);
-        my_slab.initialize_gaussian(twodads::field_t::theta, tlevs - 1);
+        my_slab.initialize_gaussian(twodads::field_t::f_theta, tlevs - 1);
 
-        my_slab.update_derivatives();
-
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, tlevs - 1, 0);
+        my_slab.update_real_fields(tlevs - 1);
+        my_slab.rhs(tlevs - 1);
 
         size_t tstep{0};
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());        
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());        
         }
 
         // Integrate first time step
         std::cout << "Integrating: t = " << tstep << std::endl;
         tstep = 1;
-        my_slab.integrate(twodads::field_t::theta, 1);
+        my_slab.integrate(twodads::field_t::f_theta, 1);
+        my_slab.integrate(twodads::field_t::f_omega, 1);
+
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, tlevs - 2, 0);
+        my_slab.update_real_fields(tlevs - 2);
+        my_slab.rhs(tlevs - 2);
+
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());  
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());  
         }
 
 
         // Integrate second time step
         std::cout << "Integrating: t = " << tstep << std::endl;
         tstep = 2;
-        my_slab.integrate(twodads::field_t::theta, 2);
+        my_slab.integrate(twodads::field_t::f_theta, 2);
+
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, tlevs - 3, 0);
+        my_slab.update_real_fields(tlevs - 3);
+        my_slab.rhs(tlevs - 3);
+
         for(size_t tl = 0; tl < tlevs; tl++)
         {
             fname.str(string(""));
             fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());      
+            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());      
         }
         
         //tstep++;
@@ -81,12 +94,17 @@ int main(void)
         {
             // Integrate with third order scheme now
             std::cout << "Integrating: t = " << tstep << std::endl;
-            my_slab.integrate(twodads::field_t::theta, 3);
+            my_slab.integrate(twodads::field_t::f_theta, 3);
+            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, tlevs - 1, 0);
+            my_slab.update_real_fields(tlevs - 1);
+            my_slab.rhs(tlevs - 1);
+
+
             for(size_t tl = 0; tl < tlevs; tl++)
             {
                 fname.str(string(""));
                 fname << "test_stiff_solnum_" << Nx << "_a" << tl << "_t" << tstep << "_host.dat";
-                utility :: print((*my_slab.get_array_ptr(twodads::field_t::theta)), tl, fname.str());        
+                utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());        
             }
             my_slab.advance();
         }

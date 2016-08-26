@@ -128,7 +128,7 @@ output_h5 :: ~output_h5()
     delete group_omega_rhs;
 }
 
-
+/*
 void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 {
     cuda_array<cuda::real_t>* arr;
@@ -172,5 +172,6 @@ void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>
 	delete dataset;
     delete output_file;
 }	
+*/
 
 // End of file output.cpp

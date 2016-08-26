@@ -10,17 +10,114 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+
 #include <iostream>
 #include <map>
+#include <stdexcept>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/foreach.hpp>
+
 #include "2dads_types.h"
 
-using namespace std;
+
+class slab_config_js
+{
+    public:
+        slab_config_js(std::string); 
+
+        size_t get_runnr() const {return(runnr);};
+        twodads::real_t get_xleft() const {return(xleft);};
+        twodads::real_t get_xright() const {return(xright);};
+        twodads::real_t get_ylow() const {return(ylow);};
+        twodads::real_t get_yup() const {return(yup);};
+
+        size_t get_my() const {return(My);};
+        size_t get_nx() const {return(Nx);};
+        size_t get_tlevs() const {return(tlevs);};
+
+        std::string get_scheme() const {return(scheme);};
+        twodads::real_t get_deltat() const {return(deltat);};
+        twodads::real_t get_tend() const {return(tend);};
+        twodads::real_t get_tdiag() const {return(tdiag);};
+        twodads::real_t get_tout() const {return(tout);};
+
+        bool get_log_theta() const {return(log_theta);};
+        bool get_log_tau() const {return(log_tau);};
+
+        twodads::rhs_t get_theta_rhs() const {return(theta_rhs);};
+        twodads::rhs_t get_omega_rhs() const {return(omega_rhs);};
+        twodads::rhs_t get_tau_rhs() const {return(tau_rhs);};
+
+        twodads::init_fun_t get_init_function_theta() const {return(init_function_theta);};
+        twodads::init_fun_t get_init_function_omega() const {return(init_function_omega);};
+        twodads::init_fun_t get_init_function_tau() const {return(init_function_tau);};
+
+        std::vector<twodads::diagnostic_t> get_diagonstics() const {return(diagnostics);};
+        std::vector<twodads::output_t> get_output() const {return(output);};
+
+        std::vector<twodads::real_t> get_initc_theta() const {return(initc_theta);};
+        std::vector<twodads::real_t> get_initc_omega() const {return(initc_omega);};
+        std::vector<twodads::real_t> get_initc_tau() const {return(initc_tau);};
+
+        std::vector<twodads::real_t> get_model_params() const {return(model_params);};
+
+    private:
+	    size_t runnr;
+	    twodads::real_t xleft;
+	    twodads::real_t xright;
+	    twodads::real_t ylow;
+	    twodads::real_t yup;
+	    size_t My;
+	    size_t Nx;
+	    size_t tlevs;
+	    std::string scheme;
+	    twodads::real_t deltat;
+	    twodads::real_t tend;
+	    twodads::real_t tdiag;
+	    twodads::real_t tout;
+	    bool log_theta;
+        bool log_tau;
+	    bool do_dealiasing;
+        bool do_randomize_modes;
+        bool particle_tracking;
+        size_t nprobes;
+        size_t nthreads;
+
+        twodads::rhs_t theta_rhs;
+        twodads::rhs_t omega_rhs;
+        twodads::rhs_t tau_rhs;
+        twodads::init_fun_t init_function_theta;
+        twodads::init_fun_t init_function_tau;
+        twodads::init_fun_t init_function_omega;
+        std::string init_function_theta_str;
+        std::string init_function_tau_str;
+        std::string init_function_omega_str;
+
+        std::vector<twodads::diagnostic_t> diagnostics;
+        std::vector<twodads::output_t> output;
+
+	    std::vector<twodads::real_t> initc_theta;
+	    std::vector<twodads::real_t> initc_tau;
+	    std::vector<twodads::real_t> initc_omega;
+
+	    std::vector<twodads::real_t> model_params;
+	    std::string initial_conditions_str;
+        std::string shift_modes_str;
+	    size_t chunksize;
+        twodads::real_t diff;
+    
+        // Mappings from values in input.ini to enums in twodads.h
+        static const std::map<std::string, twodads::output_t> output_map;
+        static const std::map<std::string, twodads::diagnostic_t> diagnostic_map;
+        static const std::map<std::string, twodads::init_fun_t> init_func_map;
+        static const std::map<std::string, twodads::rhs_t> rhs_func_map;
+};
+
 
 /*! \brief store simulation domain information
  *  \ingroup configuration
  */
-
-
 
 class slab_config {
 
@@ -29,72 +126,72 @@ public:
      * \brief Standard constructor reads input.ini from pwd,
      * call slab_config('.') as delegating constructor
      */
-    slab_config() : slab_config(string("input.ini")) {};
+    slab_config() : slab_config(std::string("input.ini")) {};
 
     /*
      * \brief Constructor, reads input.ini in directory, specified by argument
      */
-    slab_config(string);
+    slab_config(std::string);
 
 	~slab_config() {};
 
     // Inspectors for private members
-	inline unsigned int get_runnr() const { return runnr; };
+	inline size_t get_runnr() const { return runnr; };
 	/*! 
      * \brief Left domain boundary.
-     * \return Left domain boundary (double)
+     * \return Left domain boundary (twodads::real_t)
      */
-	inline double get_xleft() const { return xleft; };
+	inline twodads::real_t get_xleft() const { return xleft; };
 	/*! 
      * \brief Right domain boundary.
-     * \return Right domain boundary (double)
+     * \return Right domain boundary (twodads::real_t)
      */
-	inline double get_xright() const { return xright; };
+	inline twodads::real_t get_xright() const { return xright; };
 	/*! 
      * \brief Upper domain boundary.
-     * \returns Upper domain boundary (double)
+     * \returns Upper domain boundary (twodads::real_t)
      */
-	inline double get_yup() const { return yup; };
+	inline twodads::real_t get_yup() const { return yup; };
 	/*! 
      * \brief Lower domain boundary.
-     * \returns Lower domain bonudary (double)
+     * \returns Lower domain bonudary (twodads::real_t)
      */
-	inline double get_ylow() const { return ylow; };
+	inline twodads::real_t get_ylow() const { return ylow; };
 	/*! 
      * \brief Number of grid points in x direction.
      * \returns Number of grid points in x direction
      */
-	inline unsigned int get_nx() const { return Nx; };
+	inline size_t get_nx() const { return Nx; };
 	/*!
      * \brief Number of grid points in y direction.
      * \returns Number of grid points in y direction
      */
-	inline unsigned int get_my() const { return My; };
+	inline size_t get_my() const { return My; };
 	/*! 
      * \brief Order of time integration scheme.
      * \returns (currently only 4th order Karniadakis scheme is supported
      */
-	inline unsigned int get_tlevs() const { return tlevs; };
+	inline size_t get_tlevs() const { return tlevs; };
 	/*!
      * \brief Length of one timestep.
      * \returns \f$ \mathrm{d}t \f$
      */
-	inline double get_deltat() const { return deltat; };
+	inline twodads::real_t get_deltat() const { return deltat; };
 	/*! 
      * \brief Simulation time end
      * \returns \f$ T_{\mathrm{end}} \f$
      */
-	inline double get_tend() const { return tend; };
+	inline twodads::real_t get_tend() const { return tend; };
 	/*! 
      * \brief Time between diagnostic output.
      * \returns \f$ \triangle_{\mathrm{tdiag}} \f$
      */
-	inline double get_tdiag() const { return tdiag; };
+	inline twodads::real_t get_tdiag() const { return tdiag; };
 	/*! 
      * \brief Time between full output.
      * \returns \f$ \triangle_{\mathrm{tout}} \f$
      */
-	inline double get_tout() const { return tout; };
+	inline twodads::real_t get_tout() const { return tout; };
 	
 	/// Use logarithmic formulation of density variable.
 	inline bool get_log_theta() const { return log_theta; };
@@ -105,61 +202,61 @@ public:
 	/// Use particle tracking?.
     inline int do_particle_tracking() const { return particle_tracking; };
     /// Number of radial probes
-    inline unsigned int get_nprobe() const { return nprobes; };
+    inline size_t get_nprobe() const { return nprobes; };
 
     /// Number of threads for diagnostic_arrays
-    inline unsigned int get_nthreads() const {return nthreads; };
+    inline size_t get_nthreads() const {return nthreads; };
 
 	// Number of particles tracked.
     //int get_particle_tracking() const;	
 	/// List of diagnostic functions to run.
-	inline vector<twodads::diagnostic_t> get_diagnostics() const { return diagnostics; };
+	inline std::vector<twodads::diagnostic_t> get_diagnostics() const { return diagnostics; };
 	/// List of variables to include in full output.
     /// theta, theta_x, theta_y, omega[_xy], strmf[_xy]
-	inline vector<twodads::output_t> get_output() const { return output; };
+	inline std::vector<twodads::output_t> get_output() const { return output; };
 
 	/// Vector of all model parameters.
-	inline vector<double> get_model_params() const { return model_params; };
+	inline std::vector<twodads::real_t> get_model_params() const { return model_params; };
 	/// Value of a specific model parameter.
-	inline double get_model_params(int i) const { return model_params[i]; };
+	inline twodads::real_t get_model_params(int i) const { return model_params[i]; };
 
 	/// Vector of initial conditions for theta
-	inline vector<double> get_initc_theta() const { return initc_theta; };
+	inline std::vector<twodads::real_t> get_initc_theta() const { return initc_theta; };
 
 	/// Vector of initial conditions for tau
-	inline vector<double> get_initc_tau() const { return initc_tau; };
+	inline std::vector<twodads::real_t> get_initc_tau() const { return initc_tau; };
 
 	/// Vector of initial conditions for omega
-	inline vector<double> get_initc_omega() const { return initc_omega; };
+	inline std::vector<twodads::real_t> get_initc_omega() const { return initc_omega; };
 
 	/*!
      * \brief Value of a specific initial condition.
      * \returns Value of initial parameter i 
      */
-	inline double get_initc_theta(int i) const { return initc_theta[i]; };
+	inline twodads::real_t get_initc_theta(int i) const { return initc_theta[i]; };
 	
 	/*!
      * \brief Value of a specific initial condition.
      * \returns Value of initial parameter i 
      */
-	inline double get_initc_tau(int i) const { return initc_tau[i]; };
+	inline twodads::real_t get_initc_tau(int i) const { return initc_tau[i]; };
 	
 	/*!
      * \brief Value of a specific initial condition.
      * \returns Value of initial parameter i 
      */
-	inline double get_initc_omega(int i) const { return initc_omega[i]; };
+	inline twodads::real_t get_initc_omega(int i) const { return initc_omega[i]; };
 	
 	/// Return the initialization routine.
-	inline string get_init_function_theta_str() const {return init_function_theta_str;};
+	inline std::string get_init_function_theta_str() const {return init_function_theta_str;};
 	inline twodads::init_fun_t get_init_function_theta() const { return init_function_theta; };
 
 	/// Return the initialization routine.
-	inline string get_init_function_tau_str() const {return init_function_tau_str;};
+	inline std::string get_init_function_tau_str() const {return init_function_tau_str;};
 	inline twodads::init_fun_t get_init_function_tau() const { return init_function_tau; };
 
 	/// Return the initialization routine.
-	inline string get_init_function_omega_str() const {return init_function_omega_str;};
+	inline std::string get_init_function_omega_str() const {return init_function_omega_str;};
 	inline twodads::init_fun_t get_init_function_omega() const { return init_function_omega; };
 
     /*!
@@ -192,19 +289,19 @@ public:
 	/*! 
      * \brief Domain length in x direction.
      */
-	inline double get_lengthx() const { return (xright - xleft); };
+	inline twodads::real_t get_lengthx() const { return (xright - xleft); };
 	/*!
      * \brief Domain length in y direction.
      */
-	inline double get_lengthy() const { return (yup - ylow); };
+	inline twodads::real_t get_lengthy() const { return (yup - ylow); };
 	/*!
      * \brief Grid spacing in x direction.
      */
-	inline double get_deltax() const { return( (xright - xleft) / double(Nx) ); };
+	inline twodads::real_t get_deltax() const { return( (xright - xleft) / twodads::real_t(Nx) ); };
 	/*!
      * \brief Grid spacing in y direction.
      */
-	inline double get_deltay() const { return( (yup - ylow) / double(My) ); };
+	inline twodads::real_t get_deltay() const { return( (yup - ylow) / twodads::real_t(My) ); };
 
     /*!
      * \brief Prints all parameters
@@ -215,26 +312,26 @@ public:
     void test_modes() const;
 private:
 	// Configuration variables
-	unsigned int runnr;
-	double xleft;
-	double xright;
-	double ylow;
-	double yup;
-	unsigned int My;
-	unsigned int Nx;
-	unsigned int tlevs;
-	string scheme;
-	double deltat;
-	double tend;
-	double tdiag;
-	double tout;
+	size_t runnr;
+	twodads::real_t xleft;
+	twodads::real_t xright;
+	twodads::real_t ylow;
+	twodads::real_t yup;
+	size_t My;
+	size_t Nx;
+	size_t tlevs;
+	std::string scheme;
+	twodads::real_t deltat;
+	twodads::real_t tend;
+	twodads::real_t tdiag;
+	twodads::real_t tout;
 	bool log_theta;
     bool log_tau;
 	bool do_dealiasing;
     bool do_randomize_modes;
     int particle_tracking;
-    unsigned int nprobes;
-    unsigned int nthreads;
+    size_t nprobes;
+    size_t nthreads;
 
     twodads::rhs_t theta_rhs;
     twodads::rhs_t omega_rhs;
@@ -242,30 +339,30 @@ private:
     twodads::init_fun_t init_function_theta;
     twodads::init_fun_t init_function_tau;
     twodads::init_fun_t init_function_omega;
-    string init_function_theta_str;
-    string init_function_tau_str;
-    string init_function_omega_str;
+    std::string init_function_theta_str;
+    std::string init_function_tau_str;
+    std::string init_function_omega_str;
 
-    vector<twodads::diagnostic_t> diagnostics;
-    vector<twodads::output_t> output;
+    std::vector<twodads::diagnostic_t> diagnostics;
+    std::vector<twodads::output_t> output;
 
-	vector<double> initc_theta;
-	vector<double> initc_tau;
-	vector<double> initc_omega;
+	std::vector<twodads::real_t> initc_theta;
+	std::vector<twodads::real_t> initc_tau;
+	std::vector<twodads::real_t> initc_omega;
 
-	vector<double> model_params;
-	string initial_conditions_str;
-    string shift_modes_str;
+	std::vector<twodads::real_t> model_params;
+	std::string initial_conditions_str;
+    std::string shift_modes_str;
 	int chunksize;
-    double diff;
+    twodads::real_t diff;
 	
     // helper functions
-	void split_at_whitespace(const string, vector<double>*);
+	void split_at_whitespace(const std::string, std::vector<twodads::real_t>*);
     // Mappings from values in input.ini to enums in twodads.h
-    static const map<std::string, twodads::output_t> output_map;
-    static const map<std::string, twodads::diagnostic_t> diagnostic_map;
-    static const map<std::string, twodads::init_fun_t> init_func_map;
-    static const map<std::string, twodads::rhs_t> rhs_func_map;
+    static const std::map<std::string, twodads::output_t> output_map;
+    static const std::map<std::string, twodads::diagnostic_t> diagnostic_map;
+    static const std::map<std::string, twodads::init_fun_t> init_func_map;
+    static const std::map<std::string, twodads::rhs_t> rhs_func_map;
 };
 
 /*
@@ -274,19 +371,19 @@ private:
  */
 
 template<typename R>
-R map_safe_select(string varname, map<std::string, R> mymap)
+R map_safe_select(std::string varname, std::map<std::string, R> mymap)
 {
     R ret_val;
     try{
         ret_val = mymap.at(varname);
     } catch (const std::out_of_range& oor)
     {
-        stringstream err_msg;
-        err_msg << "Invalid selection" << varname << endl;
-        err_msg << "Valid strings are: " << endl;
+        std::stringstream err_msg;
+        err_msg << "Invalid selection" << varname << std::endl;
+        err_msg << "Valid strings are: " << std::endl;
         for(auto const &it : mymap)
-            err_msg << it.first << endl;
-        throw out_of_range(err_msg.str());
+            err_msg << it.first << std::endl;
+        throw std::out_of_range(err_msg.str());
     }
     return (ret_val);
 }
