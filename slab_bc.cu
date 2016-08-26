@@ -8,8 +8,14 @@ using namespace std;
 
 map<twodads::rhs_t, slab_bc::rhs_func_ptr> slab_bc :: rhs_func_map = slab_bc::create_rhs_func_map();
 
-slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) : 
-    boundaries(_bc), geom(_sl), tint_params(_sp),
+//slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) :
+slab_bc :: slab_bc(const slab_config_js _conf)
+    geom(_conf.get_geom()),
+    tint_params(_conf.get_tint_params()),
+    boundaries_theta(_conf.get_bvals_theta()),
+    boundaries_omega(_conf.get_bvals_omega()),
+    boundaries_tau(_conf.get_bvals_tau()),
+    boundaries_strmf(_conf.get_bvas_strmf())
     myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs{new deriv_t(get_geom())},
     tint{new integrator_t(get_geom(), get_bvals(),  _sp)},

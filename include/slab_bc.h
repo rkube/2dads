@@ -58,6 +58,7 @@ class slab_bc
         typedef void(slab_bc ::*rhs_func_ptr) (const size_t); 
 
         slab_bc(const twodads::slab_layout_t, const twodads::bvals_t<value_t>, const twodads::stiff_params_t);
+        slab_bc(const slab_config_js cfg);
         ~slab_bc();
 
         void dft_r2c(const twodads::field_t, const size_t);
@@ -85,11 +86,18 @@ class slab_bc
 
         cuda_arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
         inline twodads::slab_layout_t get_geom() const {return(geom);};
-        inline twodads::bvals_t<value_t> get_bvals() const {return(boundaries);};
+        inline twodads::bvals_t<value_t> get_bvals_theta() const {return(boundaries_theta);};
+        inline twodads::bvals_t<value_t> get_bvals_omega() const {return(boundaries_omega);};
+        inline twodads::bvals_t<value_t> get_bvals_tau() const {return(boundaries_tau);};
+        inline twodads::bvals_t<value_t> get_bvals_strm() const {return(boundaries_strmf);};
         inline twodads::stiff_params_t get_tint_params() const {return(tint_params);};
     private:
 
-        const twodads::bvals_t<value_t> boundaries;
+        const twodads::bvals_t<value_t> boundaries_theta;
+        const twodads::bvals_t<value_t> boundaries_omega;
+        const twodads::bvals_t<value_t> boundaries_tau;
+        const twodads::bvals_t<value_t> boundaries_strmf;
+
         const twodads::slab_layout_t geom;
         const twodads::stiff_params_t tint_params;
 

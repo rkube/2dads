@@ -103,9 +103,9 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
             Nx_int{static_cast<int>(get_geom().get_nx())},
             diag_order{0},
             // Pass a complex bvals_t to these guys. They don't really need it though.
-            diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
-            diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
-            diag_u(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1)
+            diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
+            diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
+            diag_u(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1)
         {
             init_diagonal(1);
             init_diagonals_ul();

@@ -13,7 +13,8 @@ DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))'
 #SOURCES_CPP=shader.cpp slab_config.cpp output.cpp slab_config.cpp
 #SOURCES_CU=initialize.cu slab_cuda.cu
 
-#OBJECTS=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics_cu.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
+OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_host.o
+OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_device.o
 
 #shader.o: shader.cpp
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
@@ -50,10 +51,10 @@ slab_bc_devive.o: slab_bc.cpp
 #	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 2dads_bc_host: slab_config.o output.o slab_bc_host.o
-	$(CC) $(CFLAGS) -DHOST -o run_bc/2dads_bc $(OBJECTS) main_bc.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -DHOST -o run_bc/2dads_bc $(OBJECTS_HOST) main_bc.cpp $(INCLUDES) $(LFLAGS)
 
 2dads_bc_device: slab_config.o output.o slab_bc_device.o
-	$(CUDACC) $(CFLAGS) -DDEVICE -o run_bc/2dads_bc_device $(OBJECTS) main_bc.cu
+	$(CUDACC) $(CFLAGS) -DDEVICE -o run_bc/2dads_bc_device $(OBJECTS_DEVICE) main_bc.cu
 
 #tests: cuda_array2 slab_cuda initialize output diagnostics
 #	$(MAKE) -C $(TEST_DIR)

@@ -26,35 +26,89 @@ class slab_config_js
     public:
         slab_config_js(std::string); 
 
-        size_t get_runnr() const {return(runnr);};
-        twodads::real_t get_xleft() const {return(xleft);};
-        twodads::real_t get_xright() const {return(xright);};
-        twodads::real_t get_ylow() const {return(ylow);};
-        twodads::real_t get_yup() const {return(yup);};
+        boost::property_tree::ptree& get_pt()  {return(pt);};
 
-        size_t get_my() const {return(My);};
-        size_t get_nx() const {return(Nx);};
-        size_t get_tlevs() const {return(tlevs);};
+        size_t get_runnr() const {return(pt.get<size_t>("2dads.runnr"));};
+        twodads::real_t get_xleft() const {return(pt.get<twodads::real_t>("2dads.geometry.xleft"));};
+        twodads::real_t get_xright() const {return(pt.get<twodads::real_t>("2dads.geometry.xright"));};
+        twodads::real_t get_ylow() const {return(pt.get<twodads::real_t>("2dads.geometry.ylow"));};
+        twodads::real_t get_yup() const {return(pt.get<twodads::real_t>("2dads.geometry.yup"));};
 
-        std::string get_scheme() const {return(scheme);};
-        twodads::real_t get_deltat() const {return(deltat);};
-        twodads::real_t get_tend() const {return(tend);};
-        twodads::real_t get_tdiag() const {return(tdiag);};
-        twodads::real_t get_tout() const {return(tout);};
+        size_t get_my() const {return(pt.get<size_t>("2dads.geometry.Nx"));};
+        size_t get_nx() const {return(pt.get<size_t>("2dads.geometry.My"));};
+        size_t get_tlevs() const {return(pt.get<size_t>("2dads.integrator.level"));};
+
+        twodads::bvals_t<twodads::real_t> get_bvals_theta() 
+        {
+            twodads::bvals_t<twodads::real_t> bvals(
+                bc_map.at(pt.get<std::string>("2dads.geometry.theta_bc_left")),
+                bc_map.at(pt.get<std::string>("2dads.geometry.theta_bc_right")),
+                pt.get<twodads::real_t>("2dads.geometry.theta_bval_left"),
+                pt.get<twodads::real_t>("2dads.geometry.theta_bval_right")
+            );
+
+            return(bvals);
+        };
+
+
+        twodads::bvals_t<twodads::real_t> get_bvals_omega() 
+        {
+            twodads::bvals_t<twodads::real_t> bvals(
+                bc_map.at(pt.get<std::string>("2dads.geometry.omega_bc_left")),
+                bc_map.at(pt.get<std::string>("2dads.geometry.omega_bc_right")),
+                pt.get<twodads::real_t>("2dads.geometry.omega_bval_left"),
+                pt.get<twodads::real_t>("2dads.geometry.omega_bval_right")
+            );
+
+            return(bvals);
+        };
+
+
+        twodads::bvals_t<twodads::real_t> get_bvals_tau() 
+        {
+            twodads::bvals_t<twodads::real_t> bvals(
+                bc_map.at(pt.get<std::string>("2dads.geometry.tau_bc_left")),
+                bc_map.at(pt.get<std::string>("2dads.geometry.tau_bc_right")),
+                pt.get<twodads::real_t>("2dads.geometry.tau_bval_left"),
+                pt.get<twodads::real_t>("2dads.geometry.tau_bval_right")
+            );
+
+            return(bvals);
+        };
+
+
+        twodads::bvals_t<twodads::real_t> get_bvals_strmf() 
+        {
+            twodads::bvals_t<twodads::real_t> bvals(
+                bc_map.at(pt.get<std::string>("2dads.geometry.strmf_bc_left")),
+                bc_map.at(pt.get<std::string>("2dads.geometry.strmf_bc_right")),
+                pt.get<twodads::real_t>("2dads.geometry.strmf_bval_left"),
+                pt.get<twodads::real_t>("2dads.geometry.strmf_bval_right")
+            );
+
+            return(bvals);
+        };
+
+
+        std::string get_scheme() const {return(pt.get<std::string>("2dads.integrator.scheme"));};
+        twodads::real_t get_deltat() const {return(pt.get<twodads::real_t>("2dads.integrator.deltat"));};
+        twodads::real_t get_tend() const {return(pt.get<twodads::real_t>("2dads.integrator.deltat"));};
+        twodads::real_t get_tdiag() const {return(pt.get<twodads::real_t>("2dads.diagnostics.xleft"));};
+        twodads::real_t get_tout() const {return(pt.get<twodads::real_t>("2dads.output.tout"));};
 
         bool get_log_theta() const {return(log_theta);};
         bool get_log_tau() const {return(log_tau);};
 
-        twodads::rhs_t get_theta_rhs() const {return(theta_rhs);};
-        twodads::rhs_t get_omega_rhs() const {return(omega_rhs);};
-        twodads::rhs_t get_tau_rhs() const {return(tau_rhs);};
+        twodads::rhs_t get_theta_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_theta")));};
+        twodads::rhs_t get_omega_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_omega")));};
+        twodads::rhs_t get_tau_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_tau")));};
 
-        twodads::init_fun_t get_init_function_theta() const {return(init_function_theta);};
-        twodads::init_fun_t get_init_function_omega() const {return(init_function_omega);};
-        twodads::init_fun_t get_init_function_tau() const {return(init_function_tau);};
+        twodads::init_fun_t get_init_function_theta() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
+        twodads::init_fun_t get_init_function_omega() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
+        twodads::init_fun_t get_init_function_tau() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
 
-        std::vector<twodads::diagnostic_t> get_diagonstics() const {return(diagnostics);};
-        std::vector<twodads::output_t> get_output() const {return(output);};
+        std::vector<twodads::diagnostic_t> get_diagonstics() const;
+        std::vector<twodads::output_t> get_output() const;
 
         std::vector<twodads::real_t> get_initc_theta() const {return(initc_theta);};
         std::vector<twodads::real_t> get_initc_omega() const {return(initc_omega);};
@@ -63,36 +117,23 @@ class slab_config_js
         std::vector<twodads::real_t> get_model_params() const {return(model_params);};
 
     private:
-	    size_t runnr;
-	    twodads::real_t xleft;
-	    twodads::real_t xright;
-	    twodads::real_t ylow;
-	    twodads::real_t yup;
-	    size_t My;
-	    size_t Nx;
-	    size_t tlevs;
-	    std::string scheme;
-	    twodads::real_t deltat;
-	    twodads::real_t tend;
-	    twodads::real_t tdiag;
-	    twodads::real_t tout;
+        boost::property_tree::ptree pt;
 	    bool log_theta;
         bool log_tau;
 	    bool do_dealiasing;
         bool do_randomize_modes;
         bool particle_tracking;
         size_t nprobes;
-        size_t nthreads;
 
-        twodads::rhs_t theta_rhs;
-        twodads::rhs_t omega_rhs;
-        twodads::rhs_t tau_rhs;
-        twodads::init_fun_t init_function_theta;
-        twodads::init_fun_t init_function_tau;
-        twodads::init_fun_t init_function_omega;
-        std::string init_function_theta_str;
-        std::string init_function_tau_str;
-        std::string init_function_omega_str;
+        //twodads::rhs_t theta_rhs;
+        //twodads::rhs_t omega_rhs;
+        //twodads::rhs_t tau_rhs;
+        //twodads::init_fun_t init_function_theta;
+        //twodads::init_fun_t init_function_tau;
+        //twodads::init_fun_t init_function_omega;
+        //std::string init_function_theta_str;
+        //std::string init_function_tau_str;
+        //std::string init_function_omega_str;
 
         std::vector<twodads::diagnostic_t> diagnostics;
         std::vector<twodads::output_t> output;
@@ -102,16 +143,17 @@ class slab_config_js
 	    std::vector<twodads::real_t> initc_omega;
 
 	    std::vector<twodads::real_t> model_params;
-	    std::string initial_conditions_str;
-        std::string shift_modes_str;
-	    size_t chunksize;
-        twodads::real_t diff;
+	    //std::string initial_conditions_str;
+        //std::string shift_modes_str;
+	    //size_t chunksize;
+        //twodads::real_t diff;
     
         // Mappings from values in input.ini to enums in twodads.h
         static const std::map<std::string, twodads::output_t> output_map;
         static const std::map<std::string, twodads::diagnostic_t> diagnostic_map;
         static const std::map<std::string, twodads::init_fun_t> init_func_map;
         static const std::map<std::string, twodads::rhs_t> rhs_func_map;
+        static const std::map<std::string, twodads::bc_t> bc_map;
 };
 
 

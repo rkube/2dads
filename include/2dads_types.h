@@ -174,30 +174,22 @@ namespace twodads {
     class bvals_t
     {
         public:
-            CUDAMEMBER bvals_t(bc_t _bc_left, bc_t _bc_right, bc_t _bc_top, bc_t _bc_bottom, T _bv_l, T _bv_r, T _bv_t, T _bv_b)
-                               : bc_left(_bc_left), bc_right(_bc_right), bc_top(_bc_top), bc_bottom(_bc_bottom),
-                                 bval_left(_bv_l), bval_right(_bv_r), bval_top(_bv_t), bval_bottom(_bv_b) {};
+            CUDAMEMBER bvals_t(bc_t _bc_left, bc_t _bc_right, T _bv_l, T _bv_r)
+                               : bc_left(_bc_left), bc_right(_bc_right), 
+                                 bval_left(_bv_l), bval_right(_bv_r) {};
 
             CUDAMEMBER inline bc_t get_bc_left() const {return(bc_left);};
             CUDAMEMBER inline bc_t get_bc_right() const {return(bc_right);};
-            CUDAMEMBER inline bc_t get_bc_top() const {return(bc_top);};
-            CUDAMEMBER inline bc_t get_bc_bottom() const {return(bc_bottom);};
 
             CUDAMEMBER inline T get_bv_left() const {return(bval_left);};
             CUDAMEMBER inline T get_bv_right() const {return(bval_right);};
-            CUDAMEMBER inline T get_bv_top() const {return(bval_top);};
-            CUDAMEMBER inline T get_bv_bottom() const {return(bval_bottom);};
 
             CUDAMEMBER inline bool operator==(const bvals_t& rhs) const
             {
                 if((bc_left  == rhs.bc_left) 
                    && (bc_right == rhs.bc_right)
-                   && (bc_top == rhs.bc_top)
-                   && (bc_bottom == rhs.bc_bottom)
                    && (abs(bval_left - rhs.bval_left) < twodads::epsilon)
-                   && (abs(bval_right - rhs.bval_right) < twodads::epsilon)
-                   && (abs(bval_top - rhs.bval_top) < twodads::epsilon)
-                   && (abs(bval_bottom - rhs.bval_bottom) < twodads::epsilon))
+                   && (abs(bval_right - rhs.bval_right) < twodads::epsilon))
                 {
                     return (true);
                 }
@@ -213,14 +205,10 @@ namespace twodads {
             // The boundary conditions on the domain border
             const bc_t bc_left;
             const bc_t bc_right;
-            const bc_t bc_top;
-            const bc_t bc_bottom;
 
             // The boundary values on the domain border
             const T bval_left;
             const T bval_right;
-            const T bval_top;
-            const T bval_bottom;
     };
 
 

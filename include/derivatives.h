@@ -1334,22 +1334,22 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t _geom) :
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy1{get_geom_my21(), 
-               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}),
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}),
                1},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy2{get_geom_my21(),
-               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
+               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 
                1},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag(get_geom_transpose(), 
-         twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 
+         twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 
          1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_l(get_geom_transpose(), 
-           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1),
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_u(get_geom_transpose(), 
-           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}, cmplx_t{0.0}), 1)
+           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 1)
 {
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.

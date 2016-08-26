@@ -112,17 +112,6 @@ const map<string, twodads::rhs_t> slab_config::rhs_func_map
 
 
 
-slab_config_js :: slab_config_js(std::string fname) :
-	runnr(0), xleft(0.0), xright(0.0), ylow(0.0), yup(0.0),
-	My(0), Nx(0), tlevs(0), deltat(0), tend(0), tdiag(0.0),
-	tout(0.0), log_theta(false), log_tau(false), do_dealiasing(false), particle_tracking(0), 
-	nprobes(0), chunksize(0)
-{
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_json(fname, pt);
-
-}
-
 // Parse input from input.ini
 //config :: config( string filename, int foo ) :
 slab_config :: slab_config(string cfg_file) :
@@ -415,5 +404,124 @@ void slab_config :: print_config() const
         cout << str_from_map<twodads::diagnostic_t>(it, diagnostic_map) << "\t";
     cout << endl;
 }
+
+
+const map<string, twodads::output_t> slab_config_js::output_map 
+{
+    {"theta", twodads::output_t::o_theta},
+    {"theta_x", twodads::output_t::o_theta_x},
+    {"theta_y", twodads::output_t::o_theta_y},
+    {"omega", twodads::output_t::o_omega},
+    {"omega_x", twodads::output_t::o_omega_x},
+    {"omega_y", twodads::output_t::o_omega_y},
+    {"tau", twodads::output_t::o_tau},
+    {"tau_x", twodads::output_t::o_tau_x},
+    {"tau_y", twodads::output_t::o_tau_y},
+    {"strmf", twodads::output_t::o_strmf},
+    {"strmf_x", twodads::output_t::o_strmf_x},
+    {"strmf_y", twodads::output_t::o_strmf_y},
+    {"theta_rhs", twodads::output_t::o_theta_rhs},
+    {"omega_rhs", twodads::output_t::o_omega_rhs}
+};
+
+const map<string, twodads::diagnostic_t> slab_config_js::diagnostic_map 
+{
+    {"blobs", twodads::diagnostic_t::diag_blobs},
+    {"com_theta", twodads::diagnostic_t::diag_com_theta},
+    {"com_tau", twodads::diagnostic_t::diag_com_tau},
+    {"max_theta", twodads::diagnostic_t::diag_max_theta},
+    {"max_tau", twodads::diagnostic_t::diag_max_tau},
+    {"max_omega", twodads::diagnostic_t::diag_max_omega},
+    {"max_strmf", twodads::diagnostic_t::diag_max_strmf},
+    {"energy", twodads::diagnostic_t::diag_energy},
+    {"energy_ns", twodads::diagnostic_t::diag_energy_ns},
+    {"energy_local", twodads::diagnostic_t::diag_energy_local},
+    {"probes", twodads::diagnostic_t::diag_probes},
+    {"consistency", twodads::diagnostic_t::diag_consistency},
+	{"memory", twodads::diagnostic_t::diag_mem}
+};
+
+const map<string, twodads::init_fun_t> slab_config_js::init_func_map 
+{
+    {"gaussian", twodads::init_fun_t::init_gaussian},
+    {"constant", twodads::init_fun_t::init_constant}, 
+    {"sine", twodads::init_fun_t::init_sine},
+    {"mode", twodads::init_fun_t::init_mode},
+    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
+    {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole}
+};
+    
+const map<string, twodads::rhs_t> slab_config_js::rhs_func_map 
+{
+    {"theta_rhs_ns", twodads::rhs_t::theta_rhs_ns},
+    {"theta_rhs_lin", twodads::rhs_t::theta_rhs_lin},
+    {"theta_rhs_log", twodads::rhs_t::theta_rhs_log},
+    {"theta_rhs_hw", twodads::rhs_t::theta_rhs_hw},
+    {"theta_rhs_full", twodads::rhs_t::theta_rhs_full}, 
+    {"theta_rhs_hwmod", twodads::rhs_t::theta_rhs_hwmod},
+    {"theta_rhs_sheath_nlin", twodads::rhs_t::theta_rhs_sheath_nlin},
+    {"theta_rhs_null", twodads::rhs_t::theta_rhs_null},
+    {"tau_rhs_sheath_nlin", twodads::rhs_t::tau_rhs_sheath_nlin},
+    {"tau_rhs_null", twodads::rhs_t::tau_rhs_null},
+    {"omega_rhs_ns", twodads::rhs_t::omega_rhs_ns},
+    {"omega_rhs_hw", twodads::rhs_t::omega_rhs_hw},
+    {"omega_rhs_hwmod", twodads::rhs_t::omega_rhs_hwmod},
+    {"omega_rhs_hwzf", twodads::rhs_t::omega_rhs_hwzf},
+    {"omega_rhs_ic", twodads::rhs_t::omega_rhs_ic},
+    {"omega_rhs_sheath_nlin", twodads::rhs_t::omega_rhs_sheath_nlin}, 
+    {"omega_rhs_null", twodads::rhs_t::omega_rhs_null}
+};
+
+
+const map<std::string, twodads::bc_t> slab_config_js :: bc_map
+{
+    {"dirichlet", twodads::bc_t::bc_dirichlet},
+    {"neumann", twodads::bc_t::bc_neumann},
+    {"periodic", twodads::bc_t::bc_periodic}
+};
+
+slab_config_js :: slab_config_js(std::string fname) :
+	    log_theta{false},
+        log_tau{false},
+	    do_dealiasing{false},
+        do_randomize_modes{false},
+        particle_tracking{false},
+        nprobes{0}
+{
+    boost::property_tree::read_json(fname, pt);
+
+    // Initialize all vector quantities
+   for(auto it: pt.get_child("2dads.diagnostics.routines"))
+   {
+       diagnostics.push_back(diagnostic_map.at(it.second.data()));
+   } 
+
+   for(auto it: pt.get_child("2dads.output.fields"))
+   {
+       output.push_back(output_map.at(it.second.data()));
+   }
+
+   for(auto it : pt.get_child("2dads.initial.initc_theta"))
+   {
+       initc_theta.push_back(it.second.get_value<twodads::real_t>());
+   }
+
+   for(auto it : pt.get_child("2dads.initial.initc_omega"))
+   {
+       initc_omega.push_back(it.second.get_value<twodads::real_t>());
+   }
+
+   for(auto it : pt.get_child("2dads.initial.initc_tau"))
+   {
+       initc_tau.push_back(it.second.get_value<twodads::real_t>());
+   }
+
+   for(auto it : pt.get_child("2dads.model.parameters"))
+   {
+       model_params.push_back(it.second.get_value<twodads::real_t>());
+   }
+
+}
+
 
 // End of file slab_config.cpp
