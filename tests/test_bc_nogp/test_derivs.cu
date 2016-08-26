@@ -135,7 +135,7 @@ int main(void)
         sol_an.apply([] __device__ (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t 
             {
                 twodads::real_t y{geom.get_y(m)};
-                return(100 * (-1.0 + 100. * 8 * y) * exp(-50.0 * y * y));
+                return(100 * (-1.0 + 100. * y * y) * exp(-50.0 * y * y));
             }, t_src);
 
         // Write analytic solution to file

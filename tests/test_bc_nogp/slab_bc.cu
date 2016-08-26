@@ -32,11 +32,7 @@ slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twod
                        {twodads::field_t::f_strmf_y,   &strmf_y},
                        {twodads::field_t::f_theta_rhs, &theta_rhs},
                        {twodads::field_t::f_omega_rhs, &omega_rhs}}
-{
-    std::cout << "theta at " << &theta << std::endl;
-    std::cout << "theta_x at " << &theta_x << std::endl;
-    std::cout << "theta_y at " << &theta_y << std::endl;
-}
+{}
 
 
 void slab_bc :: dft_r2c(const twodads::field_t fname, const size_t tidx)
@@ -50,7 +46,7 @@ void slab_bc :: dft_r2c(const twodads::field_t fname, const size_t tidx)
     }
     else
     {
-        cout << "Array is already transformed, skipping dft r2c" << endl;
+        std::cerr << "Array is already transformed, skipping dft r2c" << std::endl;
     }
 }
 
@@ -67,7 +63,7 @@ void slab_bc :: dft_c2r(const twodads::field_t fname, const size_t tidx)
     }
     else
     {
-        cout << "Array is not transformed, skipping dft c2r" << endl;
+        std::cerr << "Array is not transformed, skipping dft c2r" << std::endl;
     }
 }
 
@@ -168,12 +164,10 @@ void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fn
 
     if(d == 1)
     {
-        std::cout << "dx1, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
     }
     else if (d == 2)
     {
-        std::cout << "dx2, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dx_2((*arr_src), (*arr_dst), t_src, t_dst);
     }
 }
@@ -188,12 +182,10 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 
     if(d == 1)
     {
-        std::cout << "dy1, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
     }
     else if (d == 2)
     {
-        std::cout << "dy2, src at " << arr_src << ", dst at " << arr_dst << std::endl;
         my_derivs.dy_2((*arr_src), (*arr_dst), t_src, t_dst);
     }
 }
@@ -253,12 +245,10 @@ void slab_bc :: integrate(const twodads::field_t fname, const size_t tlev)
         // Third order:
         // Sources at tlevs - 1, tlevs - 2
         // Next time step data is written to tlevs - 3
-        std::cout << "Integrating third order" << std::endl;
         tint.integrate((*arr), tlevs - 2, tlevs - 1, 0, tlevs - 3, tlev);
     }
     else if (tlev == 3)
     {
-        std::cout << "Integrating fourth order" << std::endl;
         tint.integrate((*arr), tlevs - 3, tlevs - 2, tlevs - 1, tlevs - 4, tlev);
     }
 }
@@ -275,7 +265,6 @@ void slab_bc :: advance()
 slab_bc :: ~slab_bc()
 {
     delete myfft;
-    cout << "Deleting slab" << endl;
 }
 
 // End of file slab_bc.cu

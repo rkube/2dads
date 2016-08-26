@@ -310,8 +310,6 @@ namespace detail
     template <typename T>
     inline void impl_delete_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, allocator_device<T>)
     {
-        //std::cout << "impl_delete_address(device), address_ptr -> " << address_ptr << std::endl;
-        //std::cout << "impl_delete_address(device), address_2ptr -> " << address_2ptr << std::endl;
         device :: kernel_free_address<<<1, 1>>>(address_2ptr);
         gpuErrchk(cudaPeekAtLastError());
     }
@@ -592,7 +590,7 @@ public:
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
         for(size_t t = 0; t < get_tlevs(); t++)
         {
-            my_alloc.copy(get_tlev_ptr(t), get_tlev_ptr(t) + get_geom().get_nelem_per_t(), rhs.get_tlev_ptr(t));
+            my_alloc.copy(rhs.get_tlev_ptr(t), rhs.get_tlev_ptr(t) + rhs.get_geom().get_nelem_per_t(), get_tlev_ptr(t));
             set_transformed(t, rhs.is_transformed(t));
         }
         return (*this);

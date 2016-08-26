@@ -107,7 +107,6 @@ namespace cufft
                         err_str << "Error planning 1d Z2D DFT: " << err << "\n";
                         throw gpu_error(err_str.str());
                     }
-                    std::cout << "...done" << std::endl;
                     break;
 
                 case twodads::dft_t::dft_2d:

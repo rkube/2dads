@@ -432,7 +432,9 @@ namespace host
             {
                 index = row * (geom.get_my() + geom.get_pad_y()) + col; 
                 out[index] = op_func(in[index], map[index]);
+                //std::cout << map[index] << "\t";
             }
+            //std::cout << std::endl;
         }
     }
 
@@ -1098,14 +1100,26 @@ class deriv_t
                   cuda_array_bc_nogp<T, allocator>& dst,
                   const size_t t_src, const size_t t_dst)
         {
+            //std::cout << "deriv_t: ddy1" << std::endl;
+            //std::cout << "input (real):" << std::endl;
+            //utility :: print(src, t_src, std::cout);
+            //std::cout << std::endl;
+
             // DFT r2c
             if(!(src.is_transformed(t_src)))
             {
                 myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
                 src.set_transformed(t_src, true);
             }
+
+            //std::cout << "input (freq):" << std::endl;
+            //utility :: print(src, t_src, std::cout);
+            //std::cout << std::endl;
             // Multiply with ky coefficients
             detail :: impl_dy1(src, dst, t_src, t_dst, get_coeffs_dy1(), get_geom_my21(), allocator<T>{});
+            //std::cout << "output (freq): " << std::endl;
+            //utility :: print(dst, t_dst, std::cout);
+            //std::cout << std::endl;
 
             // DFT c2r and normalize
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
@@ -1115,6 +1129,10 @@ class deriv_t
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(t_src, false);
             utility :: normalize(src, t_src);
+
+            //std::cout << "output (real): " << std::endl;
+            //utility :: print(dst, t_dst, std::cout);
+            //std::cout << std::endl;
         }
 
         void dy_2(cuda_array_bc_nogp<T, allocator>& src,
