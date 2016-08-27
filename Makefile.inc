@@ -1,4 +1,5 @@
-CC	= /usr/bin/g++
+#CC	= /usr/bin/g++
+CC	= /home/rku000/local/bin/clang++
 CFLAGS = -DDEBUG -O0 -pg -g -std=c++11 -Wall -malign-double -fopenmp
 #CFLAGS = -O2 -march=native -std=c++11 -Wall -malign-double
 INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include -I/usr/include/hdf5/serial -I/home/rku000/local/intel/mkl/include

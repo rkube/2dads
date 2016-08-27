@@ -14,11 +14,38 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/foreach.hpp>
+#include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/filesystem.hpp>
+
 
 #include "2dads_types.h"
+#include "error.h"
+
+// For inverse map lookups
+// http://stackoverflow.com/questions/5749073/reverse-map-lookup
+template<typename T>
+class finder
+{
+    public:
+        finder(const T _val) : val(_val) {}
+        T get_val() const {return(val);};
+
+        template <typename U>
+        bool operator()(const std::pair<U, T> cmp) const
+        {
+            return (std::get<1>(cmp) == get_val());
+        }
+    private:
+        const T val;
+};
+
 
 
 class slab_config_js
@@ -31,62 +58,32 @@ class slab_config_js
         size_t get_runnr() const {return(pt.get<size_t>("2dads.runnr"));};
         twodads::real_t get_xleft() const {return(pt.get<twodads::real_t>("2dads.geometry.xleft"));};
         twodads::real_t get_xright() const {return(pt.get<twodads::real_t>("2dads.geometry.xright"));};
+        twodads::real_t get_Lx() const {return(get_xright() - get_xleft());};
         twodads::real_t get_ylow() const {return(pt.get<twodads::real_t>("2dads.geometry.ylow"));};
         twodads::real_t get_yup() const {return(pt.get<twodads::real_t>("2dads.geometry.yup"));};
+        twodads::real_t get_Ly() const {return(get_ylow() - get_yup());};
 
-        size_t get_my() const {return(pt.get<size_t>("2dads.geometry.Nx"));};
-        size_t get_nx() const {return(pt.get<size_t>("2dads.geometry.My"));};
+        size_t get_my() const {return(pt.get<size_t>("2dads.geometry.My"));};
+        size_t get_pad_y() const {return(pt.get<size_t>("2dads.geometry.pady"));};
+        size_t get_my21() const {return((get_my() + get_pad_y()) / 2 + 1);};
+        size_t get_nx() const {return(pt.get<size_t>("2dads.geometry.Nx"));};
+        size_t get_pad_x() const {return(pt.get<size_t>("2dads.geometry.padx"));};
         size_t get_tlevs() const {return(pt.get<size_t>("2dads.integrator.level"));};
 
-        twodads::bvals_t<twodads::real_t> get_bvals_theta() 
+        twodads::real_t get_deltax() const {return(twodads::real_t(get_nx()) / get_Lx());};
+        twodads::real_t get_deltay() const {return(twodads::real_t(get_my()) / get_Ly());};
+
+        twodads::grid_t get_grid_type() const {return(grid_map.at(pt.get<std::string>("2dads.geometry.grid_type")));};
+        
+        twodads::bvals_t<twodads::real_t> get_bvals(const twodads::field_t fname) const;
+
+        twodads::stiff_params_t get_tint_params(const twodads::dyn_field_t) const;
+
+        twodads::slab_layout_t get_geom() const
         {
-            twodads::bvals_t<twodads::real_t> bvals(
-                bc_map.at(pt.get<std::string>("2dads.geometry.theta_bc_left")),
-                bc_map.at(pt.get<std::string>("2dads.geometry.theta_bc_right")),
-                pt.get<twodads::real_t>("2dads.geometry.theta_bval_left"),
-                pt.get<twodads::real_t>("2dads.geometry.theta_bval_right")
-            );
-
-            return(bvals);
-        };
-
-
-        twodads::bvals_t<twodads::real_t> get_bvals_omega() 
-        {
-            twodads::bvals_t<twodads::real_t> bvals(
-                bc_map.at(pt.get<std::string>("2dads.geometry.omega_bc_left")),
-                bc_map.at(pt.get<std::string>("2dads.geometry.omega_bc_right")),
-                pt.get<twodads::real_t>("2dads.geometry.omega_bval_left"),
-                pt.get<twodads::real_t>("2dads.geometry.omega_bval_right")
-            );
-
-            return(bvals);
-        };
-
-
-        twodads::bvals_t<twodads::real_t> get_bvals_tau() 
-        {
-            twodads::bvals_t<twodads::real_t> bvals(
-                bc_map.at(pt.get<std::string>("2dads.geometry.tau_bc_left")),
-                bc_map.at(pt.get<std::string>("2dads.geometry.tau_bc_right")),
-                pt.get<twodads::real_t>("2dads.geometry.tau_bval_left"),
-                pt.get<twodads::real_t>("2dads.geometry.tau_bval_right")
-            );
-
-            return(bvals);
-        };
-
-
-        twodads::bvals_t<twodads::real_t> get_bvals_strmf() 
-        {
-            twodads::bvals_t<twodads::real_t> bvals(
-                bc_map.at(pt.get<std::string>("2dads.geometry.strmf_bc_left")),
-                bc_map.at(pt.get<std::string>("2dads.geometry.strmf_bc_right")),
-                pt.get<twodads::real_t>("2dads.geometry.strmf_bval_left"),
-                pt.get<twodads::real_t>("2dads.geometry.strmf_bval_right")
-            );
-
-            return(bvals);
+            twodads::slab_layout_t sl(get_xleft(), get_deltax(), get_ylow(), get_deltay(),
+                                      get_nx(), get_pad_x(), get_my(), get_pad_y(), get_grid_type());
+            return(sl);
         };
 
 
@@ -99,22 +96,13 @@ class slab_config_js
         bool get_log_theta() const {return(log_theta);};
         bool get_log_tau() const {return(log_tau);};
 
-        twodads::rhs_t get_theta_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_theta")));};
-        twodads::rhs_t get_omega_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_omega")));};
-        twodads::rhs_t get_tau_rhs() const {return(rhs_func_map.at(pt.get<std::string>("2dads.model.rhs_tau")));};
-
-        twodads::init_fun_t get_init_function_theta() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
-        twodads::init_fun_t get_init_function_omega() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
-        twodads::init_fun_t get_init_function_tau() const {return(init_func_map.at(pt.get<std::string>("2dads.initial.init_func_theta")));};
+        twodads::rhs_t get_rhs_t(const twodads::dyn_field_t) const;
+        twodads::init_fun_t get_init_func_t(const twodads::dyn_field_t) const;
+        std::vector<twodads::real_t> get_initc(const twodads::dyn_field_t) const;
 
         std::vector<twodads::diagnostic_t> get_diagonstics() const;
         std::vector<twodads::output_t> get_output() const;
-
-        std::vector<twodads::real_t> get_initc_theta() const {return(initc_theta);};
-        std::vector<twodads::real_t> get_initc_omega() const {return(initc_omega);};
-        std::vector<twodads::real_t> get_initc_tau() const {return(initc_tau);};
-
-        std::vector<twodads::real_t> get_model_params() const {return(model_params);};
+        std::vector<twodads::real_t> get_model_params() const;
 
     private:
         boost::property_tree::ptree pt;
@@ -125,35 +113,19 @@ class slab_config_js
         bool particle_tracking;
         size_t nprobes;
 
-        //twodads::rhs_t theta_rhs;
-        //twodads::rhs_t omega_rhs;
-        //twodads::rhs_t tau_rhs;
-        //twodads::init_fun_t init_function_theta;
-        //twodads::init_fun_t init_function_tau;
-        //twodads::init_fun_t init_function_omega;
-        //std::string init_function_theta_str;
-        //std::string init_function_tau_str;
-        //std::string init_function_omega_str;
-
-        std::vector<twodads::diagnostic_t> diagnostics;
-        std::vector<twodads::output_t> output;
-
-	    std::vector<twodads::real_t> initc_theta;
-	    std::vector<twodads::real_t> initc_tau;
-	    std::vector<twodads::real_t> initc_omega;
-
-	    std::vector<twodads::real_t> model_params;
-	    //std::string initial_conditions_str;
-        //std::string shift_modes_str;
-	    //size_t chunksize;
-        //twodads::real_t diff;
+        //std::vector<twodads::diagnostic_t> diagnostics;
+        //std::vector<twodads::output_t> output;
+	    //std::vector<twodads::real_t> model_params;
     
         // Mappings from values in input.ini to enums in twodads.h
+        static const std::map<std::string, twodads::field_t> fname_map;
+        static const std::map<std::string, twodads::dyn_field_t> dyn_fname_map;
         static const std::map<std::string, twodads::output_t> output_map;
         static const std::map<std::string, twodads::diagnostic_t> diagnostic_map;
         static const std::map<std::string, twodads::init_fun_t> init_func_map;
         static const std::map<std::string, twodads::rhs_t> rhs_func_map;
         static const std::map<std::string, twodads::bc_t> bc_map;
+        static const std::map<std::string, twodads::grid_t> grid_map;
 };
 
 
@@ -421,7 +393,7 @@ R map_safe_select(std::string varname, std::map<std::string, R> mymap)
     } catch (const std::out_of_range& oor)
     {
         std::stringstream err_msg;
-        err_msg << "Invalid selection" << varname << std::endl;
+        err_msg << "Invalid selection: " << varname << std::endl;
         err_msg << "Valid strings are: " << std::endl;
         for(auto const &it : mymap)
             err_msg << it.first << std::endl;

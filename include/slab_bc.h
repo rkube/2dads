@@ -17,6 +17,7 @@
 #include "solvers.h"
 #include "derivatives.h"
 #include "integrators.h"
+#include "slab_config.h"
 
 #ifdef __CUDACC__
 #include "cuda_types.h"
@@ -58,7 +59,7 @@ class slab_bc
         typedef void(slab_bc ::*rhs_func_ptr) (const size_t); 
 
         slab_bc(const twodads::slab_layout_t, const twodads::bvals_t<value_t>, const twodads::stiff_params_t);
-        slab_bc(const slab_config_js cfg);
+        slab_bc(const slab_config_js& cfg);
         ~slab_bc();
 
         void dft_r2c(const twodads::field_t, const size_t);
@@ -85,31 +86,65 @@ class slab_bc
         void advance();
 
         cuda_arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
-        inline twodads::slab_layout_t get_geom() const {return(geom);};
-        inline twodads::bvals_t<value_t> get_bvals_theta() const {return(boundaries_theta);};
-        inline twodads::bvals_t<value_t> get_bvals_omega() const {return(boundaries_omega);};
-        inline twodads::bvals_t<value_t> get_bvals_tau() const {return(boundaries_tau);};
-        inline twodads::bvals_t<value_t> get_bvals_strm() const {return(boundaries_strmf);};
-        inline twodads::stiff_params_t get_tint_params() const {return(tint_params);};
+
+        inline slab_config_js& get_conf() {return(conf);};
+        inline twodads::slab_layout_t get_geom() const {return(get_conf().get_geom());};
+        inline twodads::bvals_t<value_t> get_bvals(const twodas::field_t) const
+        {
+            switch (field_t)
+            {
+                case twodads::field_t::f_theta:
+                    return get_conf().get_bvals_theta();
+                    break;
+
+                case twodads::field_t::f_omega:
+                    return get_conf().get_bvals_omega();
+                    break;
+                
+                case twodads::field_t::f_tau:
+                    return get_conf().get_bvals_tau();
+                    break;
+
+                case twodads::field_t::f_strmf:
+                    return get_conf().get_bvals_strmf();
+                    break;
+                default:
+                    std::cerr << "No boundary conditions on this array" << std::endl;
+            }
+        };
+
+        inline twodads::stiff_params_t get_tint_params(const twodads::dyn_field_t fname) const
+        {
+            switch(fname)
+            {
+                case twodads::dyn_field_t::f_theta:
+                    return get_conf().get_tint_params_theta();
+                    break;
+                case twodads::dyn_field_t::f_omega:
+                    return get_conf().get_tint_params_omega();
+                    break;
+                case twodads::dyn_field_t::f_tau:
+                    return get_conf().get_tint_params_tau();
+                    break;
+            }
+        }        
+
     private:
-
-        const twodads::bvals_t<value_t> boundaries_theta;
-        const twodads::bvals_t<value_t> boundaries_omega;
-        const twodads::bvals_t<value_t> boundaries_tau;
-        const twodads::bvals_t<value_t> boundaries_strmf;
-
-        const twodads::slab_layout_t geom;
-        const twodads::stiff_params_t tint_params;
+        const slab_config_js conf;
 
         dft_object_t<twodads::real_t>* myfft;
 
 #ifdef DEVICE
         deriv_base_t<value_t, allocator_device>* my_derivs;
-        integrator_base_t<value_t, allocator_device>* tint;
+        integrator_base_t<value_t, allocator_device>* tint_theta;
+        integrator_base_t<value_t, allocator_device>* tint_omega;
+        integrator_base_t<value_t, allocator_device>* tint_tau;
 #endif //DEVICE
 #ifdef HOST
         deriv_base_t<value_t, allocator_host>* my_derivs;
-        integrator_base_t<value_t, allocator_host>* tint;
+        integrator_base_t<value_t, allocator_host>* tint_theta;
+        integrator_base_t<value_t, allocator_host>* tint_omega;
+        integrator_base_t<value_t, allocator_host>* tint_tau;
 #endif //HOST
 
         cuda_arr_real theta;

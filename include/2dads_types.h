@@ -201,6 +201,40 @@ namespace twodads {
                 return(!(*this == rhs));
             }
 
+            friend std::ostream& operator<< (std::ostream& os, const bvals_t<T>& bv)
+            {
+                os << "Left: ";
+                switch(bv.get_bc_left())
+                {
+                    case twodads::bc_t::bc_dirichlet:
+                        os << " dirichlet ";
+                        break;
+                    case twodads::bc_t::bc_neumann:
+                        os << " neumann ";
+                        break;
+                    case twodads::bc_t::bc_periodic:
+                        os << " periodic ";
+                        break;
+                }
+                os << bv.get_bv_left() << "\tRight";
+
+                switch(bv.get_bc_right())
+                {
+                    case twodads::bc_t::bc_dirichlet:
+                        os << " dirichlet ";
+                        break;
+                    case twodads::bc_t::bc_neumann:
+                        os << " neumann ";
+                        break;
+                    case twodads::bc_t::bc_periodic:
+                        os << " periodic ";
+                        break;
+                }
+                os << bv.get_bv_right() << std::endl;
+
+                return(os);
+            }
+
         private: 
             // The boundary conditions on the domain border
             const bc_t bc_left;
@@ -290,20 +324,6 @@ namespace twodads {
         init_turbulent_bath, ///< Initialize all modes randomly
         init_lamb_dipole ///<Lamb Dipole
     };
-    /*
-        init_tau_gaussian,  ///< Initializes gaussian profile for tau, init_function = theta_gaussian
-        init_both_gaussian, ///< Initializes gaussian profile for both, theta and tau
-        init_theta_sine,  ///< Initializes sinusoidal profile for theta
-        init_omega_sine,  ///< Initializes sinusoidal profile for omega
-        init_both_sine,  ///< Initializes sinusoidal profile for theta and omega
-        init_turbulent_bath, ///< Initialize all modes randomly
-        init_test, ///< Who knows?
-        init_theta_mode, ///< Initializes single modes for theta_hat
-        init_omega_mode, ///< Initializes single modes for omega_hat
-        init_both_mode, ///< Initializes single modes for theta_hat and omega_hat
-        init_lamb,
-        init_file, ///< Input from input.h5
-    };*/
 
     /*!
      * Defines the right hand side to use

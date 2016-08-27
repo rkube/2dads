@@ -7,17 +7,8 @@
  *
  */
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <boost/program_options.hpp>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/filesystem.hpp>
+
 #include "slab_config.h"
-#include "error.h"
-#include "2dads_types.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -421,8 +412,40 @@ const map<string, twodads::output_t> slab_config_js::output_map
     {"strmf_x", twodads::output_t::o_strmf_x},
     {"strmf_y", twodads::output_t::o_strmf_y},
     {"theta_rhs", twodads::output_t::o_theta_rhs},
+    {"tau_rhs", twodads::output_t::o_tau_rhs},
     {"omega_rhs", twodads::output_t::o_omega_rhs}
 };
+
+const map<string, twodads::field_t> slab_config_js::fname_map
+{
+    {"theta", twodads::field_t::f_theta},
+    {"theta_x", twodads::field_t::f_theta_x},
+    {"theta_y", twodads::field_t::f_theta_y},
+    {"omega", twodads::field_t::f_omega},
+    {"omega_x", twodads::field_t::f_omega_x},
+    {"omega_y", twodads::field_t::f_omega_y},
+    {"tau", twodads::field_t::f_tau},
+    {"tau_x", twodads::field_t::f_tau_x},
+    {"tau_y", twodads::field_t::f_tau_y},
+    {"strmf", twodads::field_t::f_strmf},
+    {"strmf_x", twodads::field_t::f_strmf_x},
+    {"strmf_y", twodads::field_t::f_strmf_y},
+    {"tmp", twodads::field_t::f_tmp},
+    {"tmp_x", twodads::field_t::f_tmp_x},
+    {"tmp_y", twodads::field_t::f_tmp_y},
+    {"theta_rhs", twodads::field_t::f_theta_rhs},
+    {"tau_rhs", twodads::field_t::f_tau_rhs},
+    {"omega_rhs", twodads::field_t::f_omega_rhs}
+};
+
+
+const map<string, twodads::dyn_field_t> slab_config_js :: dyn_fname_map
+{
+    {"theta", twodads::dyn_field_t::f_theta},
+    {"omega", twodads::dyn_field_t::f_omega},
+    {"tau", twodads::dyn_field_t::f_tau}
+};
+
 
 const map<string, twodads::diagnostic_t> slab_config_js::diagnostic_map 
 {
@@ -480,6 +503,12 @@ const map<std::string, twodads::bc_t> slab_config_js :: bc_map
     {"periodic", twodads::bc_t::bc_periodic}
 };
 
+const map<std::string, twodads::grid_t> slab_config_js :: grid_map
+{
+    {"vertex", twodads::grid_t::vertex_centered},
+    {"cell", twodads::grid_t::cell_centered}
+};
+
 slab_config_js :: slab_config_js(std::string fname) :
 	    log_theta{false},
         log_tau{false},
@@ -490,38 +519,99 @@ slab_config_js :: slab_config_js(std::string fname) :
 {
     boost::property_tree::read_json(fname, pt);
 
-    // Initialize all vector quantities
-   for(auto it: pt.get_child("2dads.diagnostics.routines"))
-   {
-       diagnostics.push_back(diagnostic_map.at(it.second.data()));
-   } 
 
-   for(auto it: pt.get_child("2dads.output.fields"))
-   {
-       output.push_back(output_map.at(it.second.data()));
-   }
-
-   for(auto it : pt.get_child("2dads.initial.initc_theta"))
-   {
-       initc_theta.push_back(it.second.get_value<twodads::real_t>());
-   }
-
-   for(auto it : pt.get_child("2dads.initial.initc_omega"))
-   {
-       initc_omega.push_back(it.second.get_value<twodads::real_t>());
-   }
-
-   for(auto it : pt.get_child("2dads.initial.initc_tau"))
-   {
-       initc_tau.push_back(it.second.get_value<twodads::real_t>());
-   }
-
-   for(auto it : pt.get_child("2dads.model.parameters"))
-   {
-       model_params.push_back(it.second.get_value<twodads::real_t>());
-   }
 
 }
 
+twodads::rhs_t slab_config_js :: get_rhs_t(const twodads::dyn_field_t fname) const
+{
+    auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
+    return(map_safe_select(pt.get<std::string>(std::string("2dads.model.rhs_") + std::get<0>(*it)), 
+                           rhs_func_map));
+}
 
+twodads::init_fun_t slab_config_js :: get_init_func_t(const twodads::dyn_field_t fname) const
+{
+    auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
+    return(map_safe_select(pt.get<std::string>(std::string("2dads.initial.init_func_") + std::get<0>(*it)), 
+                           init_func_map));
+}
+
+
+std::vector<twodads::real_t> slab_config_js :: get_initc(const twodads::dyn_field_t fname) const
+{
+    auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
+    std::string nodename = "2dads.initial.initc_" + std::get<0>(*it);
+
+    std::vector<twodads::real_t> res;
+    for (auto cell : pt.get_child(nodename))
+    {
+        res.push_back(cell.second.get_value<twodads::real_t>() );
+    }
+
+    return(res);
+}
+
+
+std::vector<twodads::diagnostic_t> slab_config_js :: get_diagnostics() const
+{
+    std::vector<twodads::diagnostic_t> res;
+    for(auto it : pt.get_child("2dads.diagnostics.routines"))
+        res.push_back(diagnostic_map.at(it.second.data()));
+
+    return(res); 
+}
+
+
+std::vector<twodads::output_t> slab_config_js :: get_output() const
+{
+    std::vector<twodads::output_t> res;
+    for(auto it: pt.get_child("2dads.output.fields"))
+    {
+        res.push_back(output_map.at(it.second.data()));
+    }
+    return(res);
+}
+
+std::vector<twodads::real_t> slab_config_js :: get_model_params() const
+{
+    std::vector<twodads::real_t> res;
+    for(auto it : pt.get_child("2dads.model.parameters"))
+    {
+        res.push_back(it.second.get_value<twodads::real_t>());
+    }
+    return(res);
+}
+
+twodads::bvals_t<twodads::real_t> slab_config_js :: get_bvals(const twodads::field_t fname) const
+{
+    // Emulate map reverse look-up:
+    // See // http://stackoverflow.com/questions/5749073/reverse-map-lookup
+    auto it = std::find_if(fname_map.begin(), fname_map.end(), finder<twodads::field_t>(fname));
+
+    // Build and create a boundary value structure
+    twodads::bvals_t<twodads::real_t> bvals(
+        map_safe_select(pt.get<std::string>(std::string("2dads.geometry.") + std::get<0>(*it) + std::string("_bc_left")), bc_map),
+        map_safe_select(pt.get<std::string>(std::string("2dads.geometry.") + std::get<0>(*it) + std::string("_bc_right")), bc_map),
+        pt.get<twodads::real_t>(std::string("2dads.geometry.") + std::get<0>(*it) + std::string("_bval_left")),
+        pt.get<twodads::real_t>(std::string("2dads.geometry.") + std::get<0>(*it)+ std::string("_bval_right"))
+    );
+    std::cout << bvals << std::endl;
+    return(bvals);
+
+};
+
+
+twodads::stiff_params_t slab_config_js :: get_tint_params(const twodads::dyn_field_t fname) const
+{
+    auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
+
+    twodads::stiff_params_t sp(
+        get_deltat(), get_Lx(), get_Ly(),
+        pt.get<twodads::real_t>(std::string("2dads.model.diff_") + std::get<0>(*it)),
+        pt.get<twodads::real_t>("2dads.integrator.hypervisc"), 
+        get_nx(), get_my21(), get_tlevs()
+    );
+    return(sp);
+}
 // End of file slab_config.cpp

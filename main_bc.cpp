@@ -26,10 +26,9 @@ int main(void)
     std::cout << "main: " << my_config.get_runnr() << std::endl;
 
     std::cout << "runnr = " << my_config.get_runnr() << std::endl;
-    std::cout << "xlef = "<< my_config.get_xleft() << std::endl;
+    std::cout << "xleft = "<< my_config.get_xleft() << std::endl;
 
-
-    twodads::bvals_t<twodads::real_t> bv_theta(my_config.get_bvals_theta());
+    slab_bc my_slab(my_config);
 
     //std::cout << "I am runnr " << my_config.get_runnr() << std::endl;
 }

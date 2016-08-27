@@ -9,23 +9,29 @@ using namespace std;
 map<twodads::rhs_t, slab_bc::rhs_func_ptr> slab_bc :: rhs_func_map = slab_bc::create_rhs_func_map();
 
 //slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) :
-slab_bc :: slab_bc(const slab_config_js _conf)
-    geom(_conf.get_geom()),
-    tint_params(_conf.get_tint_params()),
-    boundaries_theta(_conf.get_bvals_theta()),
-    boundaries_omega(_conf.get_bvals_omega()),
-    boundaries_tau(_conf.get_bvals_tau()),
-    boundaries_strmf(_conf.get_bvas_strmf())
+
+slab_bc :: slab_bc(const slab_config_js& _conf) :
+    conf(_conf),
     myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},
     my_derivs{new deriv_t(get_geom())},
-    tint{new integrator_t(get_geom(), get_bvals(),  _sp)},
-    theta(_sl, _bc, tint_params.get_tlevs()), theta_x(_sl, _bc, 1), theta_y(_sl, _bc, 1),
-    omega(_sl, _bc, tint_params.get_tlevs()), omega_x(_sl, _bc, 1), omega_y(_sl, _bc, 1),
-    tau(_sl, _bc, tint_params.get_tlevs()),   tau_x(_sl, _bc, 1),   tau_y(_sl, _bc, 1),
-    strmf(_sl, _bc, tint_params.get_tlevs()), strmf_x(_sl, _bc, 1), strmf_y(_sl, _bc, 1),
-    theta_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
-    omega_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
-    tau_rhs(_sl, _bc, tint_params.get_tlevs() - 1),
+    tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_stiff_params(twodads::dyn_field_t::f_theta))},
+    tint_omega{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_stiff_params(twodads::dyn_field_t::f_omega))},
+    tint_tau{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_stiff_params(twodads::dyn_field_t::f_tau))},
+    theta(get_config.get_geom(),       get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs()), 
+    theta_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_theta), 1), 
+    theta_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_theta), 1),
+    omega(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tlevs()), 
+    omega_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_omega), 1), 
+    omega_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_omega), 1),
+    tau(get_config().get_geom(),       get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tlevs()),   
+    tau_x(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),   
+    tau_y(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),
+    strmf(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_strmf), get_config().get_tlevs()), 
+    strmf_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1), 
+    strmf_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1),
+    theta_rhs(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs() - 1),
+    omega_rhs(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tlevs() - 1),
+    tau_rhs(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tlevs() - 1),
     get_field_by_name{ {twodads::field_t::f_theta,     &theta},
                        {twodads::field_t::f_theta_x,   &theta_x},
                        {twodads::field_t::f_theta_y,   &theta_y},
@@ -44,6 +50,11 @@ slab_bc :: slab_bc(const slab_config_js _conf)
     omega_rhs_func{rhs_func_map[twodads::rhs_t::omega_rhs_null]},
     tau_rhs_func{rhs_func_map[twodads::rhs_t::tau_rhs_null]}
 {
+    std::cout << "Created new slab:" << std::endl;
+    std::cout << "Boundaries for theta: " << get_config().get_bvals(twodads::field_t::f_theta) << std::endl;
+    std::cout << "Boundaries for omega: " << get_config().get_bvals(twodads::field_t::f_omega) << std::endl;
+    std::cout << "Boundaries for tau: " << get_config().get_bvals(twodads::field_t::f_tau) << std::endl;
+    std::cout << "Boundaries for strmf: " << get_config().get_bvals(twodads::field_t::f_strmf << std::endl;
 }
 
 
