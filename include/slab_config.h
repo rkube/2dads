@@ -86,7 +86,6 @@ class slab_config_js
             return(sl);
         };
 
-
         std::string get_scheme() const {return(pt.get<std::string>("2dads.integrator.scheme"));};
         twodads::real_t get_deltat() const {return(pt.get<twodads::real_t>("2dads.integrator.deltat"));};
         twodads::real_t get_tend() const {return(pt.get<twodads::real_t>("2dads.integrator.deltat"));};
@@ -100,7 +99,7 @@ class slab_config_js
         twodads::init_fun_t get_init_func_t(const twodads::dyn_field_t) const;
         std::vector<twodads::real_t> get_initc(const twodads::dyn_field_t) const;
 
-        std::vector<twodads::diagnostic_t> get_diagonstics() const;
+        std::vector<twodads::diagnostic_t> get_diagnostics() const;
         std::vector<twodads::output_t> get_output() const;
         std::vector<twodads::real_t> get_model_params() const;
 
@@ -108,10 +107,10 @@ class slab_config_js
         boost::property_tree::ptree pt;
 	    bool log_theta;
         bool log_tau;
-	    bool do_dealiasing;
-        bool do_randomize_modes;
-        bool particle_tracking;
-        size_t nprobes;
+	    //bool do_dealiasing;
+        //bool do_randomize_modes;
+        //bool particle_tracking;
+        //size_t nprobes;
 
         //std::vector<twodads::diagnostic_t> diagnostics;
         //std::vector<twodads::output_t> output;

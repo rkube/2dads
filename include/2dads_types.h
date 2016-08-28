@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <cmath>
 
 #ifdef __CUDACC__
 #define CUDAMEMBER __host__ __device__
@@ -31,14 +32,10 @@ namespace twodads {
 
     #ifdef DEVICE
     using fft_handle_t = cufftHandle;
-    //using real_arr = cuda_array_bc_nogp<T, allocator_device>;
-    //using cmplx_arr = cuda_array_bc_nogp<CuCmplx<T>, allocator_device>;
     #endif //DEVICE
 
     #ifdef HOST
     using fft_handle_t = fftw_plan;
-    //using real_arr = cuda_array_bc_nogp<T, allocator_host>;
-    //using cmplx_arr = cuda_array_bc_nogp<CuCmplx<T>, allocator_host>;
     #endif //HOST
 
     // Use PI from math.h
@@ -186,10 +183,9 @@ namespace twodads {
 
             CUDAMEMBER inline bool operator==(const bvals_t& rhs) const
             {
-                if((bc_left  == rhs.bc_left) 
-                   && (bc_right == rhs.bc_right)
-                   && (abs(bval_left - rhs.bval_left) < twodads::epsilon)
-                   && (abs(bval_right - rhs.bval_right) < twodads::epsilon))
+                if((bc_left  == rhs.bc_left)  && (bc_right == rhs.bc_right)
+                   && (std::fabs(bval_left - rhs.bval_left) < twodads::epsilon)
+                   && (std::fabs(bval_right - rhs.bval_right) < twodads::epsilon))
                 {
                     return (true);
                 }

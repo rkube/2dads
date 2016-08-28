@@ -14,22 +14,18 @@
 #include <map>
 #include <H5Cpp.h>
 #include "2dads_types.h"
-//#include "cuda_types.h"
-//#include "slab_cuda.h"
 #include "slab_config.h"
 
 #ifndef H5_NO_NAMESPACE
     using namespace H5;
 #endif
 
-using namespace std;
-
 // Base class for output
 // Virtual only
 
-class output {
+class output_t {
 public:
-    output(slab_config);
+    output(slab_config_js);
     //~output() {};
 
     // Interface to write output in given output resource
@@ -42,16 +38,17 @@ public:
     // Output counter and array dimensions
     inline uint get_output_counter() const {return(output_counter);};
     inline void increment_output_counter() {output_counter++;};
-    inline uint get_nx() const {return(Nx);};
-    inline uint get_my() const {return(My);};
+    //inline uint get_nx() const {return(Nx);};
+    //inline uint get_my() const {return(My);};
 private:
-    uint output_counter;
+    size_t output_counter;
+    twodads::slab_layout_t geom();
     const uint My, Nx;
 };
 
 
 // Derived class, handles output to HDF5
-class output_h5 : public output {
+class output_h5_t : public output_t {
 public:
     /// Setup output for fields specified in configuration file of passed slab reference.
     //output_h5(vector<twodads::output_t>, uint, uint);
@@ -107,9 +104,9 @@ private:
     DataSpace dspace_theta_rhs;
     DSetCreatPropList ds_creatplist;
     // Mapping from field types to dataspace
-    map<twodads::output_t, DataSpace*> dspace_map;
+    std::map<twodads::output_t, DataSpace*> dspace_map;
     // Mapping from field types to dataspace names
-    map<twodads::output_t, string> fname_map;
+    std::map<twodads::output_t, std::string> fname_map;
 };
 
 #endif //OUTPUT_H

@@ -50,10 +50,10 @@ slab_bc_devive.o: slab_bc.cpp
 #	$(CC) $(CFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 #	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
-2dads_bc_host: slab_config.o output.o slab_bc_host.o
+2dads_bc_host: 
 	$(CC) $(CFLAGS) -DHOST -o run_bc/2dads_bc $(OBJECTS_HOST) main_bc.cpp $(INCLUDES) $(LFLAGS)
 
-2dads_bc_device: slab_config.o output.o slab_bc_device.o
+2dads_bc_device: 
 	$(CUDACC) $(CFLAGS) -DDEVICE -o run_bc/2dads_bc_device $(OBJECTS_DEVICE) main_bc.cu
 
 #tests: cuda_array2 slab_cuda initialize output diagnostics

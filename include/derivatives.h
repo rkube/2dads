@@ -622,14 +622,14 @@ namespace detail
         // Call kernel that accesses elements with get_elem; no wrapping around
         device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
                 out.get_tlev_ptr(t_dst), 
-                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                 {return(0.5 * (u_right - u_left) * inv_dx);},
                 out.get_geom());
         gpuErrchk(cudaPeekAtLastError());
         // Call kernel that accesses elements with operator(); interpolates ghost point values
         device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
                 out.get_tlev_ptr(t_dst), 
-                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                 {return(0.5 * (u_right - u_left) * inv_dx);},
                 out.get_geom(), 0);
         gpuErrchk(cudaPeekAtLastError());
@@ -637,7 +637,7 @@ namespace detail
         // Call kernel that accesses elements with operator(); interpolates ghost point values
         device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
                 out.get_tlev_ptr(t_dst), 
-                [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                 {return(0.5 * (u_right - u_left) * inv_dx);},
                 out.get_geom(), out.get_geom().get_nx() - 1);
         gpuErrchk(cudaPeekAtLastError());
@@ -655,7 +655,7 @@ namespace detail
     // Call kernel that accesses elements with get_elem; no wrapping around
     device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
               out.get_tlev_ptr(t_dst), 
-              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
               {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
               out.get_geom());
     gpuErrchk(cudaPeekAtLastError());
@@ -663,7 +663,7 @@ namespace detail
     // Call kernel that accesses elements with operator(); interpolates ghost point values
     device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
               out.get_tlev_ptr(t_dst), 
-              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
               {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);}, 
               out.get_geom(), 0);
     gpuErrchk(cudaPeekAtLastError());
@@ -671,7 +671,7 @@ namespace detail
     // Call kernel that accesses elements with operator(); interpolates ghost point values
     device :: kernel_threepoint_single_row<<<grid_single_row, block_single_row>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
               out.get_tlev_ptr(t_dst), 
-              [=] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+              [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
               {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
               out.get_geom(), out.get_geom().get_nx() - 1);
     gpuErrchk(cudaPeekAtLastError());
@@ -692,7 +692,7 @@ namespace detail
         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                 coeffs_dy1.get_tlev_ptr(0), 
                 reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
-                [=] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                 {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                 geom_my21);
         gpuErrchk(cudaPeekAtLastError());
@@ -715,7 +715,7 @@ namespace detail
         // Multiply with coefficients for ky
         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                 coeffs_dy2.get_tlev_ptr(0), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
-                [=] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                 {return(val_in * val_map.im());},
                 geom_my21);
         gpuErrchk(cudaPeekAtLastError());

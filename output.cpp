@@ -19,14 +19,13 @@ using namespace std;
 using namespace H5;
 
 // Constructor of the base class
-output :: output(slab_config config) :
+output_t :: output_t(slab_config_js config) :
     output_counter(0),
-    My(config.get_my()),
-    Nx(config.get_nx())
 {
 }
 
-output_h5 :: output_h5(slab_config config) :
+// Initialize DataSpace objects in a later for-loop But populate dspace_map with pointers.
+output_h5_t :: output_h5_t(slab_config config) :
     output(config),
     filename("output.h5"),
     output_file(new H5File(H5std_string(filename.data()), H5F_ACC_TRUNC)),
@@ -44,72 +43,70 @@ output_h5 :: output_h5(slab_config config) :
     group_strmf_y(new Group(output_file -> createGroup("/Sy"))),
     group_omega_rhs(new Group(output_file -> createGroup("/ORHS"))),
     group_theta_rhs(new Group(output_file -> createGroup("/TRHS"))),
-	dspace_file(NULL),
-    o_list(config.get_output())
-    // Initialize DataSpace objects in a later for-loop
-    // But populate dspace_map with pointers.
-{
-	// DataSpace dimension 
-	const hsize_t fdim[] = {get_my(), get_nx()};
-	// Hyperslab parameter for ghost point array output
-	const hsize_t offset[] = {0,0};
-	const hsize_t count[] = {get_my(), get_nx()};
-	DSetCreatPropList ds_creatplist;  
-	dspace_file = new DataSpace(2, count); 
-
-    // populate dspace_map
-    dspace_map[twodads::output_t::o_theta] = &dspace_theta;
-    dspace_map[twodads::output_t::o_theta_x] = &dspace_theta_x;
-    dspace_map[twodads::output_t::o_theta_y] = &dspace_theta_y;
-    dspace_map[twodads::output_t::o_tau] = &dspace_tau;
-    dspace_map[twodads::output_t::o_tau_x] = &dspace_tau_x;
-    dspace_map[twodads::output_t::o_tau_y] = &dspace_tau_y;
-    dspace_map[twodads::output_t::o_omega] = &dspace_omega;
-    dspace_map[twodads::output_t::o_omega_x] = &dspace_omega_x;
-    dspace_map[twodads::output_t::o_omega_y] = &dspace_omega_y;
-    dspace_map[twodads::output_t::o_strmf] = &dspace_strmf;
-    dspace_map[twodads::output_t::o_strmf_x] = &dspace_strmf_x;
-    dspace_map[twodads::output_t::o_strmf_y] = &dspace_strmf_y;
-    dspace_map[twodads::output_t::o_theta_rhs] = &dspace_theta_rhs;
-    dspace_map[twodads::output_t::o_omega_rhs] = &dspace_omega_rhs;
-    // populate field name map
-
-    fname_map[twodads::output_t::o_theta] = "N/";
-    fname_map[twodads::output_t::o_theta_x] = "Nx/";
-    fname_map[twodads::output_t::o_theta_y] = "Ny/";
-    fname_map[twodads::output_t::o_tau] = "T/";
-    fname_map[twodads::output_t::o_tau_x] = "Tx/";
-    fname_map[twodads::output_t::o_tau_y] = "Ty/";
-    fname_map[twodads::output_t::o_omega] = "O/";
-    fname_map[twodads::output_t::o_omega_x] = "Ox/";
-    fname_map[twodads::output_t::o_omega_y] = "Oy/";
-    fname_map[twodads::output_t::o_strmf] = "S/";
-    fname_map[twodads::output_t::o_strmf_x] = "Sx/";
-    fname_map[twodads::output_t::o_strmf_y] = "Sy/";
-    fname_map[twodads::output_t::o_theta_rhs] = "TRHS/";
-    fname_map[twodads::output_t::o_omega_rhs] = "ORHS/";
-	// Iterate over defined output functions and add them to container
-	#ifdef DEBUG
-		cout << "Initializing HDF5 output\n";
-		cout << "Output file " << output_file -> getFileName() << " created. Id: " << output_file -> getId() << "\n";
-	#endif //DEBUG
-
-    DataSpace* dspace;
-    for(auto it: o_list)
+	dspace_file{nullptr},
+    o_list(config.get_output()),
+    foo{nullptr}
     {
-        dspace = dspace_map[it];
-        (*dspace) = DataSpace(2, fdim);
-        (*dspace).selectHyperslab(H5S_SELECT_SET, count, offset, NULL, NULL);
-    }
 
-    output_file -> flush(H5F_SCOPE_LOCAL);
-    output_file -> close();
-    delete output_file; 
+        const hsize_t fdim[] = {config.get_geom().get_my(), config.get_geom().get_nx()};
+	    const hsize_t offset[] = {0,0};
+        const hsize_t count[] = {get_my(), get_nx()};
+    	DSetCreatPropList ds_creatplist;  
+    	dspace_file = new DataSpace(2, count); 
+        dspace_map[twodads::output_t::o_theta] = &dspace_theta;
+        dspace_map[twodads::output_t::o_theta_x] = &dspace_theta_x;
+        dspace_map[twodads::output_t::o_theta_y] = &dspace_theta_y;
+        dspace_map[twodads::output_t::o_tau] = &dspace_tau;
+        dspace_map[twodads::output_t::o_tau_x] = &dspace_tau_x;
+        dspace_map[twodads::output_t::o_tau_y] = &dspace_tau_y;
+        dspace_map[twodads::output_t::o_omega] = &dspace_omega
+        dspace_map[twodads::output_t::o_omega_x] = &dspace_omega_x;
+        dspace_map[twodads::output_t::o_omega_y] = &dspace_omega_y;
+        dspace_map[twodads::output_t::o_strmf] = &dspace_strmf;
+        dspace_map[twodads::output_t::o_strmf_x] = &dspace_strmf_x;
+        dspace_map[twodads::output_t::o_strmf_y] = &dspace_strmf_y;
+        dspace_map[twodads::output_t::o_theta_rhs] = &dspace_theta_rhs;
+        dspace_map[twodads::output_t::o_omega_rhs] = &dspace_omega_rhs;
+
+
+        fname_map[twodads::output_t::o_theta] = "N/";
+        fname_map[twodads::output_t::o_theta_x] = "Nx/";
+        fname_map[twodads::output_t::o_theta_y] = "Ny/";
+        fname_map[twodads::output_t::o_tau] = "T/";
+        fname_map[twodads::output_t::o_tau_x] = "Tx/";
+        fname_map[twodads::output_t::o_tau_y] = "Ty/";
+        fname_map[twodads::output_t::o_omega] = "O/";
+        fname_map[twodads::output_t::o_omega_x] = "Ox/";
+        fname_map[twodads::output_t::o_omega_y] = "Oy/";
+        fname_map[twodads::output_t::o_strmf] = "S/";
+        fname_map[twodads::output_t::o_strmf_x] = "Sx/";
+        fname_map[twodads::output_t::o_strmf_y] = "Sy/";
+        fname_map[twodads::output_t::o_theta_rhs] = "TRHS/";
+        fname_map[twodads::output_t::o_omega_rhs] = "ORHS/";
+
+        DataSpace* dspace;
+        for(auto it : o_list)
+        {
+            dspace = dspace_map[it];
+            (*dspace) = DataSpace(2, fdim);
+            (*dspace).selectHyperslab(H5S_SELECT_SET, count, offset, NULL, NULL);
+        }
+
+        output_file -> flush(H5F_SCOPE_LOCAL);
+        output_file -> close();
+        delete output_file;
+
+#ifdef DEBUG
+		std::cout << "Initializing HDF5 output\n";
+		std::cout << "Output file " << output_file -> getFileName() << " created. Id: " << output_file -> getId() << "\n";
+#endif //DEBUG
+
+ 
 }
 
 
 
-output_h5 :: ~output_h5()
+output_h5_t :: ~output_h5_t()
 {
     delete dspace_file;
 	delete group_theta;
@@ -129,7 +126,7 @@ output_h5 :: ~output_h5()
 }
 
 /*
-void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
+void output_h5_t :: write_output(slab_cuda& slab, twodads::real_t time)
 {
     cuda_array<cuda::real_t>* arr;
     // Iterate over list of fields we need to write output for
@@ -144,7 +141,7 @@ void output_h5 :: write_output(slab_cuda& slab, twodads::real_t time)
 }
 
 
-void output_h5 :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
+void output_h5_t :: surface(twodads::output_t field_name, cuda_array<cuda::real_t>* src, const cuda::real_t time)
 {
     // Dataset name is /[NOST]/[0-9]*
     stringstream foo;
