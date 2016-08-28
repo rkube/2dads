@@ -1072,6 +1072,8 @@ class deriv_base_t
 
     deriv_base_t() {}
 
+    virtual ~deriv_base_t() {}
+
     virtual void dx_1(const cuda_array_bc_nogp<T, allocator>&,
                       cuda_array_bc_nogp<T, allocator>&,
                       const size_t, const size_t) = 0;

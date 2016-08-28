@@ -8,6 +8,8 @@
 #define SLAB_BC_H
 
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <map>
 #include "2dads_types.h"
@@ -18,6 +20,7 @@
 #include "derivatives.h"
 #include "integrators.h"
 #include "slab_config.h"
+#include "output.h"
 
 #ifdef __CUDACC__
 #include "cuda_types.h"
@@ -89,6 +92,8 @@ class slab_bc
 
         void advance();
 
+        void write_output(const size_t);
+
         arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
 
         const slab_config_js& get_config() {return(conf);};
@@ -96,6 +101,7 @@ class slab_bc
     private:
 
         const slab_config_js conf;
+        output_h5_t output;
         dft_object_t<twodads::real_t>* myfft;
 
 #ifdef DEVICE
@@ -129,6 +135,7 @@ class slab_bc
 
         const std::map<twodads::field_t, arr_real*> get_field_by_name;
         const std::map<twodads::dyn_field_t, arr_real*> get_dfield_by_name;
+        const std::map<twodads::output_t, arr_real*> get_output_by_name;
         
         rhs_func_ptr theta_rhs_func;
         rhs_func_ptr omega_rhs_func;
@@ -150,8 +157,6 @@ class slab_bc
         {
             std::cout << "tau_rhs_null" << tsrc << std::endl;
         };
-
-        output_t output;
 
 
         static std::map<twodads::rhs_t, rhs_func_ptr> create_rhs_func_map()

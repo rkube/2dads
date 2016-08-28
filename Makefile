@@ -28,7 +28,7 @@ output.o: output.cpp include/output.h
 slab_bc_host.o: slab_bc.cpp
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
 
-slab_bc_devive.o: slab_bc.cpp
+slab_bc_device.o: slab_bc.cpp
 	$(CUDACC) $(CUDAFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
 
 #diagnostics.o: diagnostics.cpp include/diagnostics.h

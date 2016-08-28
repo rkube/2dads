@@ -53,7 +53,7 @@ class slab_config_js
     public:
         slab_config_js(std::string); 
 
-        boost::property_tree::ptree& get_pt()  {return(pt);};
+        const boost::property_tree::ptree& get_pt()  {return(pt);};
 
         size_t get_runnr() const {return(pt.get<size_t>("2dads.runnr"));};
         twodads::real_t get_xleft() const {return(pt.get<twodads::real_t>("2dads.geometry.xleft"));};
@@ -61,7 +61,7 @@ class slab_config_js
         twodads::real_t get_Lx() const {return(get_xright() - get_xleft());};
         twodads::real_t get_ylow() const {return(pt.get<twodads::real_t>("2dads.geometry.ylow"));};
         twodads::real_t get_yup() const {return(pt.get<twodads::real_t>("2dads.geometry.yup"));};
-        twodads::real_t get_Ly() const {return(get_ylow() - get_yup());};
+        twodads::real_t get_Ly() const {return(get_yup() - get_ylow());};
 
         size_t get_my() const {return(pt.get<size_t>("2dads.geometry.My"));};
         size_t get_pad_y() const {return(pt.get<size_t>("2dads.geometry.pady"));};
@@ -70,8 +70,8 @@ class slab_config_js
         size_t get_pad_x() const {return(pt.get<size_t>("2dads.geometry.padx"));};
         size_t get_tlevs() const {return(pt.get<size_t>("2dads.integrator.level"));};
 
-        twodads::real_t get_deltax() const {return(twodads::real_t(get_nx()) / get_Lx());};
-        twodads::real_t get_deltay() const {return(twodads::real_t(get_my()) / get_Ly());};
+        twodads::real_t get_deltax() const {return(get_Lx() / twodads::real_t(get_nx()));};
+        twodads::real_t get_deltay() const {return(get_Ly() / twodads::real_t(get_my()));};
 
         twodads::grid_t get_grid_type() const {return(grid_map.at(pt.get<std::string>("2dads.geometry.grid_type")));};
         

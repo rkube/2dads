@@ -12,6 +12,7 @@ map<twodads::rhs_t, slab_bc::rhs_func_ptr> slab_bc :: rhs_func_map = slab_bc::cr
 
 slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
+    output(_conf),
     myfft{new dft_t(get_config().get_geom(), twodads::dft_t::dft_1d)},
     my_derivs{new deriv_t(get_config().get_geom())},
     tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
@@ -49,15 +50,24 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     get_dfield_by_name{ {twodads::dyn_field_t::f_theta, &theta},
                         {twodads::dyn_field_t::f_omega, &omega},
                         {twodads::dyn_field_t::f_tau,   &tau}},
+    get_output_by_name{ {twodads::output_t::o_theta,    &theta},
+                        {twodads::output_t::o_theta_x,  &theta_x},
+                        {twodads::output_t::o_theta_y,  &theta_y},
+                        {twodads::output_t::o_omega,    &omega},
+                        {twodads::output_t::o_omega_x,  &omega_x},
+                        {twodads::output_t::o_omega_y,  &omega_y},
+                        {twodads::output_t::o_tau,      &tau},
+                        {twodads::output_t::o_tau_x,    &tau_x},
+                        {twodads::output_t::o_tau_y,    &tau_y},
+                        {twodads::output_t::o_strmf,    &strmf},
+                        {twodads::output_t::o_strmf_x,  &strmf_x},
+                        {twodads::output_t::o_strmf_y,  &strmf_y}},
     theta_rhs_func{rhs_func_map[twodads::rhs_t::theta_rhs_null]},
     omega_rhs_func{rhs_func_map[twodads::rhs_t::omega_rhs_null]},
     tau_rhs_func{rhs_func_map[twodads::rhs_t::tau_rhs_null]}
 {
-    std::cout << "Created new slab:" << std::endl;
-    std::cout << "Boundaries for theta: " << get_config().get_bvals(twodads::field_t::f_theta) << std::endl;
-    std::cout << "Boundaries for omega: " << get_config().get_bvals(twodads::field_t::f_omega) << std::endl;
-    std::cout << "Boundaries for tau: " << get_config().get_bvals(twodads::field_t::f_tau) << std::endl;
-    std::cout << "Boundaries for strmf: " << get_config().get_bvals(twodads::field_t::f_strmf) << std::endl;
+    std::cout << "created slab. Geometry: ";
+    std::cout << get_config().get_geom() << std::endl;
 }
 
 
@@ -146,6 +156,7 @@ void slab_bc :: initialize()
         case twodads::init_fun_t::init_constant:
             std::cout << "Initializing constant" << initvals[0] << std::endl;
 
+            assert(initvals.size() == 1);
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 return(initvals[0]);
@@ -153,13 +164,19 @@ void slab_bc :: initialize()
            break;
 
         case twodads::init_fun_t::init_gaussian:
-            std::cout << "Initializing gaussian" << std::endl;
+            std::cout << "Initializing gaussian: ";
+            for(auto it : initvals)
+                std::cout << it << "\t";
+            std::cout << std::endl;
+
+            // We need 4 initial values
+            assert(initvals.size() == 5);
 
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 const twodads::real_t x{geom.get_x(n)};
                 const twodads::real_t y{geom.get_y(m)};
-                return(initvals[0] + initvals[1] * exp(((x - initvals[2]) * (x - initvals[2]) + 
+                return(initvals[0] + initvals[1] * exp(-1.0 * ((x - initvals[2]) * (x - initvals[2]) + 
                                                         (y - initvals[3]) * (y - initvals[3])) / (2.0 * initvals[4])));                
             }, tidx);
             break;
@@ -169,9 +186,19 @@ void slab_bc :: initialize()
             break;
         case twodads::init_fun_t::init_mode:
             std::cout << "Initializing mode" << std::endl;
+
+            (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+            {
+                const twodads::real_t x{geom.get_x(n)};
+                const twodads::real_t y{geom.get_y(m)};
+                return(x);
+            }, tidx);
+            break;
+
             break;
         case twodads::init_fun_t::init_sine:
             std::cout << "Initializing sine" << std::endl;
+            assert(initvals.size() == 2);
 
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
@@ -415,9 +442,38 @@ void slab_bc :: advance()
     tau.advance();
 } 
 
+// Write output
+void slab_bc :: write_output(const size_t tidx)
+{
+    arr_real* arr{nullptr};
+    size_t tout{tidx};
+    // Iterate over list of fields we want in the HDF file
+    for(auto it : get_config().get_output())
+    { 
+        arr = get_output_by_name.at(it);
+        assert(tidx < arr -> get_tlevs());
+
+        if(it == twodads::output_t::o_theta ||
+           it == twodads::output_t::o_omega ||
+           it == twodads::output_t::o_tau)
+        {tout = tidx;}
+        else{tout = 0;}
+#ifdef DEVICE
+        output.surface(it, utility :: create_host_vector(arr), tout);
+#endif
+#ifdef HOST
+        output.surface(it, arr, tout);
+#endif
+    }
+    output.increment_output_counter();
+}
 
 slab_bc :: ~slab_bc()
 {
+    delete tint_tau;
+    delete tint_omega;
+    delete tint_theta;
+    delete my_derivs;
     delete myfft;
 }
 

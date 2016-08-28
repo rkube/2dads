@@ -48,9 +48,7 @@ const map<string, twodads::output_t> slab_config::output_map
     {"tau_y", twodads::output_t::o_tau_y},
     {"strmf", twodads::output_t::o_strmf},
     {"strmf_x", twodads::output_t::o_strmf_x},
-    {"strmf_y", twodads::output_t::o_strmf_y},
-    {"theta_rhs", twodads::output_t::o_theta_rhs},
-    {"omega_rhs", twodads::output_t::o_omega_rhs}
+    {"strmf_y", twodads::output_t::o_strmf_y}
 };
 
 const map<string, twodads::diagnostic_t> slab_config::diagnostic_map 
@@ -410,10 +408,7 @@ const map<string, twodads::output_t> slab_config_js::output_map
     {"tau_y", twodads::output_t::o_tau_y},
     {"strmf", twodads::output_t::o_strmf},
     {"strmf_x", twodads::output_t::o_strmf_x},
-    {"strmf_y", twodads::output_t::o_strmf_y},
-    {"theta_rhs", twodads::output_t::o_theta_rhs},
-    {"tau_rhs", twodads::output_t::o_tau_rhs},
-    {"omega_rhs", twodads::output_t::o_omega_rhs}
+    {"strmf_y", twodads::output_t::o_strmf_y}
 };
 
 const map<string, twodads::field_t> slab_config_js::fname_map
@@ -518,6 +513,19 @@ slab_config_js :: slab_config_js(std::string fname) :
         //nprobes{0}
 {
     boost::property_tree::read_json(fname, pt);
+
+    std::cout << "xleft = " << get_xleft() << "\t";
+    std::cout << "xright = " << get_xright() << "\t";
+    std::cout << "Lx = " << get_Lx() << "\t";
+    std::cout << "Nx = " << get_nx() << "\t";
+    std::cout << "dx = " << get_deltax() << std::endl;
+
+    std::cout << "ylo = " << get_ylow() << "\t";
+    std::cout << "yup = " << get_yup() << "\t";
+    std::cout << "Ly = " << get_Ly() << "\t";
+    std::cout << "My = " << get_my() << "\t";
+    std::cout << "dy = " << get_deltay() << std::endl;
+
 }
 
 twodads::rhs_t slab_config_js :: get_rhs_t(const twodads::dyn_field_t fname) const
@@ -593,9 +601,8 @@ twodads::bvals_t<twodads::real_t> slab_config_js :: get_bvals(const twodads::fie
         pt.get<twodads::real_t>(std::string("2dads.geometry.") + std::get<0>(*it) + std::string("_bval_left")),
         pt.get<twodads::real_t>(std::string("2dads.geometry.") + std::get<0>(*it)+ std::string("_bval_right"))
     );
-    std::cout << bvals << std::endl;
+    
     return(bvals);
-
 };
 
 

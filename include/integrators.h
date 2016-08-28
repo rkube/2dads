@@ -71,6 +71,7 @@ class integrator_base_t
 {
     public:
         integrator_base_t(){}
+        virtual ~integrator_base_t() {}
         virtual void integrate(cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
 };
 

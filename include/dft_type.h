@@ -353,7 +353,7 @@ template <typename T>
 class dft_object_t
 {
     public:
-        virtual ~dft_object_t() {};
+        virtual ~dft_object_t() {}
         virtual void dft_r2c(T*, twodads::cmplx_t*) = 0;
         virtual void dft_c2r(twodads::cmplx_t*, T*) = 0;
 };

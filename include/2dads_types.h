@@ -370,8 +370,7 @@ namespace twodads {
         o_theta_y, ///< Poloidal derivative of theta
         o_omega, o_omega_x, o_omega_y, 
         o_tau, o_tau_x, o_tau_y,
-        o_strmf, o_strmf_x, o_strmf_y, 
-        o_theta_rhs, o_tau_rhs, o_omega_rhs};
+        o_strmf, o_strmf_x, o_strmf_y}; 
 
     /*!
      * Domain layout passed to diagnostic functions
