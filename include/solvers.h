@@ -217,6 +217,8 @@ namespace solvers
                                 memcpy(diag_u_copy, diag_u, static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
                                 memcpy(diag_copy, diag + m * static_cast<size_t>(get_nx()), static_cast<size_t>(get_nx()) * sizeof(lapack_complex_double));
 
+
+                                std::cout << "Calling LAPACKE_zgtsv" << std::endl;
                                 if((res = LAPACKE_zgtsv(LAPACK_ROW_MAJOR,
                                                         Nx_int,
                                                         1, 
@@ -228,6 +230,7 @@ namespace solvers
                                 {
                                     std::cerr << "Error from MKL LAPACK_zgtsv: " << res << std::endl;
                                 }
+                                std::cout << "...done" << std::endl;
                             } 
                             delete [] diag_copy;
                             delete [] diag_u_copy;

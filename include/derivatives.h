@@ -432,9 +432,7 @@ namespace host
             {
                 index = row * (geom.get_my() + geom.get_pad_y()) + col; 
                 out[index] = op_func(in[index], map[index]);
-                //std::cout << map[index] << "\t";
             }
-            //std::cout << std::endl;
         }
     }
 
@@ -619,7 +617,7 @@ namespace detail
         static dim3 block_single_row(cuda::blockdim_row, 1);
         static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
 
-        // Call kernel that accesses elements with get_elem; no wrapping around
+        // Call kernel that accesses elements with get_elem; no wrapping/interpolation
         device :: kernel_threepoint_center<<<in.get_grid(), in.get_block()>>>(in.get_tlev_ptr(t_src), in.get_address_2ptr(),
                 out.get_tlev_ptr(t_dst), 
                 [] __device__ (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
@@ -725,9 +723,10 @@ namespace detail
 
     template <typename T>
     void impl_arakawa(const cuda_array_bc_nogp<T, allocator_device>& u,
-                           const cuda_array_bc_nogp<T, allocator_device>& v,
-                           cuda_array_bc_nogp<T, allocator_device> res,
-                           const size_t t_src, const size_t t_dst, allocator_device<T>)
+                      const cuda_array_bc_nogp<T, allocator_device>& v,
+                      cuda_array_bc_nogp<T, allocator_device> res,
+                      const size_t t_srcu, const size_t t_srcv, 
+                      const size_t t_dst, allocator_device<T>)
     {
         // Thread layout for accessing a single row (m = 0..My-1, n = 0, Nx-1)
         static dim3 block_single_row(cuda::blockdim_row, 1);
@@ -737,29 +736,29 @@ namespace detail
         static dim3 block_single_col(1, cuda::blockdim_col);
         static dim3 grid_single_col(1, (u.get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
 
-        device :: kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
-                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+        device :: kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                 res.get_tlev_ptr(t_dst), u.get_geom());
         gpuErrchk(cudaPeekAtLastError());
 
         // Create address objects to access ghost points 
-        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
-                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                 res.get_tlev_ptr(t_dst), u.get_geom(), 0);
         gpuErrchk(cudaPeekAtLastError());
 
-        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
-                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+        device :: kernel_arakawa_single_row<<<grid_single_row, block_single_row>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                 res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_nx() - 1);
         gpuErrchk(cudaPeekAtLastError());
 
-        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
-                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                 res.get_tlev_ptr(t_dst), u.get_geom(), 0);
         gpuErrchk(cudaPeekAtLastError());
 
-        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_src), u.get_address_2ptr(),
-                v.get_tlev_ptr(t_src), v.get_address_2ptr(),
+        device :: kernel_arakawa_single_col<<<grid_single_col, block_single_col>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
+                v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                 res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_my() - 1);
         gpuErrchk(cudaPeekAtLastError());
     }
@@ -976,16 +975,17 @@ namespace detail
 
     template <typename T>
     void impl_arakawa(const cuda_array_bc_nogp<T, allocator_host>& u,
-            const cuda_array_bc_nogp<T, allocator_host>& v,
-            cuda_array_bc_nogp<T, allocator_host> res,
-            const size_t t_src, const size_t t_dst, allocator_host<T>)
+                      const cuda_array_bc_nogp<T, allocator_host>& v,
+                      cuda_array_bc_nogp<T, allocator_host> res,
+                      const size_t t_srcu, const size_t t_srcv, 
+                      const size_t t_dst, allocator_host<T>)
     {
         std::vector<size_t> col_vals(0);
         std::vector<size_t> row_vals(0);
 
         // Uses address with direct element access avoiding ifs etc.
-        host :: arakawa_center(u.get_tlev_ptr(t_src), u.get_address_ptr(),
-                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
+        host :: arakawa_center(u.get_tlev_ptr(t_srcu), u.get_address_ptr(),
+                               v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
                                res.get_tlev_ptr(t_dst),
                                u.get_geom());
 
@@ -995,17 +995,18 @@ namespace detail
         row_vals.resize(u.get_geom().get_nx());
         for(size_t n = 0; n < u.get_geom().get_nx(); n++)
             row_vals[n] = n;
-        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
-                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
-                               res.get_tlev_ptr(t_src),
+
+        host :: arakawa_single(u.get_tlev_ptr(t_srcu), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_dst),
                                u.get_geom(),
                                row_vals, col_vals);
 
         //Arakawa kernel for col = My-1, n = 0..Nx-1
         col_vals[0] = u.get_geom().get_my() - 1;
-        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
-                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
-                               res.get_tlev_ptr(t_src),
+        host :: arakawa_single(u.get_tlev_ptr(t_srcu), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_dst),
                                u.get_geom(),
                                row_vals, col_vals);
 
@@ -1015,16 +1016,17 @@ namespace detail
         row_vals[0] = 0;
         for(size_t m = 0; m < u.get_geom().get_my(); m++)
             col_vals[m] = m;
-        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
-                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
-                               res.get_tlev_ptr(t_src),
+
+        host :: arakawa_single(u.get_tlev_ptr(t_srcu), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_dst),
                                u.get_geom(),
                                row_vals, col_vals);
         // Arakawa kernel for col 0..My-1, row n = Nx - 1
         row_vals[0] = u.get_geom().get_nx() - 1;
-        host :: arakawa_single(u.get_tlev_ptr(t_src), u.get_address_ptr(), 
-                               v.get_tlev_ptr(t_src), v.get_address_ptr(),
-                               res.get_tlev_ptr(t_src),
+        host :: arakawa_single(u.get_tlev_ptr(t_srcu), u.get_address_ptr(), 
+                               v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
+                               res.get_tlev_ptr(t_dst),
                                u.get_geom(),
                                row_vals, col_vals);
     }
@@ -1097,7 +1099,7 @@ class deriv_base_t
     virtual void arakawa(const cuda_array_bc_nogp<T, allocator>&,
                          const cuda_array_bc_nogp<T, allocator>&,
                          cuda_array_bc_nogp<T, allocator>&,
-                         const size_t, const size_t) = 0;
+                         const size_t, const size_t, const size_t) = 0;
 };
 
 
@@ -1280,9 +1282,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         void arakawa(const cuda_array_bc_nogp<T, allocator>& u,
                      const cuda_array_bc_nogp<T, allocator>& v,
                      cuda_array_bc_nogp<T, allocator>& dst,
-                     const size_t t_src, const size_t t_dst)
+                     const size_t t_srcu, const size_t t_srcv, const size_t t_dst)
         {
-            detail :: impl_arakawa(u, v, dst, t_src, t_dst, allocator<T>{});
+            detail :: impl_arakawa(u, v, dst, t_srcu, t_srcv, t_dst, allocator<T>{});
         }
 
         void init_diagonals();

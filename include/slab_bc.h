@@ -59,7 +59,12 @@ class slab_bc
         using integrator_t = integrator_karniadakis_t<value_t, allocator_host>;
 #endif //HOST
 
-        typedef void(slab_bc ::*rhs_func_ptr) (const size_t); 
+        // typedef calls to functions that compute the implicit part for time integration.
+        // These functions have 2 time indices as the argument.
+        // t_dst gives the index where the result is written to
+        // t_src gives the index where the input is if the array has more than one time index (i.e. the fields that are integrated)
+        // for all other fields, theta_[xy], strmf, strmf_[xy] this defaults to 0.
+        typedef void(slab_bc ::*rhs_func_ptr) (const size_t, const size_t); 
 
         slab_bc(const twodads::slab_layout_t, const twodads::bvals_t<value_t>, const twodads::stiff_params_t);
         slab_bc(const slab_config_js& cfg);
@@ -84,11 +89,10 @@ class slab_bc
 
         void d_dx(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
         void d_dy(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
-        void arakawa(const twodads::field_t, const twodads::field_t, const twodads::field_t, const size_t, const size_t);
+        void arakawa(const twodads::field_t, const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
 
         void integrate(const twodads::dyn_field_t, const size_t);
         void update_real_fields(const size_t);
-        void rhs(const size_t);
 
         void advance();
 
@@ -97,6 +101,31 @@ class slab_bc
         arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
 
         const slab_config_js& get_config() {return(conf);};
+
+        void rhs(const size_t, const size_t);
+
+
+        // The RHS functions below should not be called directly but via the pointers
+        // stored in ***_rhs_func
+        void rhs_theta_null(const size_t t_dst, const size_t t_src)
+        {
+            // Do nothing
+        };
+
+        void rhs_omega_null(const size_t t_dst, const size_t t_src)
+        {
+            // Do nothing
+        };
+
+        void rhs_omega_ic(const size_t, const size_t);
+
+        void rhs_tau_null(const size_t t_dst, const size_t t_src)
+        {
+            // Do nothing
+        };
+
+        void rhs_theta_lin(const size_t, const size_t);
+
 
     private:
 
@@ -143,28 +172,15 @@ class slab_bc
 
         static std::map<twodads::rhs_t, rhs_func_ptr> rhs_func_map;
 
-        void theta_rhs_null(const size_t tsrc)
-        {
-            std::cout << "theta_rhs_null" << tsrc << std::endl;
-        };
-
-        void omega_rhs_null(const size_t tsrc)
-        {
-            std::cout << "omega_rhs_null" << tsrc << std::endl;
-        };
-
-        void tau_rhs_null(const size_t tsrc)
-        {
-            std::cout << "tau_rhs_null" << tsrc << std::endl;
-        };
-
 
         static std::map<twodads::rhs_t, rhs_func_ptr> create_rhs_func_map()
         {
             std::map<twodads::rhs_t, rhs_func_ptr> my_map;
-            my_map[twodads::rhs_t::theta_rhs_null] = &slab_bc::theta_rhs_null;
-            my_map[twodads::rhs_t::omega_rhs_null] = &slab_bc::tau_rhs_null;
-            my_map[twodads::rhs_t::tau_rhs_null]   = &slab_bc::tau_rhs_null;
+            my_map[twodads::rhs_t::rhs_theta_null] = &slab_bc::rhs_theta_null;
+            my_map[twodads::rhs_t::rhs_theta_lin]  = &slab_bc::rhs_theta_lin;
+            my_map[twodads::rhs_t::rhs_omega_null] = &slab_bc::rhs_omega_null;
+            my_map[twodads::rhs_t::rhs_omega_ic]   = &slab_bc::rhs_omega_ic;
+            my_map[twodads::rhs_t::rhs_tau_null]   = &slab_bc::rhs_tau_null;
             return(my_map);
         }
 

@@ -63,7 +63,7 @@ public:
     //void write_output(slab_cuda&, twodads::real_t);
     /// @brief Write output field
     /// @detailed This assumes that the host data src points to is up-to-date. 
-    void surface(twodads::output_t, cuda_array_bc_nogp<twodads::real_t, allocator_host>*, const size_t);
+    void surface(twodads::output_t, const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t);
 
 private:
     const std::string filename;

@@ -325,23 +325,23 @@ namespace twodads {
      * Defines the right hand side to use
      */
     enum class rhs_t {
-        theta_rhs_ns,          ///< Navier-Stokes equation
-        theta_rhs_lin,         ///< interchange model, linear
-        theta_rhs_log,         ///< Logarithmic interchange model
-        theta_rhs_hw,          ///< Hasegawa-Wakatani model
-        theta_rhs_full,        ///< Density continuity equation with compression of ExB and diamagnetic drift
-        theta_rhs_hwmod,       ///< Modified Hasegawa-Wakatani model
-        theta_rhs_null,        ///< No explicit terms
-        theta_rhs_sheath_nlin, ///< Non-linear sheath losses
-        omega_rhs_ns,          ///< Navier-Stokes equation
-        omega_rhs_hw,          ///< Hasegawa-Wakatani model
-        omega_rhs_hwmod,       ///< Modified Hasegawa-Wakatani model
-        omega_rhs_hwzf,        ///< Modified Hasegawa-Wakatani model, supressed zonal flow
-        omega_rhs_ic,          ///< Interchange turbulence
-        omega_rhs_sheath_nlin, ///< Non-linear sheath losses
-        omega_rhs_null,        ///< No explicit terms (passive advection)
-        tau_rhs_sheath_nlin,   ///< Non-linear sheath losses
-        tau_rhs_null           ///< No explicit terms
+        rhs_theta_ns,          ///< Navier-Stokes equation
+        rhs_theta_lin,         ///< interchange model, linear
+        rhs_theta_log,         ///< Logarithmic interchange model
+        rhs_theta_hw,          ///< Hasegawa-Wakatani model
+        rhs_theta_full,        ///< Density continuity equation with compression of ExB and diamagnetic drift
+        rhs_theta_hwmod,       ///< Modified Hasegawa-Wakatani model
+        rhs_theta_null,        ///< No explicit terms
+        rhs_theta_sheath_nlin, ///< Non-linear sheath losses
+        rhs_omega_ns,          ///< Navier-Stokes equation
+        rhs_omega_hw,          ///< Hasegawa-Wakatani model
+        rhs_omega_hwmod,       ///< Modified Hasegawa-Wakatani model
+        rhs_omega_hwzf,        ///< Modified Hasegawa-Wakatani model, supressed zonal flow
+        rhs_omega_ic,          ///< Interchange turbulence
+        rhs_omega_sheath_nlin, ///< Non-linear sheath losses
+        rhs_omega_null,        ///< No explicit terms (passive advection)
+        rhs_tau_sheath_nlin,   ///< Non-linear sheath losses
+        rhs_tau_null           ///< No explicit terms
     };
 
     /*!

@@ -556,7 +556,7 @@ public:
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
-        detail :: impl_elementwise(myfunc, get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), get_geom(), get_grid(), get_block(), allocator_type{});
+        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});
     }
 
     template<typename F> inline void elementwise(F myfunc, const size_t tidx_lhs, const size_t tidx_rhs)
@@ -725,23 +725,20 @@ public:
         return(detail :: impl_get_data_tlev_ptr(get_tlev_ptr(), tidx, get_tlevs(), allocator_type{}));   
     };
 
-	// Check bounds
-	inline void check_bounds(size_t t, size_t n, size_t m) const {array_bounds(t, n, m);};
-	inline void check_bounds(size_t n, size_t m) const {array_bounds(n, m);};
-
     // Set true if transformed
-    inline bool is_transformed(const size_t tlev) const {return(transformed[tlev]);};
-    inline bool set_transformed(const size_t tlev, const bool val) 
+    inline bool is_transformed(const size_t tidx) const {check_bounds(tidx + 1, 0, 0); return(transformed[tidx]);};
+    inline bool set_transformed(const size_t tidx, const bool val) 
     {
-        transformed[tlev] = val; 
-        return(transformed[tlev]);
+        check_bounds(tidx + 1, 0, 0);
+        transformed[tidx] = val; 
+        return(transformed[tidx]);
     };
 
 private:
 	const twodads::bvals_t<T> boundaries;
     const twodads::slab_layout_t geom;
     const size_t tlevs;
-    const bounds array_bounds;
+    const bounds check_bounds;
     std::vector<bool> transformed;
 
     allocator_type my_alloc;
@@ -771,14 +768,14 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         boundaries(_bvals), 
         geom(_geom), 
         tlevs(_tlevs),
-        array_bounds(get_tlevs(), get_nx(), get_my()),
+        check_bounds(get_tlevs(), get_nx(), get_my()),
         transformed{std::vector<bool>(get_tlevs(), 0)},
         address_2ptr{nullptr},
         address_ptr{nullptr},
 #ifdef __CUDACC__
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
-		grid(dim3(((get_my() + geom.get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
-                  ((get_nx() + geom.get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
+		grid(dim3(((get_my() + get_geom().get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
+                  ((get_nx() + get_geom().get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
 #endif //__CUDACC__
 #ifndef __CUDACC__
         block{0,0,0},

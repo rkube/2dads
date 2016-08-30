@@ -56,7 +56,6 @@ namespace detail
                             reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)),
                             reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));  
 #endif //__CUDACC__
-        //std::cout << "impl_integrate1: do nothing" << std::endl;  
     }
 }
 
@@ -72,7 +71,7 @@ class integrator_base_t
     public:
         integrator_base_t(){}
         virtual ~integrator_base_t() {}
-        virtual void integrate(cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
+        virtual void integrate(cuda_array_bc_nogp<T, allocator>&, const cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
 };
 
 
@@ -99,9 +98,6 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
                            get_geom().get_nx(), 0,
                            get_geom().get_grid()},
             myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},   
-            My_int{static_cast<int>(get_geom().get_my())},
-            My21_int{static_cast<int>(get_geom().get_my() + get_geom().get_pad_y()) / 2},
-            Nx_int{static_cast<int>(get_geom().get_nx())},
             diag_order{0},
             // Pass a complex bvals_t to these guys. They don't really need it though.
             diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
@@ -113,7 +109,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
         }
         ~integrator_karniadakis_t() {}
         
-        void integrate(cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t);
+        void integrate(cuda_array_bc_nogp<T, allocator>&, const cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t);
 
         // init_diagonals() initializes the diagonal elements used for elliptic solver.
         // The main diagonal depends on the order of the integrator and is called in constructor for first level
@@ -124,21 +120,16 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
         // The upper and lower diagonals are the same for all time levels and are initialized once by the constructor
         void init_diagonals_ul();
 
-
         inline twodads::slab_layout_t get_geom() const {return(geom);};
         inline twodads::bvals_t<T> get_bvals() const {return(bvals);};
-        inline twodads::stiff_params_t get_params() const {return(stiff_params);};
+        inline twodads::stiff_params_t get_tint_params() const {return(stiff_params);};
         inline twodads::slab_layout_t get_geom_transpose() const {return(geom_transpose);};
 
         inline cuda_array_bc_nogp<CuCmplx<T>, allocator> get_diag() const {return(diag);};
         inline cuda_array_bc_nogp<CuCmplx<T>, allocator> get_diag_u() const {return(diag_u);};
         inline cuda_array_bc_nogp<CuCmplx<T>, allocator> get_diag_l() const {return(diag_l);};
 
-        inline int get_my_int() const {return(My_int);};
-        inline int get_my21_int() const {return(My21_int);};
-        inline int get_nx_int() const {return(Nx_int);};
-
-        inline T get_rx() const {return(get_params().get_diff() * get_params().get_deltat() / (get_geom().get_deltax() * get_geom().get_deltax()));};
+        inline T get_rx() const {return(get_tint_params().get_diff() * get_tint_params().get_deltat() / (get_geom().get_deltax() * get_geom().get_deltax()));};
 
     private:
         // Diagonal elements for elliptic solver
@@ -154,9 +145,9 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
         dft_t* myfft;
 
         // Array boundaries etc.
-        const int My_int;
-        const int My21_int;
-        const int Nx_int;
+        //const int My_int;
+        //const int My21_int;
+        //const int Nx_int;
 
         size_t diag_order;
         void set_diag_order(const size_t o) {diag_order = o;};
@@ -196,7 +187,6 @@ void integrator_karniadakis_t<T, allocator> :: init_diagonals_ul()
 {
     // diag_[lu] are transposed. Use m = 0..Nx-1, n = 0..My/2 and interchange x and y
     // ->  Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
-    //const CuCmplx<T> rx{get_params().get_diff() * get_params().get_deltat() / (get_geom().get_deltax() * get_geom().get_deltax())};
 
     const T rx{get_rx()};
     diag_l.apply([=] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
@@ -220,102 +210,135 @@ void integrator_karniadakis_t<T, allocator> :: init_diagonals_ul()
 }
 
 
-// Integrate the fields in time. Returns the 1d-dft into out
-// Given u^{k-1}, u^{k-2}, ... u^{k-K} compute u^{0}
+// Perform karniadakis stiffly-stable time integration
+// Given the solution in the previous K time steps, u^{-1}, u^{-2}, ... u^{-K} 
+// and the explicit terms of the previous K time steps NL{-1}, NL^{-2}, ... NL^{-L} 
+// compute the solution for the next time step u^{0}
+//
 // field: array where time data is stored. 
-// t_src1: data from previous time step u^{-1}
-// t_src2: data from next previous time step u^{t-2}
+// explicit_part: Explicit part in karniadakis scheme
+// t_src1: index where u^{-1} is located
+// t_src2: index where u^{-2} is located
+// t_src3: index where u^{-3} is located
 //
+// data of explicit part is stored at indices with offset -1:
+// N^{-1} : t_src1-1
+// N^{-2} : t_src2-1
+// N^{-3} : t_src3-1
 //
-// Field must not be transformed at any time level
-// Routine returns data in real space
+// t_dst: time index to store the result in
+// order: Order of time integration
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field, 
-                                                       const size_t t_src1, const size_t t_src2, const size_t t_src3, 
-                                                       const size_t t_dst, const size_t tlev) 
+void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field,
+                                                         const cuda_array_bc_nogp<T, allocator>& explicit_part,  
+                                                         const size_t t_src1, const size_t t_src2, const size_t t_src3, 
+                                                         const size_t t_dst, const size_t order) 
 {
-    assert(field.is_transformed(t_src1) == false);
-    assert(field.is_transformed(t_src2) == false);
-    assert(field.is_transformed(t_src3) == false);
-
     // Set up the data for time integrations:
-    // Sum up the fields into t_dst 
-    // Fourier transform
-    // Add the boundary terms to ky=0 mode for n=0, Nx-1
+    // Sum up the implicit and explicit terms into t_dst 
+    // DFT r2c
+    // Add boundary terms to ky=0 mode for n=0, Nx-1
     // Call tridiagonal solver
+    // DFT c2r
 
 
-    if(tlev == 1)
+    // In the following we define local constants for the coefficients such that the
+    // __device__ lambdas can capture them by value, [=] capture.
+    // They are stored in a host array, which __device__ functions cannot capture by value yet :/
+
+    if(order == 1)
     {
-        // The field needs to be transformed
-        if(get_diag_order() != 1)
-        {
-            init_diagonal(1);
-
-        }
+        // Initialize the main diagonal for first order time step
+        if(get_diag_order() != 1) {init_diagonal(1);}
 
         const T alpha1{twodads::alpha[0][1]};
+        const T beta1_dt{twodads::beta[0][0] * get_tint_params().get_deltat()};
+
+        // u^{0} = alpha_1 u^{-1}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
+
+        // u^{0} += beta_1 N^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, 
+                          explicit_part, t_dst, t_src1 - 1);
+
     }
-    else if(tlev == 2)
+    else if(order == 2)
     {
         // Initialize main diagonal for second order time step
-        if(get_diag_order() != 2)
-        {
-            init_diagonal(2);
-            //std::cout << "======= Integrating level 2: diagonal" << std::endl;
-            //utility :: print(diag, 0, std::cout);
-        }
+        if(get_diag_order() != 2) {init_diagonal(2);}
+
         // Sum up previous time steps in t_dst:
-        // t_dst = alpha_2 * u_2
-        //std::cout << "======= Integrating level 2: start" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
-
         const T alpha2{twodads::alpha[1][2]};
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
-        //std::cout << "======= Integrating level 2: added t_src2" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
-
-        // t_dst += alpha_1 * u_1
         const T alpha1{twodads::alpha[1][1]};
+
+        const T beta2_dt{twodads::beta[1][1] * get_tint_params().get_deltat()};
+        const T beta1_dt{twodads::beta[1][0] * get_tint_params().get_deltat()};
+
+        // u^{0} = alpha_2 * u^{-2}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
+
+        // u^{0} += alpha_1 * u^{-1}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
-        //std::cout << "======= Integrating level 2: added t_src1" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
+
+        // u^{0} += dt * beta_2 * N^{-2}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta2_dt);}, 
+                          explicit_part, t_dst, t_src2 - 1);
+
+        // u^{0} += dt * beta_1 * N^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, 
+                          explicit_part, t_dst, t_src1 - 1);
     }
 
-    else if (tlev == 3)
+    else if (order == 3)
     {   
         //std::cout << "tlev = 3. t_src1 = " << t_src1 << ", t_src2 = " << t_src2 << ", t_src3 = " << t_src3 << ", t_dst = " << t_dst << std::endl;
-        if(get_diag_order() != 3)
-        {
-            init_diagonal(3);
-            //std::cout << "======= Integrating level 3: diagonal" << std::endl;
-            //utility :: print(diag, 0, std::cout);
-        }
+        if(get_diag_order() != 3) {init_diagonal(3);}
+
         // Sum up previous time steps in t_dst:
-        // t_dst = alpha_3 * u^{-3}
         //std::cout << "======= Integrating level 3: start" << std::endl;
         //utility :: print(field, t_dst, std::cout);
         const T alpha3{twodads::alpha[2][3]};
         const T alpha2{twodads::alpha[2][2]};
         const T alpha1{twodads::alpha[2][1]};
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);}, t_dst, t_src3);
+
+        const T beta3_dt{twodads::beta[2][2] * get_tint_params().get_deltat()};
+        const T beta2_dt{twodads::beta[2][1] * get_tint_params().get_deltat()};
+        const T beta1_dt{twodads::beta[2][0] * get_tint_params().get_deltat()};
+
+        // u^{0} = alpha_3 * u^{-3}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);},
+                          t_dst, t_src3);
         //std::cout << "======= Integrating level 3:  add t_src3" << std::endl;
         //utility :: print(field, t_dst, std::cout);
-        // t_dst = alpha_2 * u^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, t_dst, t_src2);
+        
+        // u^{0} += alpha_2 * u^{-2}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, 
+                          t_dst, t_src2);
         //std::cout << "======= Integrating level 3:  add t_src2" << std::endl;
         //utility :: print(field, t_dst, std::cout);
-        // t_dst += alpha_1 * u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
+        
+        // u^{0} += alpha_1 * u^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, 
+                          t_dst, t_src1);
         //std::cout << "======= Integrating level 3:  add t_src1" << std::endl;
         //utility :: print(field, t_dst, std::cout);
+
+        // u^{0} += dt * beta_3 * N^{-3}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta3_dt);}, 
+                          explicit_part, t_dst, t_src3 - 1);
+
+        // u^{0} += dt * beta_2 * N^{-2}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta2_dt);}, 
+                           explicit_part, t_dst, t_src2 - 1);
+
+        // u^{0} += dt * beta_1 * N^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta1_dt);}, 
+                          explicit_part, t_dst, t_src1 - 1);
     }
 
     (*myfft).dft_r2c(field.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)));
     field.set_transformed(t_dst, true);
-
 
     // Treat the boundary conditions
     // Real part of the Fourier transform of the left boundary value

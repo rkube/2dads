@@ -62,12 +62,11 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
                         {twodads::output_t::o_strmf,    &strmf},
                         {twodads::output_t::o_strmf_x,  &strmf_x},
                         {twodads::output_t::o_strmf_y,  &strmf_y}},
-    theta_rhs_func{rhs_func_map[twodads::rhs_t::theta_rhs_null]},
-    omega_rhs_func{rhs_func_map[twodads::rhs_t::omega_rhs_null]},
-    tau_rhs_func{rhs_func_map[twodads::rhs_t::tau_rhs_null]}
+    theta_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_theta))},
+    omega_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_omega))},
+    tau_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_tau))}
 {
-    std::cout << "created slab. Geometry: ";
-    std::cout << get_config().get_geom() << std::endl;
+    assert(conf.check_consistency() == true);
 }
 
 
@@ -151,15 +150,22 @@ void slab_bc :: initialize()
         // We are initializing at the latest time level of the array
         const size_t tidx{get_config().get_tint_params(it.first).get_tlevs() - 1};
 
+        twodads::real_t iv0{0.0};
+        twodads::real_t iv1{0.0};
+        twodads::real_t iv2{0.0};
+        twodads::real_t iv3{0.0};
+        twodads::real_t iv4{0.0};
+
         switch(get_config().get_init_func_t(it.first))
         {
         case twodads::init_fun_t::init_constant:
             std::cout << "Initializing constant" << initvals[0] << std::endl;
 
             assert(initvals.size() == 1);
+            iv0 = initvals[0];
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
-                return(initvals[0]);
+                return(iv0);
             }, tidx);
            break;
 
@@ -171,13 +177,18 @@ void slab_bc :: initialize()
 
             // We need 4 initial values
             assert(initvals.size() == 5);
+            iv0 = initvals[0];
+            iv1 = initvals[1];
+            iv2 = initvals[2];
+            iv3 = initvals[3];
+            iv4 = initvals[4];
 
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 const twodads::real_t x{geom.get_x(n)};
                 const twodads::real_t y{geom.get_y(m)};
-                return(initvals[0] + initvals[1] * exp(-1.0 * ((x - initvals[2]) * (x - initvals[2]) + 
-                                                        (y - initvals[3]) * (y - initvals[3])) / (2.0 * initvals[4])));                
+                return(iv0 + iv1 * exp(-1.0 * ((x - iv2) * (x - iv2) + 
+                                               (y - iv3) * (y - iv3)) / (2.0 * iv4)));                
             }, tidx);
             break;
 
@@ -195,16 +206,18 @@ void slab_bc :: initialize()
             }, tidx);
             break;
 
-            break;
         case twodads::init_fun_t::init_sine:
             std::cout << "Initializing sine" << std::endl;
             assert(initvals.size() == 2);
+            iv0 = initvals[0];
+            iv1 = initvals[1];
+            
 
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 const twodads::real_t x{geom.get_x(n)};
                 const twodads::real_t y{geom.get_y(m)};
-                return(sin(initvals[0] * x) + sin(initvals[1] * y));
+                return(sin(iv0 * x) + sin(iv1 * y));
             }, tidx);
             break;
         case twodads::init_fun_t::init_turbulent_bath:
@@ -337,13 +350,13 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 // t_src: time level at which f and g are taken
 // t_dst: time level where we store the result in res
 void slab_bc :: arakawa(const twodads::field_t fname_arr_f, const twodads::field_t fname_arr_g, const twodads::field_t fname_arr_res,
-                        const size_t t_src, const size_t t_dst)
+                        const size_t t_srcf, const size_t t_srcg, const size_t t_dst)
 {
     arr_real* f_arr = get_field_by_name.at(fname_arr_f);
     arr_real* g_arr = get_field_by_name.at(fname_arr_g);
     arr_real* res_arr = get_field_by_name.at(fname_arr_res);
 
-    my_derivs -> arakawa((*f_arr), (*g_arr), (*res_arr), t_src, t_dst);
+    my_derivs -> arakawa((*f_arr), (*g_arr), (*res_arr), t_srcf, t_srcg, t_dst);
 }
 
 
@@ -359,80 +372,84 @@ void slab_bc :: invert_laplace(const twodads::field_t in, const twodads::field_t
 // t_dst is the time level where the result is stored
 // t_src is the source
 // tlev is the time level of the integration
-void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t tlev)
+void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
 {
     const size_t tlevs{get_config().get_tint_params(fname).get_tlevs()};
-    assert(tlev > 0 && tlev < tlevs);
+    assert(order > 0 && order < tlevs);
 
     arr_real* arr = get_dfield_by_name.at(fname);
+    arr_real* arr_rhs{nullptr};
 
 #ifdef HOST
     integrator_base_t<value_t, allocator_host>* tint_ptr{nullptr};
 #endif
 #ifdef DEVICE
-    integrator_base_t<value_t, allocator_host>* tint_ptr{nullptr};
+    integrator_base_t<value_t, allocator_device>* tint_ptr{nullptr};
 #endif
 
     switch(fname)
     {
         case twodads::dyn_field_t::f_theta:
             tint_ptr = tint_theta;
+            arr_rhs = &theta_rhs;
             break;
         case twodads::dyn_field_t::f_omega:
             tint_ptr = tint_omega;
+            arr_rhs = &omega_rhs;
             break;
         case twodads::dyn_field_t::f_tau:
             tint_ptr = tint_tau;
+            arr_rhs = &tau_rhs;
             break;
     }
 
     for(size_t t  = 0; t < arr -> get_tlevs(); t++)
+    {
         assert(arr -> is_transformed(t) == false);
-
+    }
+    for(size_t t = 0; t < arr_rhs -> get_tlevs(); t++)
+    {
+        assert(arr_rhs -> is_transformed(t) == false);
+    }
     // Pass real arrays to the time integration routine
     // tint leaves gives the newest time step transformed.
-    if(tlev == 1)
+    if(order == 1)
     {
         // second order integration: Source is at tlevs - 1,
         // next time step data is writte to tlevs - 2 
-        tint_ptr -> integrate((*arr), tlevs - 1, 0, 0, tlevs - 2, tlev);
+        tint_ptr -> integrate((*arr), (*arr_rhs), tlevs - 1, 0, 0, tlevs - 2, order);
     }
-    else if (tlev == 2)
+    else if (order == 2)
     {
         // Third order:
         // Sources at tlevs - 1, tlevs - 2
         // Next time step data is written to tlevs - 3
-        tint_ptr -> integrate((*arr), tlevs - 2, tlevs - 1, 0, tlevs - 3, tlev);
+        tint_ptr -> integrate((*arr), (*arr_rhs), tlevs - 2, tlevs - 1, 0, tlevs - 3, order);
     }
-    else if (tlev == 3)
+    else if (order == 3)
     {
-        tint_ptr -> integrate((*arr), tlevs - 3, tlevs - 2, tlevs - 1, tlevs - 4, tlev);
+        tint_ptr -> integrate((*arr), (*arr_rhs), tlevs - 3, tlevs - 2, tlevs - 1, tlevs - 4, order);
     }
 }
 
 
-void slab_bc :: update_real_fields(const size_t tlev)
+void slab_bc :: update_real_fields(const size_t tsrc)
 {
-    d_dx(twodads::field_t::f_theta, twodads::field_t::f_theta_x, 1, tlev, 0);
-    d_dy(twodads::field_t::f_theta, twodads::field_t::f_theta_y, 1, tlev, 0);
+    d_dx(twodads::field_t::f_theta, twodads::field_t::f_theta_x, 1, tsrc, 0);
+    d_dy(twodads::field_t::f_theta, twodads::field_t::f_theta_y, 1, tsrc, 0);
 
-    d_dx(twodads::field_t::f_omega, twodads::field_t::f_omega_x, 1, tlev, 0);
-    d_dy(twodads::field_t::f_omega, twodads::field_t::f_omega_y, 1, tlev, 0);
+    d_dx(twodads::field_t::f_omega, twodads::field_t::f_omega_x, 1, tsrc, 0);
+    d_dy(twodads::field_t::f_omega, twodads::field_t::f_omega_y, 1, tsrc, 0);
 
-    d_dx(twodads::field_t::f_tau, twodads::field_t::f_tau_x, 1, tlev, 0);
-    d_dy(twodads::field_t::f_tau, twodads::field_t::f_tau_y, 1, tlev, 0);
+    d_dx(twodads::field_t::f_tau, twodads::field_t::f_tau_x, 1, tsrc, 0);
+    d_dy(twodads::field_t::f_tau, twodads::field_t::f_tau_y, 1, tsrc, 0);
 
     d_dx(twodads::field_t::f_strmf, twodads::field_t::f_strmf_x, 1, 0, 0);
     d_dy(twodads::field_t::f_strmf, twodads::field_t::f_strmf_y, 1, 0, 0);
 }
 
 
-void slab_bc :: rhs(const size_t tsrc)
-{
-    (this ->* theta_rhs_func)(tsrc);
-    (this ->* omega_rhs_func)(tsrc);
-    (this ->* tau_rhs_func)(tsrc);
-}
+
 
 // Advance the fields in time
 void slab_bc :: advance()
@@ -443,21 +460,23 @@ void slab_bc :: advance()
 } 
 
 // Write output
-void slab_bc :: write_output(const size_t tidx)
+void slab_bc :: write_output(const size_t tsrc)
 {
     arr_real* arr{nullptr};
-    size_t tout{tidx};
+    size_t tout{0};
     // Iterate over list of fields we want in the HDF file
     for(auto it : get_config().get_output())
     { 
         arr = get_output_by_name.at(it);
-        assert(tidx < arr -> get_tlevs());
 
         if(it == twodads::output_t::o_theta ||
            it == twodads::output_t::o_omega ||
            it == twodads::output_t::o_tau)
-        {tout = tidx;}
+        {tout = tsrc;}
         else{tout = 0;}
+
+        assert(tout < arr -> get_tlevs());
+
 #ifdef DEVICE
         output.surface(it, utility :: create_host_vector(arr), tout);
 #endif
@@ -467,6 +486,36 @@ void slab_bc :: write_output(const size_t tidx)
     }
     output.increment_output_counter();
 }
+
+void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
+{
+    (this ->* theta_rhs_func)(t_dst, t_src);
+    (this ->* omega_rhs_func)(t_dst, t_src);
+    (this ->* tau_rhs_func)(t_dst, t_src);
+}
+
+
+void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
+{
+    //std::cout << "rhs_omega_ic, t_src=" << t_src << ", t_dst = " << t_dst << std::endl;
+    // Compute poisson bracket
+    arakawa(twodads::field_t::f_omega, twodads::field_t::f_strmf, twodads::field_t::f_omega_rhs,
+            t_src, 0, t_dst);
+
+    const twodads::real_t ic{1.0};
+    // - theta_y
+    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t {return (lhs - ic * rhs);},
+                          theta_y, 0, t_dst);           
+}
+
+
+void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
+{
+    //std::cout << "rhs_theta_lin, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
+    arakawa(twodads::field_t::f_theta, twodads::field_t::f_strmf, twodads::field_t::f_theta_rhs,
+            t_src, 0, t_dst);
+}
+
 
 slab_bc :: ~slab_bc()
 {

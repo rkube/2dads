@@ -129,9 +129,11 @@ output_h5_t :: ~output_h5_t()
 
 
 void output_h5_t :: surface(twodads::output_t field_name, 
-                            cuda_array_bc_nogp<twodads::real_t, allocator_host>* src,
+                            const cuda_array_bc_nogp<twodads::real_t, allocator_host>& src,
                             const size_t tidx)
 {
+
+    std::cout << "In routine surface" << std::endl;
     // Dataset name is /[NOST]/[0-9]*
     const twodads::real_t time{twodads::real_t(get_output_counter()) * get_dtout()};
 
@@ -167,7 +169,7 @@ void output_h5_t :: surface(twodads::output_t field_name,
     }
 */
     std::cout << "writing data at tidx" << tidx << std::endl;
-	dataset -> write(src -> get_tlev_ptr(tidx), PredType::NATIVE_DOUBLE, *dspace_ptr);
+	dataset -> write(src.get_tlev_ptr(tidx), PredType::NATIVE_DOUBLE, *dspace_ptr);
     //dataset -> write(dummy, PredType::NATIVE_DOUBLE, *dspace_ptr);
     
     // Create time attribute for the Dataset

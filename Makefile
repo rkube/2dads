@@ -1,8 +1,7 @@
 #
-include Makefile.inc
+include Makefile_osx.inc
 # Subdirectories
 TEST_DIR = tests
-OBJ_DIR = /home/rku000/source/2dads/obj/
 
 .PHONY: clean dist
 
@@ -10,15 +9,12 @@ OBJ_DIR = /home/rku000/source/2dads/obj/
 
 DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
 
-#SOURCES_CPP=shader.cpp slab_config.cpp output.cpp slab_config.cpp
-#SOURCES_CU=initialize.cu slab_cuda.cu
-
 OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_host.o
 OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_device.o
 
 #shader.o: shader.cpp
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
-#
+
 slab_config.o: slab_config.cpp include/slab_config.h
 	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)
 
@@ -28,8 +24,8 @@ output.o: output.cpp include/output.h
 slab_bc_host.o: slab_bc.cpp
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
 
-slab_bc_device.o: slab_bc.cpp
-	$(CUDACC) $(CUDAFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
+slab_bc_device.o: slab_bc.cu
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu $(INCLUDES)
 
 #diagnostics.o: diagnostics.cpp include/diagnostics.h
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
@@ -51,10 +47,10 @@ slab_bc_device.o: slab_bc.cpp
 #	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 2dads_bc_host: 
-	$(CC) $(CFLAGS) -DHOST -o run_bc/2dads_bc $(OBJECTS_HOST) main_bc.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -DHOST -o run_bc/2dads_bc_host $(OBJECTS_HOST) main_bc.cpp $(INCLUDES) $(LFLAGS)
 
 2dads_bc_device: 
-	$(CUDACC) $(CFLAGS) -DDEVICE -o run_bc/2dads_bc_device $(OBJECTS_DEVICE) main_bc.cu
+	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o run_bc/2dads_bc_device $(OBJECTS_DEVICE) main_bc.cu $(INCLUDES) $(CUDALFLAGS)
 
 #tests: cuda_array2 slab_cuda initialize output diagnostics
 #	$(MAKE) -C $(TEST_DIR)
