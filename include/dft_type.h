@@ -397,17 +397,12 @@ class cufft_object_t : public dft_object_t<T>
             cufft :: call_dft_c2r(get_plan_c2r(), arr_in, arr_out);
         }
 
-        //inline twodads::slab_layout_t get_geom() const {return(geom);};
         cufftHandle get_plan_r2c() const {return(plan_r2c);};
         cufftHandle get_plan_c2r() const {return(plan_c2r);};
         cufftHandle& get_plan_r2c() {return(plan_r2c);};
         cufftHandle& get_plan_c2r() {return(plan_c2r);};
 
-        //inline twodads::slab_layout_t get_geom() const {return(geom);}
-        //inline twodads::dft_t get_dft_t() const {return(dft_type);}
     private:
-        //const twodads::slab_layout_t geom;
-        //const twodads::dft_t dft_type;
         cufftHandle plan_r2c;
         cufftHandle plan_c2r;
 };
@@ -451,11 +446,7 @@ class fftw_object_t : public dft_object_t<T>
         fftw_plan& get_plan_r2c() {return(plan_r2c);};
         fftw_plan& get_plan_c2r() {return(plan_c2r);};
 
-        //inline twodads::slab_layout_t get_geom() const {return(geom);}
-        //inline twodads::dft_t get_dft_t() const {return(dft_type);}
     private:
-        //const twodads::slab_layout_t geom;
-        //const twodads::dft_t dft_type;
         fftw_plan plan_r2c;
         fftw_plan plan_c2r;
 };

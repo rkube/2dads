@@ -1084,10 +1084,10 @@ class deriv_base_t
                                 cuda_array_bc_nogp<T, allocator>&,
                                 const size_t, const size_t) = 0;
 
-    virtual void arakawa(const cuda_array_bc_nogp<T, allocator>&,
-                         const cuda_array_bc_nogp<T, allocator>&,
-                         cuda_array_bc_nogp<T, allocator>&,
-                         const size_t, const size_t, const size_t) = 0;
+    virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
+                          const cuda_array_bc_nogp<T, allocator>&,
+                          cuda_array_bc_nogp<T, allocator>&,
+                          const size_t, const size_t, const size_t) = 0;
 };
 
 
@@ -1118,23 +1118,23 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             delete myfft;
         };
 
-        void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
-                  cuda_array_bc_nogp<T, allocator>& dst,
-                  const size_t t_src, const size_t t_dst)
+        virtual void dx_1(const cuda_array_bc_nogp<T, allocator>& src,
+                          cuda_array_bc_nogp<T, allocator>& dst,
+                          const size_t t_src, const size_t t_dst)
         {
             detail :: impl_dx1(src, dst, t_src, t_dst, allocator<T>{}); 
         }
 
-        void dx_2(const cuda_array_bc_nogp<T, allocator>& src,
-                  cuda_array_bc_nogp<T, allocator>& dst,
-                  const size_t t_src, const size_t t_dst)
+        virtual void dx_2(const cuda_array_bc_nogp<T, allocator>& src,
+                          cuda_array_bc_nogp<T, allocator>& dst,
+                          const size_t t_src, const size_t t_dst)
         {
             detail :: impl_dx2(src, dst, t_src, t_dst, allocator<T>{});
         }
 
-        void dy_1(cuda_array_bc_nogp<T, allocator>& src,
-                  cuda_array_bc_nogp<T, allocator>& dst,
-                  const size_t t_src, const size_t t_dst)
+        virtual void dy_1(cuda_array_bc_nogp<T, allocator>& src,
+                          cuda_array_bc_nogp<T, allocator>& dst,
+                          const size_t t_src, const size_t t_dst)
         {
             // DFT r2c
             if(!(src.is_transformed(t_src)))
@@ -1156,9 +1156,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             utility :: normalize(src, t_src);
         }
 
-        void dy_2(cuda_array_bc_nogp<T, allocator>& src,
-                  cuda_array_bc_nogp<T, allocator>& dst,
-                  const size_t t_src, const size_t t_dst)
+        virtual void dy_2(cuda_array_bc_nogp<T, allocator>& src,
+                          cuda_array_bc_nogp<T, allocator>& dst,
+                          const size_t t_src, const size_t t_dst)
         {
             // DFT r2c
             if(!(src.is_transformed(t_src)))
@@ -1179,11 +1179,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             utility :: normalize(src, t_src);            
         }
 
-        void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
-                            cuda_array_bc_nogp<T, allocator>& dst,
-                            //const twodads::bc_t bc_t_left, const T bv_left,
-                            //const twodads::bc_t bc_t_right, const T bv_right,
-                            const size_t t_src, const size_t t_dst)
+        virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
+                                    cuda_array_bc_nogp<T, allocator>& dst,
+                                    const size_t t_src, const size_t t_dst)
         {
             assert(src.get_geom() == dst.get_geom());
             assert(src.get_geom() == get_geom());
@@ -1267,10 +1265,10 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             utility :: normalize(dst, t_dst);
         }
 
-        void arakawa(const cuda_array_bc_nogp<T, allocator>& u,
-                     const cuda_array_bc_nogp<T, allocator>& v,
-                     cuda_array_bc_nogp<T, allocator>& dst,
-                     const size_t t_srcu, const size_t t_srcv, const size_t t_dst)
+        virtual void pbracket(const cuda_array_bc_nogp<T, allocator>& u,
+                              const cuda_array_bc_nogp<T, allocator>& v,
+                              cuda_array_bc_nogp<T, allocator>& dst,
+                              const size_t t_srcu, const size_t t_srcv, const size_t t_dst)
         {
             detail :: impl_arakawa(u, v, dst, t_srcu, t_srcv, t_dst, allocator<T>{});
         }
@@ -1282,7 +1280,6 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         cmplx_arr& get_diag() {return(diag);};
         cmplx_arr& get_diag_u() {return(diag_u);};
         cmplx_arr& get_diag_l() {return(diag_l);};
-        //cmplx_t* get_hdiag() {return(h_diag);};
         // Layout of the real fields, i.e. Nx * My
         twodads::slab_layout_t get_geom() const {return(geom);};
         // Layout of complex fields, i.e. Nx * My21
