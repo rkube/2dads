@@ -1,10 +1,6 @@
 /*
- *  output.h
- *  2dads-oo
- *
- *  Created by Ralph Kube on 01.12.10.
- *  Copyright 2010 __MyCompanyName__. All rights reserved.
- *
+ * output.h 
+ * Defines an abstract type output_t and an implementation using HDF5
  */
 
 #ifndef OUTPUT_H
@@ -21,8 +17,7 @@
     using namespace H5;
 #endif
 
-// Base class for output
-// Virtual only
+// Abstract base class for output
 
 class output_t {
 public:
@@ -31,8 +26,8 @@ public:
     // Interface to write output in given output resource
     // write_output is purely virtual and will only be defined in the derived class
 
-    //virtual void surface(twodads::output_t, cuda_array<cuda::real_t, cuda::real_t>*, const cuda::real_t) = 0;    
-    //virtual void write_output(slab_cuda&, twodads::real_t) = 0;
+    virtual void surface(twodads::output_t, const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t) = 0;
+    virtual void surface(twodads::output_t, const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t, const twodads::real_t) = 0;
 
     // Output counter and array dimensions
     inline size_t get_output_counter() const {return(output_counter);};
@@ -52,19 +47,13 @@ private:
 class output_h5_t : public output_t {
 public:
     /// Setup output for fields specified in configuration file of passed slab reference.
-    //output_h5(vector<twodads::output_t>, uint, uint);
     output_h5_t(const slab_config_js&);
     /// Cleanup.
     ~output_h5_t();
     
-    /// @brief Call this routine to write output
-    /// @detailed Note that get_field_by_name, when called with a twodads::output_t
-    /// @detailed also calls cuda_array<%>.copy_device_to_host
-    //void write_output(slab_cuda&, twodads::real_t);
-    /// @brief Write output field
-    /// @detailed This assumes that the host data src points to is up-to-date. 
+    /// @brief Write output field from a host array 
     void surface(twodads::output_t, const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t);
-
+    void surface(twodads::output_t, const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t, const twodads::real_t);
 private:
     const std::string filename;
     H5File* output_file;

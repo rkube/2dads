@@ -8,12 +8,16 @@ using namespace std;
 
 map<twodads::rhs_t, slab_bc::rhs_func_ptr> slab_bc :: rhs_func_map = slab_bc::create_rhs_func_map();
 
-//slab_bc :: slab_bc(const twodads::slab_layout_t _sl, const twodads::bvals_t<twodads::real_t> _bc, const twodads::stiff_params_t _sp) :
-
 slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
     output(_conf),
-    myfft{new dft_t(get_config().get_geom(), twodads::dft_t::dft_1d)},
+#ifdef DEVICE
+    //myfft{new dft_t(get_config().get_geom(), twodads::dft_t::dft_1d)},
+    myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+#endif //DEVICE
+#ifdef HOST
+    myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+#endif //HOST
     my_derivs{new deriv_t(get_config().get_geom())},
     tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
     tint_omega{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega))},
@@ -460,7 +464,7 @@ void slab_bc :: advance()
 } 
 
 // Write output
-void slab_bc :: write_output(const size_t tsrc)
+void slab_bc :: write_output(const size_t t_src)
 {
     arr_real* arr{nullptr};
     size_t tout{0};
@@ -472,7 +476,7 @@ void slab_bc :: write_output(const size_t tsrc)
         if(it == twodads::output_t::o_theta ||
            it == twodads::output_t::o_omega ||
            it == twodads::output_t::o_tau)
-        {tout = tsrc;}
+        {tout = t_src;}
         else{tout = 0;}
 
         assert(tout < arr -> get_tlevs());
@@ -486,6 +490,36 @@ void slab_bc :: write_output(const size_t tsrc)
     }
     output.increment_output_counter();
 }
+
+
+void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
+{
+    arr_real* arr{nullptr};
+    size_t tout{0};
+    // Iterate over list of fields we want in the HDF file
+    for(auto it : get_config().get_output())
+    { 
+        arr = get_output_by_name.at(it);
+
+        if(it == twodads::output_t::o_theta ||
+           it == twodads::output_t::o_omega ||
+           it == twodads::output_t::o_tau)
+        {tout = t_src;}
+        else{tout = 0;}
+
+        assert(tout < arr -> get_tlevs());
+
+#ifdef DEVICE
+        output.surface(it, utility :: create_host_vector(arr), tout, time);
+#endif
+#ifdef HOST
+        output.surface(it, arr, tout, time);
+#endif
+    }
+    output.increment_output_counter();
+}
+
+
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {

@@ -135,15 +135,16 @@ void output_h5_t :: surface(twodads::output_t field_name,
     // Dataset name is /[NOST]/[0-9]*
     const twodads::real_t time{twodads::real_t(get_output_counter()) * get_dtout()};
 
-    stringstream foo;
-    
-    foo << fname_map.at(field_name) << "/" << to_string(get_output_counter());
-    string dataset_name(foo.str());
+    //stringstream foo;
+    //foo << fname_map.at(field_name) << "/" << to_string(get_output_counter());
+    //string dataset_name(foo.str());
+    std::string dataset_name(fname_map.at(field_name) + "/" + to_string(get_output_counter()));
+
 
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];
 
-    FloatType float_type(PredType::NATIVE_DOUBLE);
+    //FloatType float_type(PredType::NATIVE_DOUBLE);
     DataSpace att_space(H5S_SCALAR);
 	
 	// Create dataset in the file 
@@ -153,22 +154,44 @@ void output_h5_t :: surface(twodads::output_t field_name,
                                                               ds_creatplist));
     // Write to the data set we just created in the file.
     // Source pointed to by dspace_ptr, created in the constructor
-
-/*
-    const size_t nelem{src -> get_geom().get_nx() * (src -> get_geom().get_my() + src -> get_geom().get_pad_y())};
-    twodads::real_t dummy[nelem];
-    for(size_t n = 0; n < nelem; n++)
-    {
-        dummy[n] = twodads::real_t(n);
-    }
-*/
-    std::cout << "writing data at tidx" << tidx << std::endl;
 	dataset -> write(src.get_tlev_ptr(tidx), PredType::NATIVE_DOUBLE, *dspace_ptr);
-    //dataset -> write(dummy, PredType::NATIVE_DOUBLE, *dspace_ptr);
     
     // Create time attribute for the Dataset
-    Attribute att = dataset -> createAttribute("time", float_type, att_space);
-    att.write(float_type, &time);
+    Attribute att = dataset -> createAttribute("time", PredType::NATIVE_DOUBLE, att_space);
+    att.write(PredType::NATIVE_DOUBLE, &time);
+
+	delete dataset;
+    delete output_file;
+}	
+
+// Same as above but pass the time attribute explicitly instead of computing
+// it from the output counter
+void output_h5_t :: surface(twodads::output_t field_name, 
+                            const cuda_array_bc_nogp<twodads::real_t, allocator_host>& src,
+                            const size_t tidx,
+                            const twodads::real_t time)
+{
+    // Dataset name is /[NOST]/[0-9]*
+    std::string dataset_name(fname_map.at(field_name) + "/" + to_string(get_output_counter()));
+
+    output_file = new H5File(filename, H5F_ACC_RDWR);
+    DataSpace* dspace_ptr = dspace_map[field_name];
+
+    //FloatType float_type(PredType::NATIVE_DOUBLE);
+    DataSpace att_space(H5S_SCALAR);
+	
+	// Create dataset in the file 
+	DataSet* dataset = new DataSet(output_file->createDataSet(dataset_name, 
+                                                              PredType::NATIVE_DOUBLE, 
+                                                              *dspace_file, 
+                                                              ds_creatplist));
+    // Write to the data set we just created in the file.
+    // Source pointed to by dspace_ptr, created in the constructor
+	dataset -> write(src.get_tlev_ptr(tidx), PredType::NATIVE_DOUBLE, *dspace_ptr);
+    
+    // Create time attribute for the Dataset
+    Attribute att = dataset -> createAttribute("time", PredType::NATIVE_DOUBLE, att_space);
+    att.write(PredType::NATIVE_DOUBLE, &time);
 
 	delete dataset;
     delete output_file;

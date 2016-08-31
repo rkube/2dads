@@ -97,6 +97,7 @@ class slab_bc
         void advance();
 
         void write_output(const size_t);
+        void write_output(const size_t, const twodads::real_t);
 
         arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
 

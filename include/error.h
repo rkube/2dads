@@ -167,6 +167,18 @@ class name_error : public std::exception
 };
 
 
+/// When numerics goes wrong
+
+class numerics_error : public std::exception
+{
+    public:
+        numerics_error(const std::string& err) : error(err) {};
+        ~numerics_error() throw() {};
+        virtual const char* what() const throw() {return error.data();};
+
+    private:
+        const std::string error;
+};
 
 
 /// things not implemented yet

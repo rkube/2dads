@@ -766,28 +766,19 @@ namespace detail
     template <typename T>
     void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_device>& src,
                              cuda_array_bc_nogp<T, allocator_device>& dst,
-                             //const twodads::bc_t bc_t_left, const T bval_left,
-                             //const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
-                             //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
                              allocator_device<T>)                         
     {
-        //const T inv_dx2{1.0 / (src.get_geom().get_deltax() * src.get_geom().get_deltax())};
-        //const T delta_y{T(src.get_geom().get_my()) / src.get_geom().get_Ly()};
+        solvers :: elliptic_cublas_t my_ell_solver(src.get_geom());
 
-        //if (dst.get_bvals() != src.get_bvals())
-        //    throw assert_error(std::string("assert_error: invert_laplace: src and dst must have the same boundary conditions\n"));
-
-        solvers :: elliptic my_ell_solver(src.get_geom());
-
-        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(src.get_tlev_ptr(t_src)), 
-                            reinterpret_cast<cuDoubleComplex*>(dst.get_tlev_ptr(t_dst)),
-                            reinterpret_cast<cuDoubleComplex*>(diag_l.get_tlev_ptr(0)), 
-                            reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
-                            reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
+        my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), 
+                            reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                            diag_l.get_tlev_ptr(0), 
+                            diag.get_tlev_ptr(0), 
+                            diag_u.get_tlev_ptr(0));
 
         dst.set_transformed(t_dst, true);
     }
@@ -893,7 +884,6 @@ namespace detail
                                         out.get_geom());
 
         // Call expensive interpolation routine only for 2 columns
-        std::cout << "dx1(host): apply_threepoint" << std::endl;
         host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
                                  [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                                  {return(0.5 * (u_right - u_left) * inv_dx);},
@@ -1034,25 +1024,23 @@ namespace detail
     template <typename T>
     void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_host>& src,
                              cuda_array_bc_nogp<T, allocator_host>& dst,
-                             //const twodads::bc_t bc_t_left, const T bval_left,
-                             //const twodads::bc_t bc_t_right, const T bval_right,
                              const size_t t_src, const size_t t_dst,
-                             //CuCmplx<T>* h_diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
                              allocator_host<T>)
     {
-        solvers :: elliptic my_ell_solver(src.get_geom());
         // Copy input data for solver into dst.
         dst.copy(t_dst, src, t_src);
 
 #ifndef __CUDACC__
+        solvers :: elliptic_mkl_t my_ell_solver(src.get_geom());
+
         my_ell_solver.solve(nullptr,
-                            reinterpret_cast<lapack_complex_double*>(dst.get_tlev_ptr(t_dst)),
-                            reinterpret_cast<lapack_complex_double*>(diag_l.get_tlev_ptr(0)) + 1, 
-                            reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)), 
-                            reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));
+                            reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                            diag_l.get_tlev_ptr(0) + 1, 
+                            diag.get_tlev_ptr(0), 
+                            diag_u.get_tlev_ptr(0));
 #endif //__CUDACC__
         dst.set_transformed(t_dst, true);
     }    

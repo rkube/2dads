@@ -29,7 +29,7 @@ int main(void)
         std::cout << "...done. Calculating RHS" << std::endl;
         my_slab.rhs(order - 2, order - 1);
 
-        my_slab.write_output(order - 1);
+        my_slab.write_output(order - 1, tstep * my_config.get_deltat());
 
         tstep++;
 
@@ -42,7 +42,7 @@ int main(void)
         my_slab.update_real_fields(order - 2);
         my_slab.rhs(order - 3, order - 2);
 
-        my_slab.write_output(order - 2);
+        my_slab.write_output(order - 2, tstep * my_config.get_deltat());
         tstep++;
 
 /////////////////////////////////////////////////////////////////////////
@@ -54,7 +54,7 @@ int main(void)
         my_slab.update_real_fields(order - 3);
         my_slab.rhs(0, order - 3);
 
-        my_slab.write_output(order - 3);
+        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
 
         for(; tstep < num_tsteps; tstep++)
         {

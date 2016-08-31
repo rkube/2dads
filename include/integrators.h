@@ -28,13 +28,13 @@ namespace detail
                                 allocator_device<T>)
     {
         
-        solvers :: elliptic my_ell_solver(field.get_geom());
+        solvers :: elliptic_cublas_t my_ell_solver(field.get_geom());
         
-        my_ell_solver.solve(reinterpret_cast<cuDoubleComplex*>(field.get_tlev_ptr(t_dst)), 
-                            reinterpret_cast<cuDoubleComplex*>(field.get_tlev_ptr(t_dst)),
-                            reinterpret_cast<cuDoubleComplex*>(diag_l.get_tlev_ptr(0)), 
-                            reinterpret_cast<cuDoubleComplex*>(diag.get_tlev_ptr(0)), 
-                            reinterpret_cast<cuDoubleComplex*>(diag_u.get_tlev_ptr(0)));
+        my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
+                            reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
+                            diag_l.get_tlev_ptr(0), 
+                            diag.get_tlev_ptr(0), 
+                            diag_u.get_tlev_ptr(0));
     }
 
 #endif //__CUDACC__
@@ -48,13 +48,13 @@ namespace detail
                                 const size_t t_dst, 
                                 allocator_host<T>)
     {
-        solvers :: elliptic my_ell_solver(field.get_geom());
 #ifndef __CUDACC__
+        solvers :: elliptic_mkl_t my_ell_solver(field.get_geom());
         my_ell_solver.solve(nullptr,
-                            reinterpret_cast<lapack_complex_double*>(field.get_tlev_ptr(t_dst)),
-                            reinterpret_cast<lapack_complex_double*>(diag_l.get_tlev_ptr(0)) + 1,
-                            reinterpret_cast<lapack_complex_double*>(diag.get_tlev_ptr(0)),
-                            reinterpret_cast<lapack_complex_double*>(diag_u.get_tlev_ptr(0)));  
+                            reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
+                            diag_l.get_tlev_ptr(0) + 1,
+                            diag.get_tlev_ptr(0),
+                            diag_u.get_tlev_ptr(0));  
 #endif //__CUDACC__
     }
 }
@@ -143,11 +143,6 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
         // Fourier transformation happens in the time integration where we solve
         // in each fourier mode
         dft_t* myfft;
-
-        // Array boundaries etc.
-        //const int My_int;
-        //const int My21_int;
-        //const int Nx_int;
 
         size_t diag_order;
         void set_diag_order(const size_t o) {diag_order = o;};
@@ -306,8 +301,6 @@ void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, a
         // u^{0} = alpha_3 * u^{-3}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);},
                           t_dst, t_src3);
-        //std::cout << "======= Integrating level 3:  add t_src3" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
         
         // u^{0} += alpha_2 * u^{-2}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, 
@@ -391,9 +384,6 @@ void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, a
     (*myfft).dft_c2r(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), field.get_tlev_ptr(t_dst));
     utility :: normalize(field, t_dst);
     field.set_transformed(t_dst, false);    
-
-    //std::cout << "======= Integrating level " << tlev << ":  result" << std::endl;
-    //utility :: print(field, t_dst, std::cout);
 }
 
 
