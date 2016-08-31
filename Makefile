@@ -25,7 +25,7 @@ slab_bc_host.o: slab_bc.cpp
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
 
 slab_bc_device.o: slab_bc.cu
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu $(INCLUDES)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -DDEVICE -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu $(INCLUDES)
 
 #diagnostics.o: diagnostics.cpp include/diagnostics.h
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)

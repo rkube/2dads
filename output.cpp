@@ -132,8 +132,6 @@ void output_h5_t :: surface(twodads::output_t field_name,
                             const cuda_array_bc_nogp<twodads::real_t, allocator_host>& src,
                             const size_t tidx)
 {
-
-    std::cout << "In routine surface" << std::endl;
     // Dataset name is /[NOST]/[0-9]*
     const twodads::real_t time{twodads::real_t(get_output_counter()) * get_dtout()};
 
@@ -144,10 +142,6 @@ void output_h5_t :: surface(twodads::output_t field_name,
 
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];
-
-#ifdef DEBUG
-    cout << "Dataset name: " << dataset_name << "\t";
-#endif //DEBUG
 
     FloatType float_type(PredType::NATIVE_DOUBLE);
     DataSpace att_space(H5S_SCALAR);

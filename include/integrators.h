@@ -292,12 +292,9 @@ void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, a
 
     else if (order == 3)
     {   
-        //std::cout << "tlev = 3. t_src1 = " << t_src1 << ", t_src2 = " << t_src2 << ", t_src3 = " << t_src3 << ", t_dst = " << t_dst << std::endl;
         if(get_diag_order() != 3) {init_diagonal(3);}
 
         // Sum up previous time steps in t_dst:
-        //std::cout << "======= Integrating level 3: start" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
         const T alpha3{twodads::alpha[2][3]};
         const T alpha2{twodads::alpha[2][2]};
         const T alpha1{twodads::alpha[2][1]};
