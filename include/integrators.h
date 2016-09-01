@@ -25,12 +25,16 @@ namespace detail
                                 const cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
                                 const cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
                                 const size_t t_dst, 
+                                solvers :: elliptic_base_t* ell_solver,
                                 allocator_device<T>)
-    {
-        
-        solvers :: elliptic_cublas_t my_ell_solver(field.get_geom());
-        
-        my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
+    {   
+        //solvers :: elliptic_cublas_t my_ell_solver(field.get_geom());
+        //my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
+        //                    reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
+        //                    diag_l.get_tlev_ptr(0), 
+        //                    diag.get_tlev_ptr(0), 
+        //                    diag_u.get_tlev_ptr(0));
+        ell_solver -> solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
                             reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0), 
                             diag.get_tlev_ptr(0), 
@@ -39,6 +43,7 @@ namespace detail
 
 #endif //__CUDACC__
 
+#ifndef __CUDACC__
 
     template <typename T>
     void impl_solve_tridiagonal(cuda_array_bc_nogp<T, allocator_host>& field,
@@ -46,17 +51,22 @@ namespace detail
                                 const cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
                                 const cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
                                 const size_t t_dst, 
+                                solvers :: elliptic_base_t* ell_solver,
                                 allocator_host<T>)
     {
-#ifndef __CUDACC__
-        solvers :: elliptic_mkl_t my_ell_solver(field.get_geom());
-        my_ell_solver.solve(nullptr,
+        //solvers :: elliptic_mkl_t my_ell_solver(field.get_geom());
+        //my_ell_solver.solve(nullptr,
+        //                    reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
+        //                    diag_l.get_tlev_ptr(0) + 1,
+        //                    diag.get_tlev_ptr(0),
+        //                    diag_u.get_tlev_ptr(0));  
+        ell_solver -> solve(nullptr,
                             reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0) + 1,
                             diag.get_tlev_ptr(0),
                             diag_u.get_tlev_ptr(0));  
-#endif //__CUDACC__
     }
+#endif //__CUDACC__
 }
 
 
@@ -82,10 +92,12 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
     public:
 #ifdef DEVICE
     using dft_t = cufft_object_t<T>;
+    using elliptic_t = solvers :: elliptic_cublas_t;
 #endif // DEVICE
 
 #ifdef HOST
     using dft_t = fftw_object_t<T>;
+    using elliptic_t = solvers :: elliptic_mkl_t;
 #endif // HOST
 
         integrator_karniadakis_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
@@ -98,7 +110,8 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
                            get_geom().get_nx(), 0,
                            get_geom().get_grid()},
             myfft{new dft_t(get_geom(), twodads::dft_t::dft_1d)},   
-            diag_order{0},
+            my_solver{new elliptic_t(get_geom())},
+            diag_order{1},
             // Pass a complex bvals_t to these guys. They don't really need it though.
             diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
             diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
@@ -131,6 +144,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
 
         inline T get_rx() const {return(get_tint_params().get_diff() * get_tint_params().get_deltat() / (get_geom().get_deltax() * get_geom().get_deltax()));};
 
+        inline elliptic_t* get_ell_solver() {return(my_solver);};
     private:
         // Diagonal elements for elliptic solver
         const twodads::slab_layout_t geom;
@@ -143,6 +157,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
         // Fourier transformation happens in the time integration where we solve
         // in each fourier mode
         dft_t* myfft;
+        elliptic_t* my_solver;
 
         size_t diag_order;
         void set_diag_order(const size_t o) {diag_order = o;};
@@ -377,7 +392,7 @@ void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, a
     }, t_dst);
 
 
-    detail :: impl_solve_tridiagonal(field, get_diag_u(), get_diag(), get_diag_l(), t_dst, allocator<T>{});
+    detail :: impl_solve_tridiagonal(field, get_diag_u(), get_diag(), get_diag_l(), t_dst, get_ell_solver(), allocator<T>{});
 
     // Field is overwritten with the solution, don't subtract boundary terms before inverse transformation
     // Inverse DFT of the result

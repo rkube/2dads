@@ -265,7 +265,7 @@ void slab_bc :: initialize_sine(const twodads::field_t fname, const size_t tidx)
 */
 
 /*
-void slab_bc :: initialize_arakawa(const twodads::field_t fname1, const twodads::field_t fname2, const size_t tlev)
+void slab_bc :: initialize_pbracket(const twodads::field_t fname1, const twodads::field_t fname2, const size_t tlev)
 {
     arr_real* arr1 = get_field_by_name.at(fname1);
     arr_real* arr2 = get_field_by_name.at(fname2);
@@ -345,7 +345,7 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 }
 
 
-// Compute Arakawa brackets
+// Compute Poisson brackets
 // res = {f, g} = f_y g_x - g_y f_x
 // Input:
 // fname_arr_f: array where f is stored
@@ -353,14 +353,14 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 // fname_arr_res: array where we store the result
 // t_src: time level at which f and g are taken
 // t_dst: time level where we store the result in res
-void slab_bc :: arakawa(const twodads::field_t fname_arr_f, const twodads::field_t fname_arr_g, const twodads::field_t fname_arr_res,
-                        const size_t t_srcf, const size_t t_srcg, const size_t t_dst)
+void slab_bc :: pbracket(const twodads::field_t fname_arr_f, const twodads::field_t fname_arr_g, const twodads::field_t fname_arr_res,
+                         const size_t t_srcf, const size_t t_srcg, const size_t t_dst)
 {
     arr_real* f_arr = get_field_by_name.at(fname_arr_f);
     arr_real* g_arr = get_field_by_name.at(fname_arr_g);
     arr_real* res_arr = get_field_by_name.at(fname_arr_res);
 
-    my_derivs -> arakawa((*f_arr), (*g_arr), (*res_arr), t_srcf, t_srcg, t_dst);
+    my_derivs -> pbracket((*f_arr), (*g_arr), (*res_arr), t_srcf, t_srcg, t_dst);
 }
 
 
@@ -533,8 +533,8 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
     //std::cout << "rhs_omega_ic, t_src=" << t_src << ", t_dst = " << t_dst << std::endl;
     // Compute poisson bracket
-    arakawa(twodads::field_t::f_omega, twodads::field_t::f_strmf, twodads::field_t::f_omega_rhs,
-            t_src, 0, t_dst);
+    pbracket(twodads::field_t::f_omega, twodads::field_t::f_strmf, twodads::field_t::f_omega_rhs,
+             t_src, 0, t_dst);
 
     const twodads::real_t ic{1.0};
     // - theta_y
@@ -546,8 +546,8 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
     //std::cout << "rhs_theta_lin, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
-    arakawa(twodads::field_t::f_theta, twodads::field_t::f_strmf, twodads::field_t::f_theta_rhs,
-            t_src, 0, t_dst);
+    pbracket(twodads::field_t::f_theta, twodads::field_t::f_strmf, twodads::field_t::f_theta_rhs,
+             t_src, 0, t_dst);
 }
 
 

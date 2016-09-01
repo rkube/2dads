@@ -770,11 +770,11 @@ namespace detail
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_l,
+                             solvers :: elliptic_base_t* ell_solver,
                              allocator_device<T>)                         
     {
-        solvers :: elliptic_cublas_t my_ell_solver(src.get_geom());
-
-        my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), 
+        //solvers :: elliptic_cublas_t my_ell_solver(src.get_geom());
+        ell_solver -> solve(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), 
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0), 
                             diag.get_tlev_ptr(0), 
@@ -1028,15 +1028,16 @@ namespace detail
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_u,
                              cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& diag_l,
+                             solvers :: elliptic_base_t* ell_solver,
                              allocator_host<T>)
     {
         // Copy input data for solver into dst.
         dst.copy(t_dst, src, t_src);
 
 #ifndef __CUDACC__
-        solvers :: elliptic_mkl_t my_ell_solver(src.get_geom());
+        //solvers :: elliptic_mkl_t my_ell_solver(src.get_geom());
 
-        my_ell_solver.solve(nullptr,
+        ell_solver -> solve(nullptr,
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0) + 1, 
                             diag.get_tlev_ptr(0), 
@@ -1106,10 +1107,12 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
 
         #ifdef HOST
         using dft_library_t = fftw_object_t<T>;
+        using elliptic_c = solvers :: elliptic_mkl_t;
         #endif //HOST
 
         #ifdef DEVICE
         using dft_library_t = cufft_object_t<T>;
+        using elliptic_t = solvers :: elliptic_cublas_t;
         #endif //DEVICE
 
         deriv_fd_t(const twodads::slab_layout_t);    
@@ -1243,6 +1246,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                 
             detail :: impl_invert_laplace(src, dst, t_src, t_dst,  
                                           get_diag(), get_diag_u(), get_diag_l(),
+                                          get_ell_solver(),
                                           allocator<T>{});
 
             // Remove boundary terms after solving the system
@@ -1287,11 +1291,14 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         // Layouf of the diagonals, i.e. My21 * Nx
         twodads::slab_layout_t get_geom_transpose() const {return(geom_transpose);};
 
+        inline elliptic_t* get_ell_solver() {return(my_solver);};
+
     private:
         const twodads::slab_layout_t geom;          // Layout for Nx * My arrays
         const twodads::slab_layout_t geom_my21;     // Layout for spectrally transformed NX * My21 arrays
         const twodads::slab_layout_t geom_transpose;     // Transposed complex layout (My21 * Nx) for the tridiagonal solver
         dft_object_t<twodads::real_t>* myfft;
+        elliptic_t* my_solver;
 
         // Coefficient storage for spectral derivation
         cmplx_arr coeffs_dy1;
@@ -1321,6 +1328,7 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t _geom) :
                    get_geom().get_nx(), 0,
                    get_geom().get_grid()},
     myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
+    my_solver{new elliptic_t(get_geom())},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy1{get_geom_my21(), 
                twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}),

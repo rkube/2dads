@@ -30,12 +30,12 @@
 // http://stackoverflow.com/questions/2062560/what-is-the-use-of-making-constructor-private-in-a-class
 //
 //
-// Abstract base class to solver interface defines routine
-// void solve(cmplx* src, cmplx* dst, cmplx* diag_l, cmplx* diag, cmplx* diag_u);
-//
+// elliptic_base_t is defined as an abstract base class that just defines the sizes
+// of the linear system. The call to the actual solver routines is defined in the
+// solve member of the derived classes.
 // Implementations
 //
-// * MKL
+// * MKL (zgtsv)
 // * Numerical recipies
 // * cuSparse (zgtsv)
 
@@ -95,16 +95,18 @@ namespace solvers
                 return (h.cusparse_handle);
             }
     };
+
+
 #endif //__CUDAC__
 
-    class elliptic_t
+    class elliptic_base_t
     {
         public:
-            elliptic_t(const twodads::slab_layout_t _geom) : My_int{static_cast<int>(_geom.get_my())},
-                                                             My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
-                                                             Nx_int{static_cast<int>(_geom.get_nx())}
+            elliptic_base_t(const twodads::slab_layout_t _geom) : My_int{static_cast<int>(_geom.get_my())},
+                                                                  My21_int{static_cast<int>((_geom.get_my() + _geom.get_pad_y()) / 2)},
+                                                                  Nx_int{static_cast<int>(_geom.get_nx())}
             {}
-            virtual ~elliptic_t() {}
+            virtual ~elliptic_base_t() {}
 
             virtual void solve(CuCmplx<twodads::real_t>*, 
                                CuCmplx<twodads::real_t>*, 
@@ -123,17 +125,17 @@ namespace solvers
 
 
 #ifdef __CUDACC__
-    class elliptic_cublas_t : public elliptic_t
+    class elliptic_cublas_t : public elliptic_base_t
     {
-        using elliptic_t :: get_my_int;
-        using elliptic_t :: get_my21_int;
-        using elliptic_t :: get_nx_int;
+        using elliptic_base_t :: get_my_int;
+        using elliptic_base_t :: get_my21_int;
+        using elliptic_base_t :: get_nx_int;
 
         private:
             cuDoubleComplex* d_tmp_mat;
 
         public:
-            elliptic_cublas_t(const twodads::slab_layout_t _geom) : elliptic_t(_geom)
+            elliptic_cublas_t(const twodads::slab_layout_t _geom) : elliptic_base_t(_geom)
              {
                 cudaError_t err;
                 if( (err = cudaMalloc((void**) &d_tmp_mat, static_cast<size_t>(get_nx_int() * get_my21_int()) * sizeof(cuDoubleComplex))) != cudaSuccess)
@@ -222,19 +224,17 @@ namespace solvers
 #endif //__CUDACC__
 
 #ifndef __CUDACC__
-    class elliptic_mkl_t : public elliptic_t
+    class elliptic_mkl_t : public elliptic_base_t
     // Class wrapper for zgtsv routine
     {
-        using elliptic_t :: get_my_int;
-        using elliptic_t :: get_my21_int;
-        using elliptic_t :: get_nx_int;
+        using elliptic_base_t :: get_my_int;
+        using elliptic_base_t :: get_my21_int;
+        using elliptic_base_t :: get_nx_int;
 
         public:
-            elliptic_mkl_t(const twodads::slab_layout_t& _geom) : elliptic_t(_geom) 
+            elliptic_mkl_t(const twodads::slab_layout_t& _geom) : elliptic_base_t(_geom) 
             {};
             
-            //void solve(lapack_complex_double* dummy, lapack_complex_double* dst,
-            //           lapack_complex_double* diag_l, lapack_complex_double* diag, lapack_complex_double* diag_u)
             virtual void solve(CuCmplx<twodads::real_t>* dummy, 
                                CuCmplx<twodads::real_t>* dummy_dst,
                                CuCmplx<twodads::real_t>* dummy_diag_l, 
@@ -282,14 +282,14 @@ namespace solvers
 
     // Implementation of tridiagonal solver from numerical recipes
     // $2.4, p.53ff
-    class elliptic_nr_t : public elliptic_t
+    class elliptic_nr_t : public elliptic_base_t
     {
-        using elliptic_t :: get_my_int;
-        using elliptic_t :: get_my21_int;
-        using elliptic_t :: get_nx_int;
+        using elliptic_base_t :: get_my_int;
+        using elliptic_base_t :: get_my21_int;
+        using elliptic_base_t :: get_nx_int;
 
         public:
-            elliptic_nr_t(const twodads::slab_layout_t& _geom) : elliptic_t(_geom)
+            elliptic_nr_t(const twodads::slab_layout_t& _geom) : elliptic_base_t(_geom)
             {};
 
             virtual void solve(CuCmplx<twodads::real_t>* src, CuCmplx<twodads::real_t>* dst,

@@ -1,12 +1,12 @@
 #
-include Makefile_osx.inc
+include Makefile_linux.inc
 # Subdirectories
 TEST_DIR = tests
 
 .PHONY: clean dist
 
 
-DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
+DEFINES	= -DPINNED_HOST_MEMORY  
 
 OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_host.o
 OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_device.o
@@ -15,16 +15,16 @@ OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_d
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
 
 slab_config.o: slab_config.cpp include/slab_config.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp 
 
 output.o: output.cpp include/output.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(DEFINES) $(INCLUDES) -c -o $(OBJ_DIR)/output.o output.cpp 
 
 slab_bc_host.o: slab_bc.cpp
-	$(CC) $(CFLAGS) $(DEFINES) -DHOST -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp 
 
 slab_bc_device.o: slab_bc.cu
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -DDEVICE -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu $(INCLUDES)
+	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -DDEVICE $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu 
 
 #diagnostics.o: diagnostics.cpp include/diagnostics.h
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
@@ -37,10 +37,10 @@ slab_bc_device.o: slab_bc.cu
 #	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
 
 2dads_host: 
-	$(CC) $(CFLAGS) -DHOST -o run/2dads_host $(OBJECTS_HOST) main_bc.cpp $(INCLUDES) $(LFLAGS)
+	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_host $(OBJECTS_HOST) main_bc.cpp $(LFLAGS)
 
 2dads_device: 
-	$(CUDACC) $(CUDACFLAGS) -DDEVICE -o run/2dads_device $(OBJECTS_DEVICE) main_bc.cu $(INCLUDES) $(CUDALFLAGS)
+	$(CUDACC) $(CUDACFLAGS) -DDEVICE $(INCLUDES) -o run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
 
 dist:
 	rm -i dist/*.cpp
