@@ -1107,7 +1107,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
 
         #ifdef HOST
         using dft_library_t = fftw_object_t<T>;
-        using elliptic_c = solvers :: elliptic_mkl_t;
+        using elliptic_t = solvers :: elliptic_mkl_t;
         #endif //HOST
 
         #ifdef DEVICE
