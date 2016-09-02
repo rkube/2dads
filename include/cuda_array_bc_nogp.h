@@ -569,7 +569,9 @@ public:
 
     inline void initialize(const size_t tidx)
     {
-        detail :: impl_initialize(get_tlev_ptr(tidx), get_geom(), get_grid(), get_block(), allocator_type{});
+        detail :: impl_apply(get_tlev_ptr(tidx), 
+                             [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(0.0);}, 
+                             get_geom(), get_grid(), get_block(), allocator_type{});
     }
 
     cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
@@ -601,7 +603,7 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator+=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value += rhs);}, 
+                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value += rhs);}, 
                              get_geom(), get_grid(), get_block(), allocator_type{});
         return *this;
     }
@@ -621,7 +623,7 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator-=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value -= rhs);}, 
+                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value -= rhs);}, 
                              get_geom(), get_grid(), get_block(), allocator_type{});
         return *this;
     }
@@ -640,7 +642,7 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator*=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value *= rhs);}, 
+                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value += rhs);}, 
                              get_geom(), get_grid(), get_block(), allocator_type{});
         return *this;
     }
