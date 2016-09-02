@@ -132,19 +132,6 @@ void slab_bc :: initialize()
     // Iterate over the dynamic fields and initialize them
     for(auto it : map_theta)
     {
-        switch(it.first)
-        {
-            case twodads::dyn_field_t::f_theta:
-                std::cout << "Initializing theta:    ";
-                break;
-            case twodads::dyn_field_t::f_omega:
-                std::cout << "Initializing omega:    ";
-                break;
-            case twodads::dyn_field_t::f_tau:
-                std::cout << "Initializing tau:    ";
-                break;
-        }
-
         // The field we are going to initialize
         arr_real* field{get_field_by_name.at(std::get<0>(it.second))};
 

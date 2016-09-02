@@ -49,7 +49,6 @@
 #include <functional>
 #include <sstream>
 
-//#include <memory>
 #include "2dads_types.h"
 #include "bounds.h"
 #include "address.h"
@@ -236,12 +235,18 @@ namespace host
     void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
+#pragma omp parallel for private(index)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {
-            for(size_t m = 0; m < geom.get_my(); m++)
+// We know my only at runtime and the vectorizer cannot know My at compiletime. It therefore
+// refuses to vectorize the loop. Unroll it manually
+            for(size_t m = 0; m < geom.get_my(); m += 4)
             {
                 index = n * (geom.get_my() + geom.get_pad_y()) + m;
                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+                data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
+                data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
+                data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
             }
 
         }
@@ -251,12 +256,18 @@ namespace host
     void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
+#pragma omp parallel for private(index)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {   
-            for(size_t m = 0; m < geom.get_my(); m++)
+// We know my only at runtime and the vectorizer cannot know My at compiletime. It therefore
+// refuses to vectorize the loop. Unroll it manually
+            for(size_t m = 0; m < geom.get_my(); m += 4)
             {
                 index = n * (geom.get_my() + geom.get_pad_y()) + m;
                 lhs[index] = host_func(lhs[index], rhs[index]);
+                lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
+                lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
+                lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
             }
         }
     }
@@ -325,17 +336,13 @@ namespace detail
     template <typename T, typename F>
     inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
-        std::cout << "Launching apply_unroll: N=" << cuda::elem_per_thread << std::endl;
         device :: kernel_apply_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(data_ptr, myfunc, geom);   
-        //device :: kernel_apply<<<grid, block>>>(data_ptr, myfunc, geom);   
         gpuErrchk(cudaPeekAtLastError());
     }
 
     template <typename T, typename F>
     inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
-        std::cout << "Launching elementwise_unroll: N = " << cuda::elem_per_thread << std::endl;
-        //device :: kernel_elementwise<<<grid, block>>>(x, rhs, myfunc, geom);
         device :: kernel_elementwise_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(x, rhs, myfunc, geom);
         gpuErrchk(cudaPeekAtLastError());
     }

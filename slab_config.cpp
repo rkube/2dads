@@ -247,6 +247,9 @@ bool slab_config_js :: check_consistency() const
         throw config_error(std::string("Periodic boundary conditions in the x-direction are not allowed when using a cell-centered grid. Use a vertex centered grid"));
     }
 
+    assert(get_my() % 4 == 0);
+    assert(get_nx() % 4 == 0);
+
     return(true);
 }
 
