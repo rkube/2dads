@@ -4,6 +4,57 @@
 #include "cuda_array_bc_nogp.h"
 
 
+namespace device{
+#ifdef __CUDACC__
+/// Reduction kernel, taken from cuda_darray.h
+// Perform reduction of in_data, stored in column-major order
+// Use stride_size = 1, offset_size = Nx for row-wise reduction (threads in one block reduce one row, i.e. consecutive elements of in_data)
+// row-wise reduction:
+// stride_size = 1
+// offset_size = Nx
+// blocksize = (Nx, 1)
+// gridsize = (1, My)
+//
+// column-wise reduction:
+// stride_size = My
+// offset_size = 1
+// blocksize = (My, 1)
+// gridsize = (1, Nx)
+template <typename T, typename O>
+__global__ void kernel_reduce(const T* __restrict__ in_data, 
+                            T* __restrict__ out_data, 
+                            O op_func, 
+                            const size_t stride_size, const size_t offset_size, const size_t Nx, const size_t My)
+{
+    extern __shared__ T sdata[];
+
+    const size_t tid = threadIdx.x;
+    const size_t idx_data = tid * stride_size + blockIdx.y * offset_size;
+    const size_t idx_out = blockIdx.y;
+    if(idx_data < Nx * My)
+    {
+        sdata[tid] = in_data[idx_data];
+        // reduction in shared memory
+        __syncthreads();
+        for(size_t s = 1; s < blockDim.x; s *= 2)
+        {
+            if(tid % (2*s) == 0)
+            {
+                sdata[tid] = op_func(sdata[tid], sdata[tid + s]);
+            }
+            __syncthreads();
+        }
+        // write result for this block to global mem
+        if (tid == 0)
+        {
+            //printf("threadIdx = %d: out_data[%d] = %f\n", threadIdx.x, row, sdata[0]);
+            out_data[idx_out] = sdata[0];
+        }
+    }
+}
+#endif //__CUDACC__
+}
+
 namespace utility
 {
     template <typename T>
@@ -125,8 +176,8 @@ namespace utility
         // Configuration for reduction kernel
         T* data_ptr = vec.get_tlev_ptr(tlev);
         const size_t shmem_size_row = vec.get_geom().get_nx() * sizeof(T);
-        const dim3 grid(vec.get_grid());
-        const dim3 block(vec.get_block());
+        //const dim3 grid(vec.get_grid());
+        //const dim3 block(vec.get_block());
         const dim3 blocksize_row(static_cast<int>(vec.get_geom().get_nx()), 1, 1);
         const dim3 gridsize_row(1, static_cast<int>(vec.get_geom().get_my()), 1);
 
@@ -160,10 +211,10 @@ namespace utility
         }
 
         // Take the square of the absolute value
-        device :: kernel_apply<<<grid, block>>>(device_copy,
-                                                [=] __device__ (T in, size_t n, size_t m, twodads::slab_layout_t geom ) -> T 
-                                                {return(abs(in) * abs(in));}, 
-                                                tmp_geom);
+        device :: kernel_apply_single<<<vec.get_grid(), vec.get_block()>>>(device_copy,
+                                                       [] __device__ (T in, const size_t n, const size_t m, const twodads::slab_layout_t& geom ) -> T 
+                                                       {return(abs(in) * abs(in));}, 
+                                                       tmp_geom);
         gpuErrchk(cudaPeekAtLastError());
         //T* tmp_arr(new T[Nx * My]);
         //gpuErrchk(cudaMemcpy(tmp_arr, device_copy.get(), get_nx() * get_my() * sizeof(T), cudaMemcpyDeviceToHost));

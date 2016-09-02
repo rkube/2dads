@@ -133,7 +133,7 @@ namespace device
     /// op_func(T, size_t, size_t, slab_layout_t)
     template <typename T, typename O>
     __global__
-    void kernel_apply(T* array_d_t, O device_func, const twodads::slab_layout_t geom) 
+    void kernel_apply_single(T* array_d_t, O device_func, const twodads::slab_layout_t geom) 
     {
         const size_t col{cuda :: thread_idx :: get_col()};
         const size_t row{cuda :: thread_idx :: get_row()};
@@ -224,53 +224,6 @@ namespace device
         }
         tlev_ptr[0] = tmp;
     }
-
-    /// Reduction kernel, taken from cuda_darray.h
-    // Perform reduction of in_data, stored in column-major order
-    // Use stride_size = 1, offset_size = Nx for row-wise reduction (threads in one block reduce one row, i.e. consecutive elements of in_data)
-    // row-wise reduction:
-    // stride_size = 1
-    // offset_size = Nx
-    // blocksize = (Nx, 1)
-    // gridsize = (1, My)
-    //
-    // column-wise reduction:
-    // stride_size = My
-    // offset_size = 1
-    // blocksize = (My, 1)
-    // gridsize = (1, Nx)
-    template <typename T, typename O>
-    __global__ void kernel_reduce(const T* __restrict__ in_data, 
-                                  T* __restrict__ out_data, 
-                                  O op_func, 
-                                  const size_t stride_size, const size_t offset_size, const size_t Nx, const size_t My)
-    {
-        extern __shared__ T sdata[];
-
-        const size_t tid = threadIdx.x;
-        const size_t idx_data = tid * stride_size + blockIdx.y * offset_size;
-        const size_t idx_out = blockIdx.y;
-        if(idx_data < Nx * My)
-        {
-            sdata[tid] = in_data[idx_data];
-            // reduction in shared memory
-            __syncthreads();
-            for(size_t s = 1; s < blockDim.x; s *= 2)
-            {
-                if(tid % (2*s) == 0)
-                {
-                    sdata[tid] = op_func(sdata[tid], sdata[tid + s]);
-                }
-                __syncthreads();
-            }
-            // write result for this block to global mem
-            if (tid == 0)
-            {
-                //printf("threadIdx = %d: out_data[%d] = %f\n", threadIdx.x, row, sdata[0]);
-                out_data[idx_out] = sdata[0];
-            }
-        }
-    }
 #endif // __CUDACC_
 }
 
@@ -322,9 +275,9 @@ namespace detail
     /// ...
 #ifdef __CUDACC__
     template <typename T>
-    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t sl, allocator_device<T>)
+    inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& geom, allocator_device<T>)
     {
-        device :: kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, tlevs, sl);
+        device :: kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, tlevs, geom);
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -333,7 +286,7 @@ namespace detail
     // The device implementation uses address_2ptr, an address_t<T>**, while the host implementation uses
     // an address_t<T>*.
     template <typename T>
-    inline address_t<T>* impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t geom, const twodads::bvals_t<T> bvals, allocator_device<T>)
+    inline address_t<T>* impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t& geom, const twodads::bvals_t<T>& bvals, allocator_device<T>)
     {
         gpuErrchk(cudaMalloc(&address_2ptr, sizeof(address_t<T>**)));
         device :: kernel_init_address<<<1, 1>>>(address_2ptr, geom, bvals);
@@ -352,34 +305,38 @@ namespace detail
      // Get data_tlev_ptr for a given time level   
     // Returns a device-pointer 
     template <typename T>
-    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tlev, const size_t tlevs, allocator_device<T>)
+    inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tidx, const size_t tlevs, allocator_device<T>)
     {
         T** data_tlev_ptr_hostcopy = new T*[tlevs];
         gpuErrchk(cudaMemcpy(data_tlev_ptr_hostcopy, data_tlev_ptr, tlevs * sizeof(T*), cudaMemcpyDeviceToHost));
         gpuErrchk(cudaPeekAtLastError());
-        return data_tlev_ptr_hostcopy[tlev];
+        return data_tlev_ptr_hostcopy[tidx];
     }
 
     template <typename T>
-    inline void impl_initialize(T* data_ptr, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
+    inline void impl_initialize(T* data_ptr, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_device<T>)
     {
-        device :: kernel_apply<<<grid, block>>>(data_ptr, 
-                                      [] __device__ (T value, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(T(0.0));},
+        device :: kernel_apply_single<<<grid, block>>>(data_ptr, 
+                                      [] __device__ (T value, size_t n, size_t m, twodads::slab_layout_t& geom) -> T {return(T(0.0));},
                                       geom);
         gpuErrchk(cudaPeekAtLastError());
     }
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {   
-        device :: kernel_apply<<<grid, block>>>(data_ptr, myfunc, geom);   
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
+    {
+        std::cout << "Launching apply_unroll: N=" << cuda::elem_per_thread << std::endl;
+        device :: kernel_apply_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(data_ptr, myfunc, geom);   
+        //device :: kernel_apply<<<grid, block>>>(data_ptr, myfunc, geom);   
         gpuErrchk(cudaPeekAtLastError());
     }
 
     template <typename T, typename F>
-    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_device<T>)
+    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
-        device :: kernel_elementwise<<<grid, block>>>(x, rhs, myfunc, geom);
+        std::cout << "Launching elementwise_unroll: N = " << cuda::elem_per_thread << std::endl;
+        //device :: kernel_elementwise<<<grid, block>>>(x, rhs, myfunc, geom);
+        device :: kernel_elementwise_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(x, rhs, myfunc, geom);
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -392,54 +349,6 @@ namespace detail
     }
 
 
-    template <typename T>
-    void impl_op_plus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        device :: kernel_elementwise<<<grid, block>>>(lhs, rhs, [] __device__ (T a, T b) -> T {return(a + b);}, geom);
-        gpuErrchk(cudaPeekAtLastError());
-    }
-
-    template <typename T>
-    void impl_op_plus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        // Let lambda capture local variables by value [=], thus T rhs from argument list of 
-        // this function is passed into the lambda
-        device :: kernel_apply<<<grid, block>>>(lhs, [=] __device__ (T a, size_t row, size_t col, twodads::slab_layout_t geom) -> T {return(a + rhs);}, geom);
-        gpuErrchk(cudaPeekAtLastError());    
-    }
-
-    template <typename T>
-    void impl_op_minus_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        device :: kernel_elementwise<<<grid, block>>>(lhs, rhs, [] __device__ (T a, T b) -> T {return(a - b);}, geom);
-        gpuErrchk(cudaPeekAtLastError());
-    }
-
-
-    template <typename T>
-    void impl_op_minus_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        // Lambda captures local rhs by value
-        device :: kernel_apply<<<grid, block>>>(lhs, [=] __device__ (T a, size_t row, size_t col, twodads::slab_layout_t geom) -> T {return(a - rhs);}, geom);
-        gpuErrchk(cudaPeekAtLastError());    
-    }
-
-
-    template <typename T>
-    void impl_op_mult_equal(T* lhs, T* rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        device :: kernel_elementwise(lhs, rhs, [] (T a, T b) -> T {return(a * b);}, geom);
-        gpuErrchk(cudaPeekAtLastError());
-    }
-
-
-    template <typename T>
-    void impl_op_mult_equal_scalar(T* lhs, T rhs, const twodads::slab_layout_t geom, const dim3 grid, const dim3 block, allocator_device<T>)
-    {
-        // Lambda captures local rhs by value
-        device :: kernel_apply<<<grid, block>>>(lhs, [=] __device__ (T a, size_t row, size_t col, twodads::slab_layout_t geom) -> T {return(a * rhs);}, geom);
-        gpuErrchk(cudaPeekAtLastError());    
-    }
 #endif //__CUDACC__
 
     template <typename T>
@@ -537,7 +446,7 @@ public:
     template <typename F> inline void apply(F myfunc, const size_t tidx)
     {
         check_bounds(tidx + 1, 0, 0);
-        detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
+        detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), get_grid_unroll(), get_block(), allocator_type{});   
     }
 
 
@@ -570,8 +479,8 @@ public:
     inline void initialize(const size_t tidx)
     {
         detail :: impl_apply(get_tlev_ptr(tidx), 
-                             [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(0.0);}, 
-                             get_geom(), get_grid(), get_block(), allocator_type{});
+                             [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t& geom) -> T {return(0.0);}, 
+                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
     }
 
     cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
@@ -595,7 +504,7 @@ public:
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
-                                   [] LAMBDACALLER (T a, T b) -> T {return(a + b);},
+                                   [] LAMBDACALLER (const T a, const T b) -> T {return(a + b);},
                                    get_geom(), get_grid(), get_block(), allocator_type{});
         return *this;
     }
@@ -603,8 +512,8 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator+=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value += rhs);}, 
-                             get_geom(), get_grid(), get_block(), allocator_type{});
+                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
+                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
 
@@ -623,8 +532,8 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator-=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value -= rhs);}, 
-                             get_geom(), get_grid(), get_block(), allocator_type{});
+                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value - rhs);}, 
+                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
     
@@ -642,8 +551,8 @@ public:
     cuda_array_bc_nogp<T, allocator>& operator*=(const T rhs)
     {
         detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value += rhs);}, 
-                             get_geom(), get_grid(), get_block(), allocator_type{});
+                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
+                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
 
@@ -670,8 +579,6 @@ public:
     }  
       
 
-	//inline void normalize(const size_t);
-
 	///@brief Copy data from t_src to t_dst
 	inline void copy(const size_t tidx_dst, const size_t tidx_src)
     {
@@ -695,7 +602,10 @@ public:
         check_bounds(tidx_dst + 1, 0, 0);
         check_bounds(tidx_src + 1, 0, 0);
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
-        detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
+        //detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
+        detail :: impl_apply(get_tlev_ptr(tidx_src), 
+        [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
+        get_geom(), get_grid_unroll(), get_block(), allocator_type{});
     }
 
 	// Advance time levels
@@ -799,7 +709,6 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
 {
     // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
     detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
-   
     // Initialize the address object
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
     initialize();
