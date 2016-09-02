@@ -6,17 +6,14 @@
 #include "cucmplx.h"
 #include <map>
 
-#ifdef __CUDACC__
-#define CUDAMEMBER __host__ __device__
-#else
-#define CUDAMEMBER
-#endif
 
 namespace cuda
 {
     using real_t = double;
     constexpr unsigned int blockdim_col{16}; ///< Block dimension for consecutive elements (y-direction)
     constexpr unsigned int blockdim_row{16}; ///< Block dimension for non-consecutive elements (x-direction)
+
+    constexpr unsigned int elem_per_thread{1};
 
     constexpr unsigned int blockdim_nx_max{1024};
     constexpr unsigned int blockdim_my_max{1024};
@@ -54,10 +51,6 @@ namespace cuda
     __constant__ const real_t ss3_alpha_d[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}};
     __constant__ const real_t ss3_beta_d[3][3]  = {{1., 0., 0.}, {2., -1. , 0.}, {3., -3.,  1.  }};
 #endif //__CUDACC
-
-//    //constexpr real_t ss3_alpha_r[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0.0}, {11./6., 3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
-//    constexpr real_t ss3_alpha_r[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}}; ///< Coefficients for implicit part in time integration
-//    constexpr real_t ss3_beta_r[3][3] =  {{1., 0., 0.}, {2., -1. , 0.}, {3., -3.,  1.   }}; ///< Coefficients for explicit part in time integration
 };
 
 #endif //CUDA_TYPES
