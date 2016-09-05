@@ -105,7 +105,6 @@ class slab_bc
 
         void rhs(const size_t, const size_t);
 
-
         // The RHS functions below should not be called directly but via the pointers
         // stored in ***_rhs_func
         void rhs_theta_null(const size_t t_dst, const size_t t_src)

@@ -12,13 +12,12 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
     output(_conf),
 #ifdef DEVICE
-    //myfft{new dft_t(get_config().get_geom(), twodads::dft_t::dft_1d)},
     myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
 #endif //DEVICE
 #ifdef HOST
     myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
 #endif //HOST
-    my_derivs{new deriv_t(get_config().get_geom())},
+    //my_derivs{new deriv_t(get_config().get_geom())},
     tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
     tint_omega{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega))},
     tint_tau{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau))},
@@ -70,6 +69,27 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     omega_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_omega))},
     tau_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_tau))}
 {
+    switch(get_config().get_bvals(twodads::field_t::f_theta).get_bc_left())
+    {
+        case twodads::bc_t::bc_dirichlet:
+        // Fall through
+        case twodads::bc_t::bc_neumann:
+#ifdef HOST
+            my_derivs = new deriv_fd_t<value_t, allocator_host>(get_config().get_geom());
+#endif //HOST
+#ifdef DEVICE
+            my_derivs = new deriv_fd_t<value_t, allocator_device>(get_config().get_geom());
+#endif //DEVICE
+            break;
+        case twodads::bc_t::bc_periodic:
+#ifdef HOST
+            my_derivs = new deriv_spectral_t<value_t, allocator_host>(get_config().get_geom());
+#endif //HOST
+#ifdef DEVICE
+            my_derivs = new deriv_spectral_t<value_t, allocator_device>(get_config().get_geom());
+#endif //DEVICE
+            break;
+    }
     assert(conf.check_consistency() == true);
 }
 
@@ -273,28 +293,6 @@ void slab_bc :: initialize_pbracket(const twodads::field_t fname1, const twodads
 }
 */
 
-/*
-void slab_bc :: initialize_derivativesx(const twodads::field_t fname, const size_t tidx)
-{
-    arr_real* arr = get_field_by_name.at(fname);
-
-    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
-            {       
-                return(sin(twodads::TWOPI * geom.get_x(n)));
-            }, tidx);
-}
-
-void slab_bc :: initialize_derivativesy(const twodads::field_t fname, const size_t tidx)
-{
-    arr_real* arr = get_field_by_name.at(fname);
-    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
-            {       
-                value_t y{geom.get_y(m)};
-                return(exp(-50.0 * y * y)); 
-            }, tidx);
-}
-
-*/
 
 // Compute x-derivative
 void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fname_dst,
