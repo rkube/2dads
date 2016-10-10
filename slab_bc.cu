@@ -69,6 +69,7 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     omega_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_omega))},
     tau_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_tau))}
 {
+    puts(__PRETTY_FUNCTION__);
     switch(get_config().get_bvals(twodads::field_t::f_theta).get_bc_left())
     {
         case twodads::bc_t::bc_dirichlet:
@@ -296,37 +297,40 @@ void slab_bc :: initialize_pbracket(const twodads::field_t fname1, const twodads
 
 // Compute x-derivative
 void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fname_dst,
-                     const size_t d, const size_t t_src, const size_t t_dst)
+                     const size_t order, const size_t t_src, const size_t t_dst)
 {
     arr_real* arr_src{get_field_by_name.at(fname_src)};
     arr_real* arr_dst{get_field_by_name.at(fname_dst)};
 
-    if(d == 1)
-    {
-        my_derivs -> dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
-    }
-    else if (d == 2)
-    {
-        my_derivs -> dx_2((*arr_src), (*arr_dst), t_src, t_dst);
-    }
+    my_derivs -> dx((*arr_src), (*arr_dst), t_src, t_dst, order); 
+
+    //if(order == 1)
+    //{
+    //    my_derivs -> dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
+    //}
+    //else if (order == 2)
+    //{
+    //    my_derivs -> dx_2((*arr_src), (*arr_dst), t_src, t_dst);
+    //}
 }
 
 
 // Compute y-derivative
 void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fname_dst,
-                     const size_t d, const size_t t_src, const size_t t_dst)
+                     const size_t order, const size_t t_src, const size_t t_dst)
 {
     arr_real* arr_src = get_field_by_name.at(fname_src);
     arr_real* arr_dst = get_field_by_name.at(fname_dst);
 
-    if(d == 1)
-    {
-        my_derivs->dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
-    }
-    else if (d == 2)
-    {
-        my_derivs->dy_2((*arr_src), (*arr_dst), t_src, t_dst);
-    }
+    my_derivs -> dy((*arr_src), (*arr_dst), t_src, t_dst, order);
+    //if(order == 1)
+    //{
+    //    my_derivs->dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
+    //}
+    //else if (order == 2)
+    //{
+    //    my_derivs->dy_2((*arr_src), (*arr_dst), t_src, t_dst);
+    //}
 }
 
 
@@ -436,8 +440,6 @@ void slab_bc :: update_real_fields(const size_t tsrc)
     d_dx(twodads::field_t::f_strmf, twodads::field_t::f_strmf_x, 1, 0, 0);
     d_dy(twodads::field_t::f_strmf, twodads::field_t::f_strmf_y, 1, 0, 0);
 }
-
-
 
 
 // Advance the fields in time

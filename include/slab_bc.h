@@ -172,7 +172,6 @@ class slab_bc
 
         static std::map<twodads::rhs_t, rhs_func_ptr> rhs_func_map;
 
-
         static std::map<twodads::rhs_t, rhs_func_ptr> create_rhs_func_map()
         {
             std::map<twodads::rhs_t, rhs_func_ptr> my_map;

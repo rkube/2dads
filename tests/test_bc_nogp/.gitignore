@@ -7,6 +7,7 @@ test_arakawa_device
 test_derivs_host
 test_derivs_device
 test_derivs_spectral_device
+test_derivs_spectral_host
 test_dtype_host
 test_dtype_device
 test_laplace_host
