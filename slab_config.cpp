@@ -190,6 +190,18 @@ std::vector<twodads::real_t> slab_config_js :: get_model_params() const
     return(res);
 }
 
+
+twodads::dft_t slab_config_js :: get_dft_t() const
+{
+    switch(get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            return twodads::dft_t::dft_2d;
+        case twodads::grid_t::cell_centered:
+            return twodads::dft_t::dft_1d;
+    }
+}
+
 twodads::bvals_t<twodads::real_t> slab_config_js :: get_bvals(const twodads::field_t fname) const
 {
     // Emulate map reverse look-up:

@@ -643,14 +643,14 @@ namespace detail
                 (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
                 (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-                (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
                 (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
             }
             m = geom_my21.get_my() - 1;
             (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
             (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
         }
         
@@ -662,7 +662,7 @@ namespace detail
             (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
             (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
         }
         m = geom_my21.get_my() - 1;
@@ -670,7 +670,7 @@ namespace detail
         (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
         (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-        (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+        (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
         (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
 
         /////////////////////////////////////////////////////////////////////////////////////////////
@@ -682,7 +682,7 @@ namespace detail
                 (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
                 (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-                (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
                 (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
             }
             
@@ -690,7 +690,7 @@ namespace detail
             (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
             (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(T(0.0));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
         }
     }
@@ -917,6 +917,10 @@ namespace detail
                                         {return((u_left + u_right - 2.0 * u_middle) * inv_dx2);},
                                         out.get_geom(), row_vals, col_vals);
                 }
+            else
+            {
+                throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
+            }
         }
 
 
@@ -935,19 +939,27 @@ namespace detail
             // while second order is
             //      u_y_hat[index] = u_hat[index] * (I * ky)^2
             if(order == 1)
+            {
                 host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                                     coeffs_map_d1.get_tlev_ptr(0),
                                     reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                                     geom_my21);
+            }
             else if(order == 2)
+            {
                 host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                                     coeffs_map_d2.get_tlev_ptr(0),
                                     reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * val_map.im());},
                                     geom_my21);
+            }
+            else
+            {
+                throw not_implemented_error(std::string("Derivatives order > 2 are not implemented\n"));
+            }
         }     
 
 
@@ -1100,7 +1112,7 @@ namespace detail
                             {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                             geom_my21);
                         break;
-                    else if(order == 1)
+                    else if(order == 2)
                         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                             coeffs_map_d2.get_tlev_ptr(0),
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
@@ -1123,20 +1135,67 @@ namespace detail
                         cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_map_d2,
                         twodads::slab_layout_t geom_my21, allocator_host<T>)
         {
-            puts(__PRETTY_FUNCTION__);
-            std::cerr << "... not implemented yet" << std::endl;
-        }
+            switch(dir)
+            {
+                case direction::x:
+                    if (order == 1)
+                    {
+                        host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                                            coeffs_map_d1.get_tlev_ptr(0),
+                                            reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                                            [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                                                {return(val_in * CuCmplx<T>(0.0, val_map.re()));},
+                                            geom_my21);
+                    }
+                    else if (order == 2)
+                    {
+                        host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                                            coeffs_map_d2.get_tlev_ptr(0),
+                                            reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                                            [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                                                {return(val_in * val_map.re());},
+                                            geom_my21);
+                    }
+                    else
+                    {
+                        throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
+                    }
+                    break;
+                case direction::y:
+                    if (order == 1)
+                    {
+                        host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                                             coeffs_map_d1.get_tlev_ptr(0),
+                                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                                             [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                                               {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
+                                             geom_my21);
+                    }
+                    else if (order == 2)  
+                    {
+                     host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                                          coeffs_map_d2.get_tlev_ptr(0),
+                                          reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                                          [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                                            {return(val_in * val_map.im());},
+                                          geom_my21);                        
+                    }             
+                    else
+                    {
+                        throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
+                    }
+                    break;
+            } // switch
+        } // impl_deriv
 
 
     } // End namespace bispectral
 } // End namespace detail
 
 
-
 /*
  * Interface to derivation and elliptical solvers
  */
-
 
 
 template <typename T, template <typename> class allocator>
@@ -1145,7 +1204,6 @@ class deriv_base_t
     public:
 
     deriv_base_t() {}
-
     virtual ~deriv_base_t() {}
 
     virtual void dx(cuda_array_bc_nogp<T, allocator>&,
@@ -1503,21 +1561,15 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                 (get_geom().get_my() + 2) / 2, 0, 
                 get_geom().get_grid()}, 
                 myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_2d)},
-                //coeffs_d1(get_geom(),
-                //          twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
-                //          1),
-                //coeffs_d2(get_geom(),
-                //          twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
-                //          1)
-                coeffs_d1(geom,
+                coeffs_d1(get_geom_my21(),
                           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
                           1),
-                coeffs_d2(geom,
+                coeffs_d2(get_geom_my21(),
                           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
-                          1)
-                   
+                          1)                   
         {
             detail :: impl_init_coeffs(get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
+            std::cout << "deriv_spectral_t :: deriv_spectral_t: constructed" << std::endl;
         }
 
         // Wrapper for private method deriv which fetches the right map corresponding to
@@ -1581,9 +1633,9 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
 
         // Layout of the real fields, i.e. Nx * My
-        const twodads::slab_layout_t& get_geom() const {return(geom);}
+        const twodads::slab_layout_t get_geom() const {return(geom);}
         // Layout of complex fields, i.e. Nx * My21
-        const twodads::slab_layout_t& get_geom_my21() const {return(geom_my21);}
+        const twodads::slab_layout_t get_geom_my21() const {return(geom_my21);}
 
         cmplx_arr& get_coeffs_d1() {return(coeffs_d1);}
         cmplx_arr& get_coeffs_d2() {return(coeffs_d2);}
@@ -1593,6 +1645,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
         const twodads::slab_layout_t geom_my21;
         dft_object_t<twodads::real_t>* myfft;
 
+        // Coefficients for spectral derivation
         cmplx_arr coeffs_d1;
         cmplx_arr coeffs_d2;
 };

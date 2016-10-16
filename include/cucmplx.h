@@ -32,7 +32,6 @@ public:
     CUDA_MEMBER CuCmplx(unsigned int re) : data{T(re), T(0.0)} {};
     CUDA_MEMBER CuCmplx(T re, T im) : data{re, im} {};
     CUDA_MEMBER CuCmplx(const CuCmplx<T>& rhs) : data{rhs.re(), rhs.im()} {};
-    //CUDA_MEMBER CuCmplx(const CuCmplx<T>* rhs) : data{rhs -> re(), rhs -> im()} {};
 
     CUDA_MEMBER inline T abs() const {return (sqrt(re() * re() + im() * im()));};
     // (a + ib) + (c + id) = (a + c) + i * (b + d)

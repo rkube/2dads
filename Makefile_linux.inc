@@ -7,13 +7,13 @@ CC	= /home/rku000/local/bin/clang++
 
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
-#CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -pg -g -std=c++11 -Wall -fopenmp -m64 
-CFLAGS = -O3 -march=native -std=c++11 -Wall -fopenmp -DMKL_ILP64 -Rpass-analysis=loop-vectorize
+CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
+#CFLAGS = -O3 -march=native -std=c++11 -Wall -fopenmp -DMKL_ILP64 -Rpass-analysis=loop-vectorize
  
-INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include  -I${MKLROOT}/include -I/usr/include/hdf5/serial/
+INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include  -I/home/rku000/local/include -I${MKLROOT}/include 
 
-#LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5_serial -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
-LFLAGS = -L${MKLROOT}/lib/intel64 -L${IOMPDIR} -L/Users/ralph/local/lib -Wl,-rpath,${MKLROOT}/lib -Wl,--no-as-needed -lhdf5_serial -lhdf5_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl
+#LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5 -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
+LFLAGS = -L${MKLROOT}/lib/intel64 -L${IOMPDIR} -L/home/rku000/local/lib -Wl,-rpath,${MKLROOT}/lib -Wl,--no-as-needed -lhdf5 -lhdf5_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl
 
 NVCC	= /usr/local/cuda/bin/nvcc
 CUDACC = /home/rku000/local/bin/clang++
@@ -32,7 +32,7 @@ CUDALFLAGS	= -L/usr/local/cuda/lib64 -lhdf5_serial -lhdf5_cpp -lcufft -lcublas -
 LFLAGS_OGL = -lglfw -lGLEW -lGL
 
 PROJ_INCDIR = /home/rku000/source/2dads/include
-OBJ_DIR = obj/
+OBJ_DIR = /home/rku000/source/2dads/obj/
 
 # MKL: file:///home/rku000/local/intel/documentation_2016/en/mkl/common/mkl_link_line_advisor.htm
 # MKLROOT /home/rku000/local/intel

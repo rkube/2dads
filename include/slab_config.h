@@ -91,7 +91,8 @@ class slab_config_js
         twodads::real_t get_deltay() const {return(get_Ly() / twodads::real_t(get_my()));};
 
         twodads::grid_t get_grid_type() const {return(grid_map.at(pt.get<std::string>("2dads.geometry.grid_type")));};
-        
+        twodads::dft_t get_dft_t() const;
+
         twodads::bvals_t<twodads::real_t> get_bvals(const twodads::field_t fname) const;
 
         twodads::stiff_params_t get_tint_params(const twodads::dyn_field_t) const;

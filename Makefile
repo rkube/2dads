@@ -1,5 +1,5 @@
 #
-include Makefile_osx.inc
+include Makefile_linux.inc
 # Subdirectories
 TEST_DIR = tests
 

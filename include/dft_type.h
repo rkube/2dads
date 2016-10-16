@@ -258,14 +258,16 @@ namespace fftw
 
             // Create dummy arrays for FFTW_ESTIMATE
             // We are going to use the new_array execute functions of fftw later on.
-            // Here we are planning an in-place dft.
-            // Later-on, we may not use in-place DFTs but out of place.
+            // Plan in-place dfts.
+            // ******************************************************************************
+            // Later-on, we MAY NOT USE in-place DFTs out of place!!!
+            // ******************************************************************************
             // For the derivatives, there was a bug when using a planned
             // out-of-place transform with in-place data. 
             // Maybe we need to later plan both, in- and out-of-place DFTs
             // and dispatch according to the pointer addresses passed to dft_r2c/dft_c2r
             double* dummy_double = new double[(geom.get_nx() + geom.get_pad_x()) * (geom.get_my() + geom.get_pad_y())];
-            CuCmplx<double>* dummy_cmplx = new CuCmplx<double>[(geom.get_nx() + geom.get_pad_x()) * ((geom.get_my() + geom.get_pad_y()) / 2)];
+            //CuCmplx<double>* dummy_cmplx = new CuCmplx<double>[(geom.get_nx() + geom.get_pad_x()) * ((geom.get_my() + geom.get_pad_y()) / 2)];
 
             switch(dft_type)
             {
@@ -298,12 +300,12 @@ namespace fftw
                     break;
 
                 case twodads::dft_t::dft_2d:
-                    plan_r2c = fftw_plan_dft_r2c_2d(geom.get_nx(), geom.get_my(), dummy_double, reinterpret_cast<fftw_complex*>(dummy_cmplx), FFTW_ESTIMATE);
-                    plan_c2r = fftw_plan_dft_c2r_2d(geom.get_nx(), geom.get_my(), reinterpret_cast<fftw_complex*>(dummy_cmplx), dummy_double, FFTW_ESTIMATE);
+                    plan_r2c = fftw_plan_dft_r2c_2d(geom.get_nx(), geom.get_my(), dummy_double, reinterpret_cast<fftw_complex*>(dummy_double), FFTW_ESTIMATE);
+                    plan_c2r = fftw_plan_dft_c2r_2d(geom.get_nx(), geom.get_my(), reinterpret_cast<fftw_complex*>(dummy_double), dummy_double, FFTW_ESTIMATE);
                     break;
             }
             delete [] dummy_double;
-            delete [] dummy_cmplx;
+            //delete [] dummy_cmplx;
         }
 
     template <>

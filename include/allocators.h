@@ -121,8 +121,18 @@ struct allocator_host
     // Allocate s * sizeof(T) bytes
     ptr_type allocate (size_t s) 
     { 
-        ptr_type ptr{new T[s]};
-        //std::cerr << "allocator_host :: allocate: " << s  << " * " << sizeof(T) << " bytes at " << ptr.get() << std::endl;
+        //std::cerr << "allocator_host :: allocating: " << s  << " * " << sizeof(T);
+        ptr_type ptr;
+        try
+        {
+            //ptr_type ptr{new T[s]};
+            ptr.reset(new T[s]);
+        }
+        catch(std::exception& ba)
+        {
+            std::cerr << "bad_alloc caught: " << ba.what() << '\n';
+        }
+        //std::cerr << "\t...done. Allocated at " << ptr.get() << std::endl;
         return(ptr);
     } 
 
@@ -180,8 +190,6 @@ struct my_allocator_traits<T*, allocator_device>
     using deleter_type = deleter_device<T*>;
 };
 #endif //__CUDACC__
-
-
 
 
 #endif //ALLOCATOR_DEVICE_H

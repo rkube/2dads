@@ -12,10 +12,12 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
     output(_conf),
 #ifdef DEVICE
-    myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+    //myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+    myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //DEVICE
 #ifdef HOST
-    myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+    //myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
+    myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //HOST
     //my_derivs{new deriv_t(get_config().get_geom())},
     tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
@@ -303,15 +305,6 @@ void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fn
     arr_real* arr_dst{get_field_by_name.at(fname_dst)};
 
     my_derivs -> dx((*arr_src), (*arr_dst), t_src, t_dst, order); 
-
-    //if(order == 1)
-    //{
-    //    my_derivs -> dx_1((*arr_src), (*arr_dst), t_src, t_dst);   
-    //}
-    //else if (order == 2)
-    //{
-    //    my_derivs -> dx_2((*arr_src), (*arr_dst), t_src, t_dst);
-    //}
 }
 
 
@@ -323,14 +316,6 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
     arr_real* arr_dst = get_field_by_name.at(fname_dst);
 
     my_derivs -> dy((*arr_src), (*arr_dst), t_src, t_dst, order);
-    //if(order == 1)
-    //{
-    //    my_derivs->dy_1((*arr_src), (*arr_dst), t_src, t_dst);   
-    //}
-    //else if (order == 2)
-    //{
-    //    my_derivs->dy_2((*arr_src), (*arr_dst), t_src, t_dst);
-    //}
 }
 
 

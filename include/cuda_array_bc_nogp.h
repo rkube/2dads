@@ -235,18 +235,26 @@ namespace host
     void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
-#pragma omp parallel for private(index)
+        size_t m{0};
+
+#pragma omp parallel for private(index, m)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {
-// We know my only at runtime and the vectorizer cannot know My at compiletime. It therefore
-// refuses to vectorize the loop. Unroll it manually
-            for(size_t m = 0; m < geom.get_my(); m += 4)
+        // We find out what My (geom.get_my()) is at runtime. To vectorize the loop
+        // find out how how many iterations we need to do when handling 4 elements
+        // per iteration. The remaining elements are done sequentially
+            for(m = 0; m < geom.get_my() - (geom.get_my() % 4); m += 4)
             {
                 index = n * (geom.get_my() + geom.get_pad_y()) + m;
                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
                 data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
                 data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
                 data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
+            }
+            for(; m < geom.get_my(); m++)
+            {
+                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
             }
 
         }
@@ -256,12 +264,13 @@ namespace host
     void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom)
     {
         size_t index{0};
-#pragma omp parallel for private(index)
+        size_t m{0};
+
+#pragma omp parallel for private(index, m)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {   
-// We know my only at runtime and the vectorizer cannot know My at compiletime. It therefore
-// refuses to vectorize the loop. Unroll it manually
-            for(size_t m = 0; m < geom.get_my(); m += 4)
+            // Loop vectorization scheme follows host_apply (above)
+            for(m = 0; m < geom.get_my() - (geom.get_my() % 4); m += 4)
             {
                 index = n * (geom.get_my() + geom.get_pad_y()) + m;
                 lhs[index] = host_func(lhs[index], rhs[index]);
@@ -269,12 +278,15 @@ namespace host
                 lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
                 lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
             }
+            for(; m < geom.get_my(); m++)
+            {
+                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                lhs[index] = host_func(lhs[index], rhs[index]);
+            }
         }
     }
 
 }
-
-
 
 
 namespace detail 

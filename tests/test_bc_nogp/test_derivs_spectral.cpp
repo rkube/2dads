@@ -48,7 +48,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddx1_solan_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddx1_solan_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_an, t_src, fname.str());
 
         // compute first x-derivative
@@ -56,7 +56,7 @@ int main(void)
         sol_num = my_slab.get_array_ptr(twodads::field_t::f_theta_x);
 
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddx1_solnum_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddx1_solnum_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num -= sol_an;
@@ -72,7 +72,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddx2_solan_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddx2_solan_" << my_config.get_nx() << "_host.dat";
         //of.open(fname.str());
         utility :: print(sol_an, t_src, fname.str());
 
@@ -81,7 +81,7 @@ int main(void)
         sol_num = my_slab.get_array_ptr(twodads::field_t::f_theta_x);
 
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddx2_solnum_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddx2_solnum_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num -= sol_an;
@@ -106,7 +106,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddy1_solan_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddy1_solan_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_an, 0, fname.str());
 
         //// compute first y-derivative
@@ -114,7 +114,7 @@ int main(void)
         sol_num = my_slab.get_array_ptr(twodads::field_t::f_theta_y);
 
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddy1_solnum_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddy1_solnum_" << my_config.get_nx() << "_host.dat";
         utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta_y)), t_src, fname.str());
 
         sol_num -= sol_an;
@@ -131,7 +131,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddy2_solan_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddy2_solan_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_an, t_src, fname.str());
 
         //// compute first x-derivative
@@ -139,10 +139,10 @@ int main(void)
         sol_num = my_slab.get_array_ptr(twodads::field_t::f_theta_y);
 
         fname.str(string(""));
-        fname << "test_derivs_bispectral_ddy2_solnum_" << my_config.get_nx() << "_device.dat";
+        fname << "test_derivs_bispectral_ddy2_solnum_" << my_config.get_nx() << "_host.dat";
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num -= sol_an;
-        cout << "First y-derivative: sol_num - sol_an: Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_num, t_src) << endl;
+        cout << "Second y-derivative: sol_num - sol_an: Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_num, t_src) << endl;
     }
 }
