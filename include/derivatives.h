@@ -1064,10 +1064,11 @@ namespace detail
             const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
                                  (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
-            device :: kernel_gen_kmap_d1<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), geom_my21);
-            gpuErrchk(cudaPeekAtLastError());
+            //device :: kernel_gen_kmap_d1<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), geom_my21);
+            //gpuErrchk(cudaPeekAtLastError());
 
-            device :: kernel_gen_kmap_d2<<<grid_my21, block_my21>>>(coeffs_d2.get_tlev_ptr(0), geom_my21);
+            //device :: kernel_gen_kmap_d2<<<grid_my21, block_my21>>>(coeffs_d2.get_tlev_ptr(0), geom_my21);
+            device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), coeffs_d2.get_tlev_ptr(0), geom_my21);
             gpuErrchk(cudaPeekAtLastError()); 
         }
 
@@ -1086,25 +1087,34 @@ namespace detail
 
             switch(dir)
             {
-                case direction::x
+                case direction::x:
                     if(order == 1)
+                    {
                         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                             coeffs_map_d1.get_tlev_ptr(0),
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                             [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                             {return(val_in * CuCmplx<T>(0.0, val_map.re()));},
                             geom_my21);
+                    }
                     else if(order == 2)
+                    {
                         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                             coeffs_map_d2.get_tlev_ptr(0),
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                             [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                             {return(val_in * val_map.re());},
                             geom_my21);
+                    }
+                    else
+                    {
+                        throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
+                    }
                     break;
 
-                case direction::y
+                case direction::y:
                     if(order == 1)
+                    {
                         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                             coeffs_map_d1.get_tlev_ptr(0),
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
@@ -1112,15 +1122,21 @@ namespace detail
                             {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                             geom_my21);
                         break;
+                    }
                     else if(order == 2)
+                    {
                         device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                             coeffs_map_d2.get_tlev_ptr(0),
                             reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                             [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                             {return(val_in * val_map.im());},
                             geom_my21);
-                        break;
-                    
+                    }
+                    else
+                    {
+                        throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
+                    }
+                    break;
             }
             gpuErrchk(cudaPeekAtLastError());
         }
