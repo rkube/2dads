@@ -1149,7 +1149,7 @@ namespace detail
                         const size_t t_src, const size_t t_dst, const direction dir, const size_t order,
                         cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_map_d1,
                         cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_map_d2,
-                        twodads::slab_layout_t geom_my21, allocator_host<T>)
+                        const twodads::slab_layout_t geom_my21, allocator_host<T>)
         {
             switch(dir)
             {
@@ -1204,6 +1204,26 @@ namespace detail
             } // switch
         } // impl_deriv
 
+
+        template <typename T>
+        void impl_invert_laplace(const cuda_array_bc_nogp<T, allocator_host>& src, 
+                                 const cuda_array_bc_nogp<T, allocator_host>& dst, 
+                                 const cuda_array_bc_nogp<twodads::cmplx_t, allocator_host>& coeffs_map,
+                                 const size_t t_src, const size_t t_dst, 
+                                 const twodads::slab_layout_t& geom_my21, allocator_host<T>)
+        {
+            host :: multiply_map(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
+                                 coeffs_map.get_tlev_ptr(0),
+                                 reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
+                                 [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
+                                 {
+                                     return(val_in /(val_map.re() + val_map.im()));
+                                 }, geom_my21);
+            // Fix the zero mode
+            (dst.get_tlev_ptr(0))[0] = T(0.0);
+            (dst.get_tlev_ptr(0))[1] = T(0.0);
+            //std::cerr << "invert laplace not implemented yet, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
+        }
 
     } // End namespace bispectral
 } // End namespace detail
@@ -1635,7 +1655,30 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                                     cuda_array_bc_nogp<T, allocator>& dst,
                                     const size_t t_src, const size_t t_dst)
         {
-            std::cerr << "derivs_bs_t::invert_laplace: not implemented yet" << std::endl;
+            assert(src.get_geom() == dst.get_geom());
+            assert(src.get_geom() == get_geom());
+            assert(src.get_bvals() == dst.get_bvals());
+
+            if(!(src.is_transformed(t_src)))
+            {
+                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+                src.set_transformed(t_src, true);
+            }
+
+            if(!(dst.is_transformed(t_dst)))
+            {
+                myfft -> dft_r2c(dst.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)));
+            }
+
+            detail :: bispectral :: impl_invert_laplace(src, dst, get_coeffs_d2(), t_src, t_dst, get_geom_my21(), allocator<T>{});
+
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            dst.set_transformed(t_dst, false);
+            utility :: normalize(dst, t_dst);
+
+            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            src.set_transformed(t_src, false);
+            utility :: normalize(dst, t_src);
         };   
 
 
