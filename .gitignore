@@ -3,6 +3,8 @@
 *.png
 *.dat
 *.o
+*.h5
+.*
 .vscode/
 run/
 run_bc/

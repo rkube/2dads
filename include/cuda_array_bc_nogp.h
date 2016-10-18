@@ -520,6 +520,7 @@ public:
 
     cuda_array_bc_nogp<T, allocator>& operator+=(const cuda_array_bc_nogp<T, allocator>& rhs)
     {
+        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
@@ -539,7 +540,8 @@ public:
 
     cuda_array_bc_nogp<T, allocator>& operator-=(const cuda_array_bc_nogp<T, allocator>& rhs)
     {
-        check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
+        check_bounds(1, rhs.get_nx(), rhs.get_my());
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a - b);},
@@ -558,7 +560,8 @@ public:
     
     cuda_array_bc_nogp<T, allocator>& operator*=(const cuda_array_bc_nogp<T, allocator>& rhs)
     {
-        check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
+        check_bounds(1, rhs.get_nx(), rhs.get_my());
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a * b);},

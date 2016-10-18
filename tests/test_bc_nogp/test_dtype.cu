@@ -10,7 +10,7 @@ using namespace std;
 
 #ifndef HOST
 #ifndef DEVICE
-#warning "Please specify -DDISPATCH=HOST or -DDISPATCH=DEVICE"
+#warning "Please specify either -DHOST or -DDEVICE"
 #endif
 #endif
 
@@ -37,8 +37,8 @@ int main(void)
     cin >> My;
 
     twodads::slab_layout_t my_geom(0.0, 1.0 / twodads::real_t(Nx), 0.0, 1.0 / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
-    twodads::bvals_t<value_t> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic,
-                                   0.0, 0.0, 0.0, 0.0};
+    twodads::bvals_t<value_t> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, 0.0, 0.0};
+
     cout << "Entering scope" << endl;
     {
         #ifdef DEVICE

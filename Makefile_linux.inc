@@ -23,8 +23,8 @@ NVCCFLAGS	= -DDEBUG -DBOOST_NOINLINE='__attribute__ ((noinline))' -O0 -g -pg -G 
 #NVCCFLAGS	= -O3 -std c++11 --gpu-architecture sm_50 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin
 
 ### Flags when compiling device code with clang. Not working yet (revision 280478)
-#CUDACFLAGS	= -DDEBUG -O0 -g -std=c++11 --cuda-gpu-arch=sm_50 -Wall  --cuda-path=/usr/local/cuda/
-#CUDACFLAGS	= -O3  -std=c++11 --gpu-architecture sm_50 -Wall  --cuda-path=/usr/local/cuda/
+CUDACFLAGS	= -DDEBUG -O0 -g -stdlib=libc++ -std=c++14 --cuda-gpu-arch=sm_50 -Wall  --cuda-path=/usr/local/cuda/
+#CUDACFLAGS	= -O3 -stdlib=libc++ -std=c++14 --gpu-architecture sm_50 -Wall  --cuda-path=/usr/local/cuda/
 
 #CUDALFLAGS	= -L/usr/local/cuda/lib64 -lcufft -lcublas -lcusparse -lhdf5_serial -lhdf5_cpp -lpthread -lm -ldl
 CUDALFLAGS	= -L/usr/local/cuda/lib64 -L/home/rku000/local/lib -lhdf5 -lhdf5_cpp -lcufft -lcublas -lcusparse -lpthread -lm -ldl
