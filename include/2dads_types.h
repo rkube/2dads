@@ -313,6 +313,8 @@ namespace twodads {
                
     /// Initialization function
     enum class init_fun_t {init_NA, ///< Not available, throws an error
+        init_arakawa_f, ///< Initialize test function for arakawa bracket (f)
+        init_arakawa_g, ///< Initialize test function for arakawa bracket (g)
         init_gaussian,  ///< Initializes gaussian profile 
         init_constant, ///< Initialize field with constant value
         init_sine, ///< Initializes sinusoidal profile for theta

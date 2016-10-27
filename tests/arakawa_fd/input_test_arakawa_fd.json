@@ -4,34 +4,34 @@
             "runnr": 0,
             "geometry": 
             {
-                "xleft"  : -20.0,
-                "xright" : 20.0,
-                "ylow"   : -20.0,
-                "yup"    : 20.0,
-                "Nx"     : 128,
+                "xleft"  : -1.0,
+                "xright" : 1.0,
+                "ylow"   : -1.0,
+                "yup"    : 1.0,
+                "Nx"     : 1024,
                 "padx"   : 0,
-                "My"     : 128,
+                "My"     : 1024,
                 "pady"   : 2,
-                "grid_type" : "vertex",
+                "grid_type" : "cell",
 
-                "theta_bc_left" : "periodic",
+                "theta_bc_left" : "dirichlet",
                 "theta_bval_left" : 0.0,
-                "theta_bc_right" : "periodic",
+                "theta_bc_right" : "dirichlet",
                 "theta_bval_right" : 0.0,
 
-                "tau_bc_left" : "periodic",
+                "tau_bc_left" : "dirichlet",
                 "tau_bval_left" : 0.0,
-                "tau_bc_right" : "periodic",
+                "tau_bc_right" : "dirichlet",
                 "tau_bval_right" : 0.0,
 
-                "omega_bc_left" : "periodic",
+                "omega_bc_left" : "dirichlet",
                 "omega_bval_left" : 0.0,
-                "omega_bc_right" : "periodic",
+                "omega_bc_right" : "dirichlet",
                 "omega_bval_right" : 0.0,
 
-                "strmf_bc_left" : "periodic",
+                "strmf_bc_left" : "dirichlet",
                 "strmf_bval_left" : 0.0,
-                "strmf_bc_right" : "periodic",
+                "strmf_bc_right" : "dirichlet",
                 "strmf_bval_right" : 0.0
             },
             "integrator":
@@ -54,9 +54,9 @@
             },
             "initial":
             {
-                "init_func_theta" : "gaussian",
-                "initc_theta" : [1.0, 1.0, 0.0, 0.0, 1.0],
-                "init_func_omega" : "constant",
+                "init_func_theta" : "arakawa_f",
+                "initc_theta" : [0.0],
+                "init_func_omega" : "arakawa_g",
                 "initc_omega" : [0.0],
                 "init_func_tau" : "constant",
                 "initc_tau"   : [0.0]

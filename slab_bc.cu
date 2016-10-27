@@ -172,6 +172,28 @@ void slab_bc :: initialize()
 
         switch(get_config().get_init_func_t(it.first))
         {
+
+        case twodads::init_fun_t::init_arakawa_f:
+            // -Sin[2 \[Pi] y] Sin[2 \[Pi] y] * Sin[2 \[Pi] x] Sin[2 \[Pi] x]
+            (*field).apply([] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+            {
+                const twodads::real_t x{geom.get_x(n)};
+                const twodads::real_t y{geom.get_y(m)};
+                return(-1.0 * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * x));
+            }, tidx);
+            break;
+
+        case twodads::init_fun_t::init_arakawa_g:
+            // Sin[ \[Pi] x] *Sin[\[Pi] y]
+            (*field).apply([] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+            {
+                const twodads::real_t x{geom.get_x(n)};
+                const twodads::real_t y{geom.get_y(m)};
+                return(sin(twodads::PI * x) * sin(twodads::PI * y));
+            }, tidx);
+            break;
+
+
         case twodads::init_fun_t::init_constant:
             std::cout << "Initializing constant" << initvals[0] << std::endl;
 
@@ -207,8 +229,9 @@ void slab_bc :: initialize()
             break;
 
         case twodads::init_fun_t::init_lamb_dipole:
-            std::cout << "Initializing lamb dipole" << std::endl;
+                throw not_implemented_error(std::string("Initializing lamb dipole: not implemented yet"));
             break;
+
         case twodads::init_fun_t::init_mode:
             std::cout << "Initializing mode" << std::endl;
 
@@ -234,9 +257,11 @@ void slab_bc :: initialize()
                 return(sin(iv0 * x) + sin(iv1 * y));
             }, tidx);
             break;
+
         case twodads::init_fun_t::init_turbulent_bath:
-            std::cout << "Initializing turbulent bath" << std::endl;
+                throw not_implemented_error(std::string("Initializing turbulent bath: not implemented yet"));
             break;
+
         case twodads::init_fun_t::init_NA:
             std::cout << "Initialization routine not available";
             break;
@@ -248,53 +273,6 @@ void slab_bc :: initialize()
 
 
 }
-
-
-/*
-void slab_bc :: initialize_invlaplace(const twodads::field_t fname, const size_t tidx)
-{
-    arr_real* arr = get_field_by_name.at(fname);
-    
-    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-                {
-                    const value_t x{geom.get_x(n)};
-                    const value_t y{geom.get_y(m)};
-                    return(exp(-0.5 * (x * x + y * y)) * (-2.0 + x * x + y * y));
-                }, tidx);
-}
-
-
-void slab_bc :: initialize_sine(const twodads::field_t fname, const size_t tidx)
-{
-    rr_real* arr = get_field_by_name.at(fname);
-    (*arr).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
-                 {
-                    return(sin(twodads::TWOPI * geom.get_x(n)) + 0.0 * sin(twodads::TWOPI * geom.get_y(m)));
-                 }, tidx);
-}
-*/
-
-/*
-void slab_bc :: initialize_pbracket(const twodads::field_t fname1, const twodads::field_t fname2, const size_t tlev)
-{
-    arr_real* arr1 = get_field_by_name.at(fname1);
-    arr_real* arr2 = get_field_by_name.at(fname2);
-  
-    // arr1 =-sin^2(2 pi y) sin^2(2 pi x). Dirichlet bc, f(-1, y) = f(1, y) = 0.0
-    (*arr1).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
-                  {
-                    value_t x{geom.get_x(n)};
-                    value_t y{geom.get_y(m)};
-                    return(-1.0 * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * x));
-                  }, tlev);
-
-    // arr2 = sin(pi x) sin (pi y). Dirichlet BC: g(-1, y) = g(1, y) = 0.0
-    (*arr2).apply([] LAMBDACALLER (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> value_t
-                  {
-                    return(sin(twodads::PI * geom.get_x(n)) * sin(twodads::PI * geom.get_y(m)));
-                  }, tlev);
-}
-*/
 
 
 // Compute x-derivative

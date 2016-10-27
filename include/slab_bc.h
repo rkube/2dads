@@ -126,7 +126,6 @@ class slab_bc
 
         void rhs_theta_lin(const size_t, const size_t);
 
-
     private:
 
         const slab_config_js conf;
@@ -182,7 +181,6 @@ class slab_bc
             my_map[twodads::rhs_t::rhs_tau_null]   = &slab_bc::rhs_tau_null;
             return(my_map);
         }
-
 };
 
 #endif // SLAB_BC_H

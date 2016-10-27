@@ -120,7 +120,11 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
             init_diagonal(1);
             init_diagonals_ul();
         }
-        ~integrator_karniadakis_t() {}
+        ~integrator_karniadakis_t() 
+        {
+            delete my_solver;
+            delete myfft;
+        }
         
         void integrate(cuda_array_bc_nogp<T, allocator>&, const cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t);
 

@@ -77,12 +77,14 @@ const std::map<std::string, twodads::diagnostic_t> slab_config_js::diagnostic_ma
 
 const std::map<std::string, twodads::init_fun_t> slab_config_js::init_func_map 
 {
-    {"gaussian", twodads::init_fun_t::init_gaussian},
+    {"arakawa_f", twodads::init_fun_t::init_arakawa_f},
+    {"arakawa_g", twodads::init_fun_t::init_arakawa_g},
     {"constant", twodads::init_fun_t::init_constant}, 
-    {"sine", twodads::init_fun_t::init_sine},
+    {"gaussian", twodads::init_fun_t::init_gaussian},
+    {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole},
     {"mode", twodads::init_fun_t::init_mode},
-    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath},
-    {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole}
+    {"sine", twodads::init_fun_t::init_sine},
+    {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath}    
 };
     
 const std::map<std::string, twodads::rhs_t> slab_config_js::rhs_func_map 
@@ -128,7 +130,14 @@ slab_config_js :: slab_config_js(std::string fname) :
         //particle_tracking{false},
         //nprobes{0}
 {
-    boost::property_tree::read_json(fname, pt);
+    try
+    {
+        boost::property_tree::read_json(fname, pt);
+    }
+    catch(std::exception const& e)
+    {
+        std::cerr << "Could not initialize configuration: " << e.what() << std::endl;
+    }
 }
 
 twodads::rhs_t slab_config_js :: get_rhs_t(const twodads::dyn_field_t fname) const
@@ -166,7 +175,6 @@ std::vector<twodads::diagnostic_t> slab_config_js :: get_diagnostics() const
     std::vector<twodads::diagnostic_t> res;
     for(auto it : pt.get_child("2dads.diagnostics.routines"))
         res.push_back(map_safe_select(it.second.data(), diagnostic_map));
-        //res.push_back(diagnostic_map.at(it.second.data()));
 
     return(res); 
 }

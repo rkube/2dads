@@ -47,6 +47,9 @@ int main(void)
                     return(exp(-0.5 * (x * x + y * y)));
                 },
         t_src);
+        // The spectral solver returns an array without mean. 
+        // Find the mean of the analytic solution and subtract it.
+        sol_an -= utility :: mean(sol_an, t_src);
 
         fname.str(string(""));
         fname << "test_laplace_solan_" << my_config.get_nx() << "_host.dat";

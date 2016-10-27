@@ -396,7 +396,7 @@ namespace host
         const T inv_dx{1.0 / geom.get_deltax()};
         const T inv_dx2{inv_dx * inv_dx};
 
-        for(size_t n = 0; n < geom.get_nx(); n++)
+        for(size_t n = 1; n < geom.get_nx() - 1; n++)
         {
             for(size_t m = 0; m < geom.get_my(); m++)
             {
@@ -885,12 +885,14 @@ namespace detail
                                                 {return(0.5 * (u_right - u_left) * inv_dx);}, 
                                                 out.get_geom());
 
-                // Call expensive interpolation routine only for 2 columns
+                // Call expensive interpolation routine only for 2 rows
+                // row n=0, m = 0...my-1
                 host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
                                             [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                                             {return(0.5 * (u_right - u_left) * inv_dx);},
                                             out.get_geom(), row_vals, col_vals);
 
+                // row n=Nx - 1, m = 0..My-1
                 row_vals[0] = in.get_geom().get_nx() - 1;
                 host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
                                             [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
@@ -1222,7 +1224,6 @@ namespace detail
             // Fix the zero mode
             (dst.get_tlev_ptr(0))[0] = T(0.0);
             (dst.get_tlev_ptr(0))[1] = T(0.0);
-            //std::cerr << "invert laplace not implemented yet, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
         }
 
     } // End namespace bispectral
@@ -1369,8 +1370,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                     add_to_boundary_left = -1.0 * src.get_geom().get_deltax() * bval_left_hat;
                     break;
                 case twodads::bc_t::bc_periodic:
-                    std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
-                    std::cerr << "Treating as dirichlet, bval=0" << std::endl;
+                    std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
                     break;
             }
 
@@ -1383,8 +1383,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                     add_to_boundary_right = -1.0 * src.get_geom().get_deltax() * bval_right_hat;
                     break;
                 case twodads::bc_t::bc_periodic:
-                    std::cerr << "Periodic boundary conditions not implemented yet." << std::endl;
-                    std::cerr << "Treating as dirichlet, bval=0" << std::endl;
+                    std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
                     break;
             }    
 
@@ -1668,6 +1667,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             if(!(dst.is_transformed(t_dst)))
             {
                 myfft -> dft_r2c(dst.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)));
+                dst.set_transformed(t_dst, true);
             }
 
             detail :: bispectral :: impl_invert_laplace(src, dst, get_coeffs_d2(), t_src, t_dst, get_geom_my21(), allocator<T>{});
@@ -1678,7 +1678,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
             myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
             src.set_transformed(t_src, false);
-            utility :: normalize(dst, t_src);
+            utility :: normalize(src, t_src);
         };   
 
 

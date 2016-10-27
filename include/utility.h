@@ -130,6 +130,24 @@ namespace utility
         return tmp;
     }
 
+    template <typename T>
+    T mean(cuda_array_bc_nogp<T, allocator_host>&vec, const size_t tlev)
+    {
+        T sum{0.0};
+        address_t<T>* addr{vec.get_address_ptr()};
+        T* data_ptr = vec.get_tlev_ptr(tlev);
+
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                sum += addr -> get_elem(data_ptr, n, m);
+            }
+        }
+        sum = sum / T(vec.get_geom().get_nx() * vec.get_geom().get_my());
+        return sum;
+    }
+
 
 #ifdef __CUDACC__
     template <typename T>
