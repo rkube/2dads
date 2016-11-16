@@ -73,6 +73,7 @@ namespace detail
 
 /*
  * Interface to time integrator routines
+ *
  */
 template <typename T, template<typename> class allocator>
 class integrator_base_t
@@ -80,11 +81,14 @@ class integrator_base_t
     public:
         integrator_base_t(){}
         virtual ~integrator_base_t() {}
-        virtual void integrate(cuda_array_bc_nogp<T, allocator>&, const cuda_array_bc_nogp<T, allocator>&, const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
+        // Integration with real fields, overloaded by integrator_karniadakis_fd_t
+        virtual void integrate(cuda_array_bc_nogp<T, allocator>&, 
+                               const cuda_array_bc_nogp<T, allocator>&, 
+                               const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
 };
 
 
-// Karniadakis stiffly-stable time integrator for semi-spectral layout. Sub-class of integrator_t
+// Karniadakis stiffly-stable time integrator. Sub-class of integrator
 template <typename T, template<typename> class allocator>
 class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
 {
@@ -405,31 +409,20 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 }
 
 
-
+// Karniadakis integration for bispectral layout
+// The integrate member needs to be called with complex fields
 template <typename T, template<typename> class allocator>
 class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
 {
     public:
-#ifdef DEVICE
-        using dft_t = cufft_object_t<T>;
-#endif // DEVICE
-
-#ifdef HOST
-        using dft_t = fftw_object_t<T>;
-#endif //HOST
-
         integrator_karniadakis_bs_t(const twodads::slab_layout_t& _sl,
                                     const twodads::bvals_t<T>& _bv,
                                     const twodads::stiff_params_t& _sp) :
             geom{_sl}, bvals{_bv}, stiff_params{_sp},
-            geom_my21{get_geom().get_xleft(), 
-                      get_geom().get_deltax(), 
-                      get_geom().get_ylo(), 
-                      get_geom().get_deltay(), 
-                      get_geom().get_nx(), get_geom().get_pad_x(),
-                      (get_geom().get_my() + 2) / 2, 0, 
-                      get_geom().get_grid()}
+            k2_map(get_geom(), twodads::bvals_t<T>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, T(0.0), T(0.0)), 1)
         {
+            k2_map.set_transformed(0, true);
+            init_k2_map();
             std::cout << "integrator_karniadakis_bs_t constructed" << std::endl;
         }
 
@@ -437,7 +430,10 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
                     const cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t,
                     const size_t, const size_t);
-        
+
+        void init_k2_map();
+        const cuda_array_bc_nogp<T, allocator>& get_k2_map() const {return(k2_map);};
+
         inline twodads::slab_layout_t get_geom() const {return(geom);};
         inline twodads::bvals_t<T> get_bvals() const {return(bvals);};
         inline twodads::stiff_params_t get_tint_params() const {return(stiff_params);};
@@ -445,10 +441,24 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
     private:
         const twodads::slab_layout_t geom;
         const twodads::bvals_t<twodads::real_t> bvals;
-        const twodads::stiff_params_t stiff_params;
-        const twodads::slab_layout_t geom_my21;
-
+        const twodads::stiff_params_t stiff_params; 
+        cuda_array_bc_nogp<T, allocator> k2_map;
 };
+
+
+template<typename T, template<typename> class allocator>
+void integrator_karniadakis_bs_t<T, allocator> :: init_k2_map()
+{
+    // Construct Ly (cut in half) outside of the function
+    k2_map.apply([] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
+                  {
+                    const T kx{twodads::TWOPI * ( (n < geom.get_nx() / 2 + 1) ? T(n) : (T(n) - T(geom.get_nx())) ) / geom.get_Lx()};
+                    const T ky{twodads::TWOPI * 0.5 * T(m - (m % 2)) / geom.get_Ly()};
+                    return(kx * kx + ky * ky);
+                  }, 0);
+
+    //utility :: print(get_k2_map(), 0, std::cout);
+}
 
 
 template<typename T, template<typename> class allocator>
@@ -466,14 +476,27 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     {
         const T alpha1{twodads::alpha[0][1]};
         const T beta1{twodads::beta[0][0]};
-        
+        const T diff{get_tint_params().get_diff()};
+        const T hv{get_tint_params().get_hv()};
+
         // u^{0} = alpha_1 u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T 
+                            {
+                                return(rhs * alpha1);
+                            }, t_dst, t_src1);
         // u^{0} += beta_1 N^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * beta1);},
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T 
+                            {
+                                return(lhs + rhs * beta1 * get_tint_params().get_deltat());
+                            },
                           explicit_part, t_dst, t_src1 - 1);
         // u^{0} /= (1.0 + dt * (diff * k^2 ))
-        //field.elementwise([=] LAMBDACALLER (T ))
+        
+        field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T 
+                            {
+                                return(rhs / (1.0 + rhs * diff + rhs * rhs * rhs * hv));
+                            },
+                          get_k2_map(), 0, t_dst);                       
     }
 }
 

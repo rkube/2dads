@@ -1,6 +1,5 @@
 /*
- * Test a slab where the arrays support various boundary conditions
- *
+ * Driver slab where the arrays support various boundary conditions
  */
 
 
@@ -48,17 +47,13 @@ class slab_bc
         using arr_cmpl = cuda_array_bc_nogp<cmplx_t, allocator_device>;
         using dft_t = cufft_object_t<value_t>;
         using deriv_t = deriv_fd_t<value_t, allocator_device>;
-        using integrator_fd_t = integrator_karniadakis_fd_t<value_t, allocator_device>;
-        using integrator_bs_t = integrator_karniadakis_bs_t<value_t, allocator_device>;
 #endif //DEVICE
 
 #ifdef HOST
         using arr_real = cuda_array_bc_nogp<value_t, allocator_host>;
         using arr_cmpl = cuda_array_bc_nogp<cmplx_t, allocator_host>;
         using dft_t = fftw_object_t<value_t>;
-        using deriv_t = deriv_fd_t<value_t, allocator_host>;
-        using integrator_fd_t = integrator_karniadakis_fd_t<value_t, allocator_host>;
-        using integrator_bs_t = integrator_karniadakis_bs_t<value_t, allocator_host>;
+        using deriv_t = deriv_fd_t<value_t, allocator_host>; 
 #endif //HOST
 
         // typedef calls to functions that compute the implicit part for time integration.

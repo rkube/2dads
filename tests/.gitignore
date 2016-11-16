@@ -3,3 +3,4 @@ old_tests
 arakawa_fd/test_arakawa_host
 derivs_spectral/test_derivs_spectral_host
 stiff_fd/test_stiff_host
+stiff_spectral/test_stiff_host

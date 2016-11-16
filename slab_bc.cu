@@ -17,10 +17,10 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
 #ifdef HOST
     myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //HOST
-    tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
-    tint_omega{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega))},
-    tint_tau{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau))},
-    theta(get_config().get_geom(),       get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs()), 
+    tint_theta{nullptr},
+    tint_omega{nullptr},
+    tint_tau{nullptr},
+    theta(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs()), 
     theta_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_theta), 1), 
     theta_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_theta), 1),
     omega(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tlevs()), 
@@ -69,6 +69,40 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     tau_rhs_func{rhs_func_map.at(get_config().get_rhs_t(twodads::dyn_field_t::f_tau))}
 {
     puts(__PRETTY_FUNCTION__);
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+#ifdef HOST
+            my_derivs = new deriv_spectral_t<value_t, allocator_host>(get_config().get_geom());
+            tint_theta = new integrator_karniadakis_bs_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta));
+            tint_omega = new integrator_karniadakis_bs_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega));
+            tint_tau = new integrator_karniadakis_bs_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau));
+#endif //HOST
+#ifdef DEVICE
+            my_derivs = new deriv_spectral_t<value_t, allocator_device>(get_config().get_geom());
+            tint_theta = new integrator_karniadakis_bs_t<value_t, allocator_devicet>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta));
+            tint_omega = new integrator_karniadakis_bs_t<value_t, allocator_device>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega));
+            tint_tau = new integrator_karniadakis_bs_t<value_t, allocator_device>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau));
+#endif //DEVICE
+            break;
+
+        case twodads::grid_t::cell_centered:
+#ifdef HOST
+            my_derivs = new deriv_fd_t<value_t, allocator_host>(get_config().get_geom());
+            tint_theta = new integrator_karniadakis_fd_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta));
+            tint_omega = new integrator_karniadakis_fd_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega));
+            tint_tau = new integrator_karniadakis_fd_t<value_t, allocator_host>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau));
+#endif //HOST
+#ifdef DEVICE
+            my_derivs = new deriv_fd_t<value_t, allocator_device>(get_config().get_geom());
+            tint_theta = new integrator_karniadakis_fd_t<value_t, allocator_device>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta));
+            tint_omega = new integrator_karniadakis_fd_t<value_t, allocator_device>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega));
+            tint_tau = new integrator_karniadakis_fd_t<value_t, allocator_device>(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau));
+#endif //DEVICE
+            break;
+    }
+
+/*
     switch(get_config().get_bvals(twodads::field_t::f_theta).get_bc_left())
     {
         case twodads::bc_t::bc_dirichlet:
@@ -90,7 +124,16 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
 #endif //DEVICE
             break;
     }
-    assert(conf.check_consistency() == true);
+*/
+    
+    try
+    {
+        conf.check_consistency();    
+    }
+    catch (config_error e)
+    {
+        std::cerr << "Error in slab configuration: " << e.what() << std::endl;
+    }
 }
 
 
@@ -145,9 +188,10 @@ void slab_bc :: initialize()
                                      twodads::field_t::f_tau_y);
 
     // Map a dynamic field name to its real field, x and y derivatives
-    auto map_theta = std::map<twodads::dyn_field_t, decltype(tuple_theta)>{{twodads::dyn_field_t::f_theta, tuple_theta},
-        {twodads::dyn_field_t::f_omega, tuple_omega}, 
-        {twodads::dyn_field_t::f_tau, tuple_tau}};
+    auto map_theta = std::map<twodads::dyn_field_t, decltype(tuple_theta)>
+        {{twodads::dyn_field_t::f_theta, tuple_theta},
+         {twodads::dyn_field_t::f_omega, tuple_omega}, 
+         {twodads::dyn_field_t::f_tau, tuple_tau}};
 
     // Iterate over the dynamic fields and initialize them
     for(auto it : map_theta)

@@ -11,7 +11,6 @@
 #include "error.h"
 #include "dft_type.h"
 #include "solvers.h"
-#include "utility.h"
 
 #include <cassert>
 #include <sstream>
@@ -29,305 +28,304 @@ enum class direction {x, y};
 namespace device
 {
 #ifdef __CUDACC__
-    // Apply three point stencil to points within the domain, rows 1..Nx-2
-    template <typename T, typename O>
-    __global__
-    void kernel_threepoint_center(const T* u, address_t<T>** address_u,
-                                T* result, O stencil_func, const twodads::slab_layout_t geom)
-    {
-        const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
-        const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
-        const T inv_dx{1.0 / geom.get_deltax()};
-        const T inv_dx2{inv_dx * inv_dx};
+// Apply three point stencil to points within the domain, rows 1..Nx-2
+template <typename T, typename O>
+__global__
+void kernel_threepoint_center(const T* u, address_t<T>** address_u,
+                              T* result, O stencil_func, const twodads::slab_layout_t geom)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
+    const T inv_dx{1.0 / geom.get_deltax()};
+    const T inv_dx2{inv_dx * inv_dx};
 
-        if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col >= 0 && col < static_cast<int>(geom.get_my()))
-        {
-            result[index] = stencil_func((**address_u).get_elem(u, row - 1, col),
-                                        (**address_u).get_elem(u, row    , col),
-                                        (**address_u).get_elem(u, row + 1, col),
-                                        inv_dx, inv_dx2);
-        }
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col >= 0 && col < static_cast<int>(geom.get_my()))
+    {
+        result[index] = stencil_func((**address_u).get_elem(u, row - 1, col),
+                                     (**address_u).get_elem(u, row    , col),
+                                     (**address_u).get_elem(u, row + 1, col),
+                                     inv_dx, inv_dx2);
     }
+}
 
 
-    // Apply three point stencil at a single row. Use address_t<T>.operator() for element access
-    template <typename T, typename O>
-    __global__
-    void kernel_threepoint_single_row(const T* u, address_t<T>** address_u,
-                                    T* result, O stencil_func, 
-                                    const twodads::slab_layout_t geom, const int row)
+// Apply three point stencil at a single row. Use address_t<T>.operator() for element access
+template <typename T, typename O>
+__global__
+void kernel_threepoint_single_row(const T* u, address_t<T>** address_u,
+                                  T* result, O stencil_func, 
+                                  const twodads::slab_layout_t geom, const int row)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
+    const T inv_dx{1.0 / geom.get_deltax()};
+    const T inv_dx2{inv_dx * inv_dx};
+
+    if(col >= 0 && col < static_cast<int>(geom.get_my()))
     {
-        const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
-        const T inv_dx{1.0 / geom.get_deltax()};
-        const T inv_dx2{inv_dx * inv_dx};
-
-        if(col >= 0 && col < static_cast<int>(geom.get_my()))
-        {
-            result[index] = stencil_func((**address_u)(u, row - 1, col),
-                                        (**address_u)(u, row    , col),
-                                        (**address_u)(u, row + 1, col),
-                                        inv_dx, inv_dx2);
-        }
+        result[index] = stencil_func((**address_u)(u, row - 1, col),
+                                     (**address_u)(u, row    , col),
+                                     (**address_u)(u, row + 1, col),
+                                     inv_dx, inv_dx2);
     }
+}
 
 
-    /// T* u is the data pointed to by a cuda_array u, address_u its address object
-    /// T* u is the data pointed to by a cuda_array v, address_v its address object
-    /// Assume that u and v have the same geometry
-    template <typename T>
-    __global__
-    void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
-                            const T* v, address_t<T>** address_v, 
-                            T* result, const twodads::slab_layout_t geom)
+/// T* u is the data pointed to by a cuda_array u, address_u its address object
+/// T* u is the data pointed to by a cuda_array v, address_v its address object
+/// Assume that u and v have the same geometry
+template <typename T>
+__global__
+void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
+                           const T* v, address_t<T>** address_v, 
+                           T* result, const twodads::slab_layout_t geom)
+{
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+    // This checks whether we are at an inside point when calling this kernel with a thread layout
+    // that covers the entire grid
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col > 0 && col < static_cast<int>(geom.get_my() - 1))
     {
-        const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
-        const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+        //printf("threadIdx.x = %d, blockIdx.x = %d, blockDim.x = %d, threadIdx.y = %d, blockIdx.y = %d, blockDim.y = %d,row = %d, col = %d, Nx = %d, My = %d\n", 
+        //        threadIdx.x, blockIdx.x, blockDim.x, threadIdx.y, blockIdx.y, blockDim.y,
+        //        row, col, static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_my()));
+        result[index] = 
+        ((((**address_u).get_elem(u, row    , col - 1) + 
+           (**address_u).get_elem(u, row + 1, col - 1) - 
+           (**address_u).get_elem(u, row    , col + 1) - 
+           (**address_u).get_elem(u, row + 1, col + 1))
+          *
+          ((**address_v).get_elem(v, row + 1, col    ) + 
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row - 1, col - 1) +
+           (**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col + 1) -
+           (**address_u).get_elem(u, row    , col + 1))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col    )))
+         +
+         (((**address_u).get_elem(u, row + 1, col    ) +
+           (**address_u).get_elem(u, row + 1, col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col + 1))
+          *
+          ((**address_v).get_elem(v, row    , col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row + 1, col - 1) +
+           (**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row - 1, col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row    , col - 1)))
+         +
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col + 1))
+          *
+          ((**address_v).get_elem(v, row + 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         
+         -
+         (((**address_u).get_elem(u, row    , col - 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row - 1, col - 1)))
 
-        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
-        // This checks whether we are at an inside point when calling this kernel with a thread layout
-        // that covers the entire grid
-
-        if(row > 0 && row < static_cast<int>(geom.get_nx() - 1) && col > 0 && col < static_cast<int>(geom.get_my() - 1))
-        {
-            //printf("threadIdx.x = %d, blockIdx.x = %d, blockDim.x = %d, threadIdx.y = %d, blockIdx.y = %d, blockDim.y = %d,row = %d, col = %d, Nx = %d, My = %d\n", 
-            //        threadIdx.x, blockIdx.x, blockDim.x, threadIdx.y, blockIdx.y, blockDim.y,
-            //        row, col, static_cast<int>(geom.get_nx()), static_cast<int>(geom.get_my()));
-            result[index] = 
-            ((((**address_u).get_elem(u, row    , col - 1) + 
-            (**address_u).get_elem(u, row + 1, col - 1) - 
-            (**address_u).get_elem(u, row    , col + 1) - 
-            (**address_u).get_elem(u, row + 1, col + 1))
-            *
-            ((**address_v).get_elem(v, row + 1, col    ) + 
-            (**address_v).get_elem(v, row    , col    )))
-            -
-            (((**address_u).get_elem(u, row - 1, col - 1) +
-            (**address_u).get_elem(u, row    , col - 1) -
-            (**address_u).get_elem(u, row - 1, col + 1) -
-            (**address_u).get_elem(u, row    , col + 1))
-            *
-            ((**address_v).get_elem(v, row    , col    ) +
-            (**address_v).get_elem(v, row - 1, col    )))
-            +
-            (((**address_u).get_elem(u, row + 1, col    ) +
-            (**address_u).get_elem(u, row + 1, col + 1) -
-            (**address_u).get_elem(u, row - 1, col    ) -
-            (**address_u).get_elem(u, row - 1, col + 1))
-            *
-            ((**address_v).get_elem(v, row    , col + 1) +
-            (**address_v).get_elem(v, row    , col    )))
-            -
-            (((**address_u).get_elem(u, row + 1, col - 1) +
-            (**address_u).get_elem(u, row + 1, col    ) -
-            (**address_u).get_elem(u, row - 1, col - 1) -
-            (**address_u).get_elem(u, row - 1, col    ))
-            *
-            ((**address_v).get_elem(v, row    , col    ) +
-            (**address_v).get_elem(v, row    , col - 1)))
-            +
-            (((**address_u).get_elem(u, row + 1, col    ) -
-            (**address_u).get_elem(u, row    , col + 1))
-            *
-            ((**address_v).get_elem(v, row + 1, col + 1) +
-            (**address_v).get_elem(v, row    , col    )))
-            
-            -
-            (((**address_u).get_elem(u, row    , col - 1) -
-            (**address_u).get_elem(u, row - 1, col    ))
-            *
-            ((**address_v).get_elem(v, row    , col    ) +
-            (**address_v).get_elem(v, row - 1, col - 1)))
-
-            +
-            (((**address_u).get_elem(u, row    , col + 1) -
-            (**address_u).get_elem(u, row - 1, col    ))
-            *
-            ((**address_v).get_elem(v, row - 1, col + 1) +
-            (**address_v).get_elem(v, row    , col    )))
-            -
-            (((**address_u).get_elem(u, row + 1, col    ) -
-            (**address_u).get_elem(u, row    , col - 1))
-            *
-            ((**address_v).get_elem(v, row    , col    ) +
-            (**address_v).get_elem(v, row + 1, col - 1)))
-            )
-            * inv_dx_dy;
-        }
-    };
-
-
-    // Kernel operates on elements with n = 0, m = 0..My-1. Extrapolate left ghost points (n = -1) of u and v on the fly
-    // address_u and address_v provide operator() which wrap the index and interpolate to ghost points
-    // when n = -1 or n = Nx.
-    template <typename T> 
-    __global__
-    void kernel_arakawa_single_row(const T* u, address_t<T>** address_u,
-                                   const T* v, address_t<T>** address_v,
-                                   T* result, const twodads::slab_layout_t geom,
-                                   const int row)
-    {
-        // Use int for col and row to pass them into address<T>::operator()
-        const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-
-        const T inv_dx_dy{1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
-
-        if(col < static_cast<int>(geom.get_my()))
-        {
-            result[index] =  
-            (
-            (((**address_u)(u, row    , col - 1) + 
-            (**address_u)(u, row + 1, col - 1) - 
-            (**address_u)(u, row    , col + 1) - 
-            (**address_u)(u, row + 1, col + 1))
-            *
-            ((**address_v)(v, row + 1, col    ) + 
-            (**address_v)(v, row    , col    ))
-            -
-            (((**address_u)(u, row - 1, col - 1) + 
-            (**address_u)(u, row    , col - 1) - 
-            (**address_u)(u, row - 1, col + 1) - 
-            (**address_u)(u, row    , col + 1))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row - 1, col    )))
-            +
-            (((**address_u)(u, row + 1, col    ) + 
-            (**address_u)(u, row + 1, col + 1) - 
-            (**address_u)(u, row - 1, col    ) - 
-            (**address_u)(u, row - 1, col + 1))
-            *
-            ((**address_v)(v, row    , col + 1) + 
-            (**address_v)(v, row    , col    )))
-            -
-            (((**address_u)(u, row + 1, col - 1) + 
-            (**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row - 1, col - 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row    , col - 1)))
-            +
-            ((**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row    , col + 1)) 
-            * 
-            ((**address_v)(v, row + 1, col + 1) + 
-            (**address_v)(v, row    , col    ))
-            -
-            ((**address_u)(u, row    , col - 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row - 1, col - 1)) 
-            +
-            ((**address_u)(u, row    , col + 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row - 1, col + 1) + 
-            (**address_v)(v, row    , col    ))
-            -
-            ((**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row    , col - 1))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row + 1, col - 1)))
-            ) * inv_dx_dy;
-        }
+         +
+         (((**address_u).get_elem(u, row    , col + 1) -
+           (**address_u).get_elem(u, row - 1, col    ))
+          *
+          ((**address_v).get_elem(v, row - 1, col + 1) +
+           (**address_v).get_elem(v, row    , col    )))
+         -
+         (((**address_u).get_elem(u, row + 1, col    ) -
+           (**address_u).get_elem(u, row    , col - 1))
+          *
+          ((**address_v).get_elem(v, row    , col    ) +
+           (**address_v).get_elem(v, row + 1, col - 1)))
+         )
+         * inv_dx_dy;
     }
+};
 
 
-    // Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
-    template <typename T>
-    __global__
-    void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
-                                const T* v, address_t<T>** address_v,
-                                T* result, const twodads::slab_layout_t geom, const int col)
+// Kernel operates on elements with n = 0, m = 0..My-1. Extrapolate left ghost points (n = -1) of u and v on the fly
+// address_u and address_v provide operator() which wrap the index and interpolate to ghost points
+// when n = -1 or n = Nx.
+template <typename T> 
+__global__
+void kernel_arakawa_single_row(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
+                               T* result, const twodads::slab_layout_t geom,
+                               const int row)
+{
+    // Use int for col and row to pass them into address<T>::operator()
+    const int col{static_cast<int>(cuda :: thread_idx :: get_col())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    const T inv_dx_dy{1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+
+    if(col < static_cast<int>(geom.get_my()))
     {
-        const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-        const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
-
-        if(row > 0 && row < static_cast<int>(geom.get_nx() - 1))
-        {
-            result[index] = 
-            (
-            (((**address_u)(u, row    , col - 1) + 
-            (**address_u)(u, row + 1, col - 1) - 
-            (**address_u)(u, row    , col + 1) - 
-            (**address_u)(u, row + 1, col + 1))
-            *
-            ((**address_v)(v, row + 1, col    ) + 
-            (**address_v)(v, row    , col    ))
-            -
-            (((**address_u)(u, row - 1, col - 1) + 
-            (**address_u)(u, row    , col - 1) - 
-            (**address_u)(u, row - 1, col + 1) - 
-            (**address_u)(u, row    , col + 1))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row - 1, col    )))
-            +
-            (((**address_u)(u, row + 1, col    ) + 
-            (**address_u)(u, row + 1, col + 1) - 
-            (**address_u)(u, row - 1, col    ) - 
-            (**address_u)(u, row - 1, col + 1))
-            *
-            ((**address_v)(v, row    , col + 1) + 
-            (**address_v)(v, row    , col    )))
-            -
-            (((**address_u)(u, row + 1, col - 1) + 
-            (**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row - 1, col - 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row    , col - 1)))
-            +
-            ((**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row    , col + 1)) 
-            * 
-            ((**address_v)(v, row + 1, col + 1) + 
-            (**address_v)(v, row    , col    ))
-            -
-            ((**address_u)(u, row    , col - 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row - 1, col - 1)) 
-            +
-            ((**address_u)(u, row    , col + 1) - 
-            (**address_u)(u, row - 1, col    ))
-            *
-            ((**address_v)(v, row - 1, col + 1) + 
-            (**address_v)(v, row    , col    ))
-            -
-            ((**address_u)(u, row + 1, col    ) - 
-            (**address_u)(u, row    , col - 1))
-            *
-            ((**address_v)(v, row    , col    ) + 
-            (**address_v)(v, row + 1, col - 1)))
-            ) * inv_dx_dy;
-        }
+        result[index] =  
+        (
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
+        *
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
+        -
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
+        +
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
+        *
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
+        -
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
+        +
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
+        * 
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
+        +
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
     }
+}
 
 
-/****** moved to utility.h
+// Kernel operates on elements with n = 0..Nx-1, m = My-1. Computes top ghost points of u and v on the fly
+template <typename T>
+__global__
+void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
+                               const T* v, address_t<T>** address_v,
+                               T* result, const twodads::slab_layout_t geom, const int col)
+{
+    const int row{static_cast<int>(cuda :: thread_idx :: get_row())};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+    const T inv_dx_dy{-1.0 / (12.0 * geom.get_deltax() * geom.get_deltay())};
+
+    if(row > 0 && row < static_cast<int>(geom.get_nx() - 1))
+    {
+        result[index] = 
+        (
+        (((**address_u)(u, row    , col - 1) + 
+          (**address_u)(u, row + 1, col - 1) - 
+          (**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row + 1, col + 1))
+        *
+         ((**address_v)(v, row + 1, col    ) + 
+          (**address_v)(v, row    , col    ))
+        -
+        (((**address_u)(u, row - 1, col - 1) + 
+          (**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col + 1) - 
+          (**address_u)(u, row    , col + 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col    )))
+        +
+        (((**address_u)(u, row + 1, col    ) + 
+          (**address_u)(u, row + 1, col + 1) - 
+          (**address_u)(u, row - 1, col    ) - 
+          (**address_u)(u, row - 1, col + 1))
+        *
+         ((**address_v)(v, row    , col + 1) + 
+          (**address_v)(v, row    , col    )))
+        -
+        (((**address_u)(u, row + 1, col - 1) + 
+          (**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row - 1, col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row    , col - 1)))
+        +
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col + 1)) 
+        * 
+         ((**address_v)(v, row + 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row    , col - 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row - 1, col - 1)) 
+        +
+         ((**address_u)(u, row    , col + 1) - 
+          (**address_u)(u, row - 1, col    ))
+        *
+         ((**address_v)(v, row - 1, col + 1) + 
+          (**address_v)(v, row    , col    ))
+        -
+         ((**address_u)(u, row + 1, col    ) - 
+          (**address_u)(u, row    , col - 1))
+        *
+         ((**address_v)(v, row    , col    ) + 
+          (**address_v)(v, row + 1, col - 1)))
+        ) * inv_dx_dy;
+    }
+}
+
+/****** moved to utility.h ******
 // Compute wavenumbers for derivation in Fourier-space
 // kmap_d1 holds (kx, ky) wavenumbers
 // kmap_d2 holds (kx^2, ky^2) wavenumbers 
-// 
+//
 // To compute derivatives in Fourier space do:
-//  u_x_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].re())
-//  u_y_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].im())
-// 
-//  u_xx_hat[index] = u_hat[index] * kmap_d2.re()
-//  u_yy_hat[index] = u_hat[index] * kmap_d2.im()
-// 
+//      u_x_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].re())
+//      u_y_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].im())
+//
+//      u_xx_hat[index] = u_hat[index] * kmap_d2.re()
+//      u_yy_hat[index] = u_hat[index] * kmap_d2.im()
+//
 // for the entire array 
-
+//
 
 template <typename T>
 __global__
@@ -367,25 +365,25 @@ void kernel_gen_coeffs(CuCmplx<T>* kmap_d1, CuCmplx<T>* kmap_d2, twodads::slab_l
         kmap_d2[index] = tmp2;
     }
 }
-*/
 
 
 
-    // Multiply the input array with the real/imaginary part of the map. Store result in output
-    template <typename T, typename O>
-    __global__
-    void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
-                                twodads::slab_layout_t geom)
+// Multiply the input array with the real/imaginary part of the map. Store result in output
+template <typename T, typename O>
+__global__
+void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
+                            twodads::slab_layout_t geom)
+{
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    if(col < geom.get_my() && row < geom.get_nx())
     {
-        const size_t col{cuda :: thread_idx :: get_col()};
-        const size_t row{cuda :: thread_idx :: get_row()};
-        const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-
-        if(col < geom.get_my() && row < geom.get_nx())
-        {
-            out[index] = op_func(in[index], map[index]);
-        }
+        out[index] = op_func(in[index], map[index]);
     }
+} 
+**** end section that was moved to utility.h */
 #endif //__CUDACC__
 } // namespace device
 
@@ -603,102 +601,102 @@ namespace host
 
 namespace detail
 {
-    // moved to utility.h
-// #ifdef __CUDACC__
-//     template <typename T>
-//     void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
-//                           cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
-//                           const twodads::slab_layout_t geom_my21,
-//                           allocator_device<T>)
-//     {
-//         const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
-//         const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
-//                              (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+/***** moved to utility.h
+#ifdef __CUDACC__
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
+                          const twodads::slab_layout_t geom_my21,
+                          allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
-//         device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
-//         gpuErrchk(cudaPeekAtLastError());    
-//     }
-// #endif //__CUDACC__
+        device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
+        gpuErrchk(cudaPeekAtLastError());    
+    }
+#endif //__CUDACC__
 
-    // moved to utility.h
-    // template <typename T>
-    // void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
-    //                       cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
-    //                       const twodads::slab_layout_t& geom_my21,
-    //                       allocator_host<T>)
-    // {
-    //     const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
-    //     const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
+    template <typename T>
+    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
+                          cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
+                          const twodads::slab_layout_t& geom_my21,
+                          allocator_host<T>)
+    {
+        const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
+        const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
 
-    //     size_t n{0};
-    //     size_t m{0};
-    //     // Access data in coeffs_dy via T get_elem function below.
-    //     address_t<CuCmplx<T>>* arr_dy1{coeffs_dy1.get_address_ptr()};
-    //     address_t<CuCmplx<T>>* arr_dy2{coeffs_dy2.get_address_ptr()};
+        size_t n{0};
+        size_t m{0};
+        // Access data in coeffs_dy via T get_elem function below.
+        address_t<CuCmplx<T>>* arr_dy1{coeffs_dy1.get_address_ptr()};
+        address_t<CuCmplx<T>>* arr_dy2{coeffs_dy2.get_address_ptr()};
   
-    //     CuCmplx<T>* dy1_data = coeffs_dy1.get_tlev_ptr(0);
-    //     CuCmplx<T>* dy2_data = coeffs_dy2.get_tlev_ptr(0);
+        CuCmplx<T>* dy1_data = coeffs_dy1.get_tlev_ptr(0);
+        CuCmplx<T>* dy2_data = coeffs_dy2.get_tlev_ptr(0);
         
-    //     /////////////////////////////////////////////////////////////////////////////////////////////
-    //     // n = 0..nx/2-1
-    //     for(n = 0; n < geom_my21.get_nx() / 2; n++)
-    //     {
-    //         for(m = 0; m < geom_my21.get_my() - 1; m++)
-    //         {
-    //             (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
-    //             (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = 0..nx/2-1
+        for(n = 0; n < geom_my21.get_nx() / 2; n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-    //             (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-    //             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-    //         }
-    //         m = geom_my21.get_my() - 1;
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-    //     }
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
         
-    //     /////////////////////////////////////////////////////////////////////////////////////////////
-    //     // n = nx/2
-    //     n = geom_my21.get_nx() / 2;
-    //     for(m = 0; m < geom_my21.get_my() - 1; m++)
-    //     {
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2
+        n = geom_my21.get_nx() / 2;
+        for(m = 0; m < geom_my21.get_my() - 1; m++)
+        {
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-    //     }
-    //     m = geom_my21.get_my() - 1;
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        m = geom_my21.get_my() - 1;
 
-    //     (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
-    //     (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+        (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
+        (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-    //     (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-    //     (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+        (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
 
-    //     /////////////////////////////////////////////////////////////////////////////////////////////
-    //     // n = nx/2+1 .. Nx-2
-    //     for(n = geom_my21.get_nx() / 2 + 1; n < geom_my21.get_nx(); n++)
-    //     {
-    //         for(m = 0; m < geom_my21.get_my() - 1; m++)
-    //         {
-    //             (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
-    //             (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2+1 .. Nx-2
+        for(n = geom_my21.get_nx() / 2 + 1; n < geom_my21.get_nx(); n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
 
-    //             (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
-    //             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-    //         }
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
             
-    //         m = geom_my21.get_my() - 1;
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
-    //         (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
 
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
-    //         (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-    //     }
-    // }
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+    }
+    *****/
 
     namespace fd
     {
@@ -1053,12 +1051,12 @@ namespace detail
 
     } // namespace fd
 
-/*
- ************************* Implementation of bispectral derivation methods ********************
- */
-
 
     namespace bispectral
+    /*
+     ************************* Implementation of bispectral derivation methods ********************
+     */
+
     {
 #ifdef __CUDACC__
         template <typename T>
@@ -1071,10 +1069,6 @@ namespace detail
             const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
                                  (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
-            //device :: kernel_gen_kmap_d1<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), geom_my21);
-            //gpuErrchk(cudaPeekAtLastError());
-
-            //device :: kernel_gen_kmap_d2<<<grid_my21, block_my21>>>(coeffs_d2.get_tlev_ptr(0), geom_my21);
             device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), coeffs_d2.get_tlev_ptr(0), geom_my21);
             gpuErrchk(cudaPeekAtLastError()); 
         }
@@ -1510,7 +1504,8 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t& _geom) :
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.
 
-    utility :: bispectral :: init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+    //detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
+    utility :: bispectral :: init_deriv_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
     init_diagonals();
 }
 
@@ -1608,7 +1603,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
                           1)                   
         {
-            utility :: bispectral :: init_coeffs(get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
+            utility :: bispectral :: init_deriv_coeffs(get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             std::cout << "deriv_spectral_t :: deriv_spectral_t: constructed" << std::endl;
         }
 
