@@ -7,7 +7,7 @@ CC	= /home/rku000/local/bin/clang++
 
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
-CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
+CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++11 -Wall -fopenmp -fno-limit-debug-info
 #CFLAGS = -O3 -march=native -std=c++11 -Wall -fopenmp -DMKL_ILP64 -Rpass-analysis=loop-vectorize
  
 INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include  -I/home/rku000/local/include -I${MKLROOT}/include 
@@ -23,7 +23,7 @@ NVCCFLAGS	= -DDEBUG -DBOOST_NOINLINE='__attribute__ ((noinline))' -O0 -g -pg -G 
 #NVCCFLAGS	= -O3 -std c++11 --gpu-architecture sm_50 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin
 
 ### Flags when compiling device code with clang. Not working yet (revision 280478)
-CUDACFLAGS	= -DDEBUG -O0 -g -stdlib=libc++ -std=c++14 --cuda-gpu-arch=sm_50 -Wall  --cuda-path=/usr/local/cuda/
+CUDACFLAGS	= -DDEBUG -O0 -g -stdlib=libc++ -std=c++11 --cuda-gpu-arch=sm_50 -Wall  --cuda-path=/usr/local/cuda/
 #CUDACFLAGS	= -O3 -stdlib=libc++ -std=c++14 --gpu-architecture sm_50 -Wall  --cuda-path=/usr/local/cuda/
 
 #CUDALFLAGS	= -L/usr/local/cuda/lib64 -lcufft -lcublas -lcusparse -lhdf5_serial -lhdf5_cpp -lpthread -lm -ldl

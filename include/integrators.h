@@ -73,7 +73,6 @@ namespace detail
 
 /*
  * Interface to time integrator routines
- *
  */
 template <typename T, template<typename> class allocator>
 class integrator_base_t
@@ -85,9 +84,9 @@ class integrator_base_t
 };
 
 
-// Karniadakis stiffly-stable time integrator. Sub-class of integrator
+// Karniadakis stiffly-stable time integrator for semi-spectral layout. Sub-class of integrator_t
 template <typename T, template<typename> class allocator>
-class integrator_karniadakis_t : public integrator_base_t<T, allocator>
+class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
 {
     public:
 #ifdef DEVICE
@@ -100,7 +99,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
     using elliptic_t = solvers :: elliptic_mkl_t;
 #endif // HOST
 
-        integrator_karniadakis_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
+        integrator_karniadakis_fd_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv, const twodads::stiff_params_t& _sp) :
             geom{_sl}, bvals{_bv}, stiff_params{_sp},  
             geom_transpose{get_geom().get_ylo(),
                            get_geom().get_deltay(),
@@ -120,7 +119,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
             init_diagonal(1);
             init_diagonals_ul();
         }
-        ~integrator_karniadakis_t() 
+        ~integrator_karniadakis_fd_t() 
         {
             delete my_solver;
             delete myfft;
@@ -174,7 +173,7 @@ class integrator_karniadakis_t : public integrator_base_t<T, allocator>
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_t<T, allocator> :: init_diagonal(const size_t tlev)
+void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tlev)
 {
     // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
@@ -197,7 +196,7 @@ void integrator_karniadakis_t<T, allocator> :: init_diagonal(const size_t tlev)
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_t<T, allocator> :: init_diagonals_ul()
+void integrator_karniadakis_fd_t<T, allocator> :: init_diagonals_ul()
 {
     // diag_[lu] are transposed. Use m = 0..Nx-1, n = 0..My/2 and interchange x and y
     // ->  Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
@@ -244,7 +243,7 @@ void integrator_karniadakis_t<T, allocator> :: init_diagonals_ul()
 // order: Order of time integration
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field,
+void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field,
                                                          const cuda_array_bc_nogp<T, allocator>& explicit_part,  
                                                          const size_t t_src1, const size_t t_src2, const size_t t_src3, 
                                                          const size_t t_dst, const size_t order) 
@@ -403,6 +402,79 @@ void integrator_karniadakis_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, a
     (*myfft).dft_c2r(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), field.get_tlev_ptr(t_dst));
     utility :: normalize(field, t_dst);
     field.set_transformed(t_dst, false);    
+}
+
+
+
+template <typename T, template<typename> class allocator>
+class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
+{
+    public:
+#ifdef DEVICE
+        using dft_t = cufft_object_t<T>;
+#endif // DEVICE
+
+#ifdef HOST
+        using dft_t = fftw_object_t<T>;
+#endif //HOST
+
+        integrator_karniadakis_bs_t(const twodads::slab_layout_t& _sl,
+                                    const twodads::bvals_t<T>& _bv,
+                                    const twodads::stiff_params_t& _sp) :
+            geom{_sl}, bvals{_bv}, stiff_params{_sp},
+            geom_my21{get_geom().get_xleft(), 
+                      get_geom().get_deltax(), 
+                      get_geom().get_ylo(), 
+                      get_geom().get_deltay(), 
+                      get_geom().get_nx(), get_geom().get_pad_x(),
+                      (get_geom().get_my() + 2) / 2, 0, 
+                      get_geom().get_grid()}
+        {
+            std::cout << "integrator_karniadakis_bs_t constructed" << std::endl;
+        }
+
+        void integrate(cuda_array_bc_nogp<T, allocator>&,
+                    const cuda_array_bc_nogp<T, allocator>&,
+                    const size_t, const size_t, const size_t,
+                    const size_t, const size_t);
+        
+        inline twodads::slab_layout_t get_geom() const {return(geom);};
+        inline twodads::bvals_t<T> get_bvals() const {return(bvals);};
+        inline twodads::stiff_params_t get_tint_params() const {return(stiff_params);};
+    
+    private:
+        const twodads::slab_layout_t geom;
+        const twodads::bvals_t<twodads::real_t> bvals;
+        const twodads::stiff_params_t stiff_params;
+        const twodads::slab_layout_t geom_my21;
+
+};
+
+
+template<typename T, template<typename> class allocator>
+void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T, allocator>& field,
+                                                            const cuda_array_bc_nogp<T, allocator>& explicit_part,
+                                                            const size_t t_src1, const size_t t_src2, const size_t t_src3,
+                                                            const size_t t_dst, const size_t order)
+{
+    // Set up the data for time integration:
+    // Sum up the implicit and explicit terms into t_dst
+
+    assert(order < 4);
+
+    if(order == 1)
+    {
+        const T alpha1{twodads::alpha[0][1]};
+        const T beta1{twodads::beta[0][0]};
+        
+        // u^{0} = alpha_1 u^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
+        // u^{0} += beta_1 N^{-1}
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * beta1);},
+                          explicit_part, t_dst, t_src1 - 1);
+        // u^{0} /= (1.0 + dt * (diff * k^2 ))
+        //field.elementwise([=] LAMBDACALLER (T ))
+    }
 }
 
 

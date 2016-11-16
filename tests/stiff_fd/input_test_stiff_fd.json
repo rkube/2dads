@@ -38,18 +38,18 @@
             {
                 "scheme"    : "karniadakis",
                 "level"     : 4,
-                "deltat"    : 0.001,
+                "deltat"    : 0.1,
                 "tend"      : 1.0,
                 "hypervisc" : 0
             },
             "model":
             {
                 "rhs_theta" : "rhs_theta_null",
-                "diff_theta": 1e-3,
+                "diff_theta": 1e-1,
                 "rhs_omega" : "rhs_omega_null",
-                "diff_omega": 1e-3,
+                "diff_omega": 1e-1,
                 "rhs_tau"  : "rhs_tau_null",
-                "diff_tau"  : 1e-3,
+                "diff_tau"  : 1e-1,
                 "parameters": [0.0, 1.0, 2.0]
             },
             "initial":

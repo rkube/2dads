@@ -12,14 +12,11 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
     output(_conf),
 #ifdef DEVICE
-    //myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
     myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //DEVICE
 #ifdef HOST
-    //myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), twodads::dft_t::dft_1d)},
     myfft{new fftw_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //HOST
-    //my_derivs{new deriv_t(get_config().get_geom())},
     tint_theta{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tint_params(twodads::dyn_field_t::f_theta))},
     tint_omega{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tint_params(twodads::dyn_field_t::f_omega))},
     tint_tau{new integrator_t(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tint_params(twodads::dyn_field_t::f_tau))},
