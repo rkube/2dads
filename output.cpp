@@ -1,12 +1,9 @@
 /*
  *  output.cpp
- *  2dads
- *
- *  Created by Ralph Kube on 01.12.10.
- *
+ *  Output functions for 2dads
  */
-#include "output.h"
 
+#include "output.h"
 
 using namespace std;
 using namespace H5;

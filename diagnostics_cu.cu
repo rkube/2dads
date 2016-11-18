@@ -1,7 +1,5 @@
 /*
- *
- * Implmentation of diagnostics class using cuda_darray
- *
+ * Implmentation of diagnostics functions
  */
 
 #include <fstream>

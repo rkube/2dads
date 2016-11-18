@@ -293,10 +293,12 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         const T beta1_dt{twodads::beta[1][0] * get_tint_params().get_deltat()};
 
         // u^{0} = alpha_2 * u^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, 
+                          t_dst, t_src2);
 
         // u^{0} += alpha_1 * u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, 
+                          t_dst, t_src1);
 
         // u^{0} += dt * beta_2 * N^{-2}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta2_dt);}, 
@@ -468,35 +470,109 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
                                                             const size_t t_dst, const size_t order)
 {
     // Set up the data for time integration:
-    // Sum up the implicit and explicit terms into t_dst
+    // Sum up the implicit and explicit terms into t_dst.
+    // Assert that all previous implicit and explicit terms are transformed 
+    // i.e. we have their fourier coefficients.
+    // Mark the resulting field as transformed as well.
 
     assert(order < 4);
+    assert(get_k2_map().is_transformed(0));
+    field.set_transformed(t_dst, true);
 
-    if(order == 1)
+    const T diff{get_tint_params().get_diff()};
+    const T hv{get_tint_params().get_hv()};
+    const T dt{get_tint_params().get_deltat()};
+
+    switch(order)
     {
-        const T alpha1{twodads::alpha[0][1]};
-        const T beta1{twodads::beta[0][0]};
-        const T diff{get_tint_params().get_diff()};
-        const T hv{get_tint_params().get_hv()};
+        case 1:
+            assert(field.is_transformed(t_src1));
+            assert(explicit_part.is_transformed(t_src1 - 1));
+            assert(get_k2_map().is_transformed(0));
 
-        // u^{0} = alpha_1 u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T 
+
+            // u^{0} = alpha_1 u^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[0][1]);}, 
+                                t_dst, t_src1);
+
+            // u^{0} += beta_1 N^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[0][0] * dt);},
+                            explicit_part, t_dst, t_src1 - 1);
+
+            // u^{0} /= (1.0 + dt * (diff * k^2 ))
+            field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T 
                             {
-                                return(rhs * alpha1);
-                            }, t_dst, t_src1);
-        // u^{0} += beta_1 N^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T 
+                                return(lhs / (twodads::alpha[0][0] + rhs * diff + rhs * rhs * rhs * hv));
+                            }, get_k2_map(), 0, t_dst);                       
+            break;
+
+        case 2:
+            assert(field.is_transformed(t_src1));
+            assert(field.is_transformed(t_src2));
+
+            assert(explicit_part.is_transformed(t_src2 - 1));
+            assert(explicit_part.is_transformed(t_src1 - 1));
+            
+            // u^{0} = alpha_2 * u^{-2}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[1][2]);},
+                            t_dst, t_src2);
+            // u^{0} += alpha_1 * u^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::alpha[1][1]);},
+                            t_dst, t_src1);
+
+            // u^{0} += dt * beta_2 * N^{-2}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[1][1] * dt);},
+                            explicit_part, t_dst, t_src2 - 1);
+            // u^{0} += dt * beta_1 * N^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[1][0] * dt);},
+                            explicit_part, t_dst, t_src1 - 1);
+
+            // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
+            field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T
                             {
-                                return(lhs + rhs * beta1 * get_tint_params().get_deltat());
-                            },
-                          explicit_part, t_dst, t_src1 - 1);
-        // u^{0} /= (1.0 + dt * (diff * k^2 ))
+                                return(lhs / (twodads::alpha[1][0] + rhs * diff + rhs * rhs * rhs * hv));
+                            }, get_k2_map(), 0, t_dst);
+            break;
+
+        case 3:    
+            assert(field.is_transformed(t_src1));
+            assert(field.is_transformed(t_src2));
+            assert(field.is_transformed(t_src3));
+
+            assert(explicit_part.is_transformed(t_src1 - 1));
+            assert(explicit_part.is_transformed(t_src2 - 1));
+            assert(explicit_part.is_transformed(t_src3 - 1));
+
+            // u^{0} = alpha_3 * u^{-3}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[2][3]);},
+                            t_dst, t_src3);
+            // u^{0} = alpha_2 * u^{-2}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::alpha[2][2]);},
+                            t_dst, t_src2);
+            // u^{0} += alpha_1 * u^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::alpha[2][1]);},
+                            t_dst, t_src1);
+
+            // u^{0} += dt * beta_3 * N^{-3}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[2][2] * dt);},
+                            explicit_part, t_dst, t_src3 - 1);
+            // u^{0} += dt * beta_2 * N^{-2}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[2][1] * dt);},
+                            explicit_part, t_dst, t_src2 - 1);
+            // u^{0} += dt * beta_1 * N^{-1}
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[2][0] * dt);},
+                            explicit_part, t_dst, t_src1 - 1);
+
+            // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
+            field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T
+                            {
+                                return(lhs / (twodads::alpha[2][0] + rhs * diff + rhs * rhs * rhs * hv));
+                            }, get_k2_map(), 0, t_dst);
+            break;
         
-        field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T 
-                            {
-                                return(rhs / (1.0 + rhs * diff + rhs * rhs * rhs * hv));
-                            },
-                          get_k2_map(), 0, t_dst);                       
+        default:
+            throw(not_implemented_error("Spectral time integration supports only orders 1-3"));
+            break;
     }
 }
 

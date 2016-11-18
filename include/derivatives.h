@@ -1048,14 +1048,13 @@ namespace detail
     #endif //__CUDACC__
             dst.set_transformed(t_dst, true);
         } 
-
     } // namespace fd
 
 
-    namespace bispectral
     /*
      ************************* Implementation of bispectral derivation methods ********************
      */
+    namespace bispectral
 
     {
 #ifdef __CUDACC__
@@ -1242,18 +1241,22 @@ class deriv_base_t
     deriv_base_t() {}
     virtual ~deriv_base_t() {}
 
+    // Computes x derivative.
     virtual void dx(cuda_array_bc_nogp<T, allocator>&,
                     cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t) = 0;
 
+    // Computes y derivative
     virtual void dy(cuda_array_bc_nogp<T, allocator>&,
                     cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t) = 0;
                       
+    // Inverts laplace equation
     virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>&,
                                 cuda_array_bc_nogp<T, allocator>&,
                                 const size_t, const size_t) = 0;
 
+    // Computes poisson brackets
     virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           cuda_array_bc_nogp<T, allocator>&,
@@ -1294,6 +1297,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
+            assert(src.is_transformed(t_src) == false && "deriv_fd_t :: void dx: src must not be transformed");
             if(order < 3)
                 detail :: fd :: impl_dx(src, dst, t_src, t_dst, order, allocator<T>{});
             else
@@ -1310,11 +1314,12 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
             // DFT r2c
-            if(!(src.is_transformed(t_src)))
-            {
-                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(t_src, true);
-            }
+            assert(src.is_transformed(t_src) == true && "deriv_fd_t :: void dy: src must be transformed");
+            //if(!(src.is_transformed(t_src)))
+            //{
+            //    myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+            //    src.set_transformed(t_src, true);
+            //}
 
             // Multiply with ky coefficients
             if (order < 3)
@@ -1327,13 +1332,13 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             } 
 
             // DFT c2r and normalize
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(t_dst, false);
-            utility :: normalize(dst, t_dst);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            //dst.set_transformed(t_dst, false);
+            //utility :: normalize(dst, t_dst);
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(t_src, false);
-            utility :: normalize(src, t_src);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            //src.set_transformed(t_src, false);
+            //utility :: normalize(src, t_src);
         }
 
 
@@ -1341,15 +1346,16 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                                     cuda_array_bc_nogp<T, allocator>& dst,
                                     const size_t t_src, const size_t t_dst)
         {
-            assert(src.get_geom() == dst.get_geom());
+            assert(src.get_geom() == dst.get_geom() && "deriv_fd_t :: invert_laplace: src and dst need to have the same geometry");
             assert(src.get_geom() == get_geom());
-            assert(src.get_bvals() == dst.get_bvals());
+            assert(src.get_bvals() == dst.get_bvals() && "deriv_fd_t :: invert_laplace: src and dst need to have the same boundary values");
 
-            if(!(src.is_transformed(t_src)))
-            {
-                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(t_src, true);
-            }
+            assert(src.is_transformed(t_src) && "deriv_fd_t: void invert_laplace: src must be transformed");
+            //if(!(src.is_transformed(t_src)))
+            //{
+            //    myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+            //    src.set_transformed(t_src, true);
+            //}
             // When solving Ax=b, update the boundary terms in b
             // The boundary conditions change the ky=0 mode of the n=0/Nx-1 row
 
@@ -1413,13 +1419,13 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                 return(input);
             }, t_src);
                 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(t_src, false);
-            utility :: normalize(src, t_src); 
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            //src.set_transformed(t_src, false);
+            //utility :: normalize(src, t_src); 
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(t_dst, false);
-            utility :: normalize(dst, t_dst);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            //dst.set_transformed(t_dst, false);
+            //utility :: normalize(dst, t_dst);
         }
 
         virtual void pbracket(const cuda_array_bc_nogp<T, allocator>& u,
@@ -1427,6 +1433,8 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                               cuda_array_bc_nogp<T, allocator>& dst,
                               const size_t t_srcu, const size_t t_srcv, const size_t t_dst)
         {
+            assert(u.is_transformed(t_srcu) == false);
+            assert(u.is_transformed(t_srcv) == false);
             detail :: fd :: impl_arakawa(u, v, dst, t_srcu, t_srcv, t_dst, allocator<T>{});
         }
 
@@ -1613,7 +1621,9 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
-            deriv(src, dst, t_src, t_dst, order, direction::x);
+            assert(src.is_transformed(t_src));
+            detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::x, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
+            dst.set_transformed(t_dst, true);
         }
 
         // Wrapper for private method deriv which fetches the right map corresponding to
@@ -1622,10 +1632,13 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
-            deriv(src, dst, t_src, t_dst, order, direction::y);
+            assert(src.is_transformed(t_src));
+            detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::y, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
+            dst.set_transformed(t_dst, true);
         }
 
 
+        /*
         virtual void deriv(cuda_array_bc_nogp<T, allocator>& src,
                            cuda_array_bc_nogp<T, allocator>& dst,
                            const size_t t_src, const size_t t_dst, 
@@ -1639,15 +1652,17 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             }
 
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, dir, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
+            dst.set_transformed(t_dst, true);
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(t_src, false);
-            utility :: normalize(src, t_src);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            //src.set_transformed(t_src, false);
+            //utility :: normalize(src, t_src);
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(t_dst, false);
-            utility :: normalize(dst, t_dst);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            //dst.set_transformed(t_dst, false);
+            //utility :: normalize(dst, t_dst);
         };   
+        */
   
                         
         virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>& src,
@@ -1658,27 +1673,29 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             assert(src.get_geom() == get_geom());
             assert(src.get_bvals() == dst.get_bvals());
 
-            if(!(src.is_transformed(t_src)))
-            {
-                myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
-                src.set_transformed(t_src, true);
-            }
+            assert(src.is_transformed(t_src));
+            //if(!(src.is_transformed(t_src)))
+            //{
+            //    myfft -> dft_r2c(src.get_tlev_ptr(t_src), reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)));
+            //    src.set_transformed(t_src, true);
+            //}
 
-            if(!(dst.is_transformed(t_dst)))
-            {
-                myfft -> dft_r2c(dst.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)));
-                dst.set_transformed(t_dst, true);
-            }
+            //if(!(dst.is_transformed(t_dst)))
+            //{
+            //    myfft -> dft_r2c(dst.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)));
+            //    dst.set_transformed(t_dst, true);
+            //}
 
             detail :: bispectral :: impl_invert_laplace(src, dst, get_coeffs_d2(), t_src, t_dst, get_geom_my21(), allocator<T>{});
+            dst.set_transformed(t_dst, true);
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
-            dst.set_transformed(t_dst, false);
-            utility :: normalize(dst, t_dst);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)), dst.get_tlev_ptr(t_dst));
+            //dst.set_transformed(t_dst, false);
+            //utility :: normalize(dst, t_dst);
 
-            myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
-            src.set_transformed(t_src, false);
-            utility :: normalize(src, t_src);
+            //myfft -> dft_c2r(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)), src.get_tlev_ptr(t_src));
+            //src.set_transformed(t_src, false);
+            //utility :: normalize(src, t_src);
         };   
 
 
@@ -1687,7 +1704,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                       cuda_array_bc_nogp<T, allocator>& dst,
                       const size_t t_src_f, const size_t t_src_g, const size_t t_dst)
         {
-            std::cerr << "derivs_bs_t::pbracket: not implemented yet" << std::endl;
+            std::cerr << "derivs_bs_t::pbracket: not implemented here"<< std::endl;
         };   
 
 

@@ -464,6 +464,8 @@ public:
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
+        assert(is_transformed(tidx_lhs) == rhs.is_transformed(tidx_rhs));
+
         detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | rhs.is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});
     }
 
@@ -511,6 +513,8 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (const T a, const T b) -> T {return(a + b);},
@@ -531,6 +535,8 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(1, rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a - b);},
@@ -551,6 +557,8 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(1, rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a * b);},
@@ -596,6 +604,8 @@ public:
         check_bounds(tidx_dst + 1, 0, 0);
         check_bounds(tidx_src + 1, 0, 0);
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
+        
+        set_transformed(tidx_dst, is_transformed(tidx_src));
     }
 
 	///@brief Copy data from src, t_src to t_dst
@@ -605,6 +615,8 @@ public:
         src.check_bounds(tidx_src + 1, 0, 0);
         assert(get_geom() == src.get_geom());
         my_alloc.copy(src.get_tlev_ptr(tidx_src), src.get_tlev_ptr(tidx_src) + src.get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
+
+        set_transformed(tidx_dst, src.is_transformed(tidx_src));
     }
 
 	///@brief Move data from t_src to t_dst, zero out t_src
@@ -615,8 +627,8 @@ public:
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
         //detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
         detail :: impl_apply(get_tlev_ptr(tidx_src), 
-        [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
-        get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
+                             [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
+                             get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
 
 	// Advance time levels
@@ -624,6 +636,9 @@ public:
     {
         detail :: impl_advance(get_tlev_ptr(), get_tlevs(), allocator_type{});
         initialize(0);
+        for(size_t tidx = get_tlevs() - 1; tidx > 0; tidx--)
+            set_transformed(tidx, is_transformed(tidx - 1));
+        set_transformed(0, false);
     }
 
 	// Access to private members

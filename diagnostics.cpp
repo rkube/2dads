@@ -1,8 +1,7 @@
-///
-/// diagnostics.cpp
-///
-
-/// Contains diagnostic routines for turbulence simulation
+/*
+ *  diagnostics.cpp
+ *  Contains diagnostic routines for turbulence simulation 
+ */
 
 
 #include <iostream>

@@ -1,6 +1,6 @@
-///
-///  To write diagnostics for turbulence simulations
-/// 
+/* 
+ *   To write diagnostics for turbulence simulations
+ */ 
 
 
 #ifndef DIAGNOSTICS_H
