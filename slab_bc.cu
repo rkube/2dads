@@ -29,7 +29,7 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     tau(get_config().get_geom(),       get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tlevs()),   
     tau_x(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),   
     tau_y(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),
-    strmf(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_strmf), get_config().get_tlevs()), 
+    strmf(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_strmf), 1), 
     strmf_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1), 
     strmf_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1),
     theta_rhs(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs() - 1),
@@ -341,7 +341,7 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
     my_derivs -> dy((*arr_src), (*arr_dst), t_src, t_dst, order);
 }
 
-
+/* Legacy method
 // Compute Poisson brackets
 // res = {f, g} = f_y g_x - g_y f_x
 // Input:
@@ -359,6 +359,7 @@ void slab_bc :: pbracket(const twodads::field_t fname_arr_f, const twodads::fiel
 
     my_derivs -> pbracket((*f_arr), (*g_arr), (*res_arr), t_srcf, t_srcg, t_dst);
 }
+*/
 
 
 // Invert the laplace equation
@@ -517,39 +518,6 @@ void slab_bc :: update_real_fields(const size_t t_src)
             dft_c2r(twodads::field_t::f_strmf_y, 0);
             break;
     }
-
-/*
-    //d_dx(twodads::field_t::f_theta, twodads::field_t::f_theta_x, 1, t_src, 0);
-    d_dy(twodads::field_t::f_theta, twodads::field_t::f_theta_y, 1, t_src, 0);
-
-    //d_dx(twodads::field_t::f_omega, twodads::field_t::f_omega_x, 1, t_src, 0);
-    d_dy(twodads::field_t::f_omega, twodads::field_t::f_omega_y, 1, t_src, 0);
-
-    //d_dx(twodads::field_t::f_tau, twodads::field_t::f_tau_x, 1, t_src, 0);
-    d_dy(twodads::field_t::f_tau, twodads::field_t::f_tau_y, 1, t_src, 0);
-
-    //d_dx(twodads::field_t::f_strmf, twodads::field_t::f_strmf_x, 1, 0, 0);
-    d_dy(twodads::field_t::f_strmf, twodads::field_t::f_strmf_y, 1, 0, 0);
-
-    if(get_config().get_grid_type() == twodads::grid_t::vertex_centered)
-    {
-        dft_c2r(twodads::field_t::f_theta, t_src);
-        dft_c2r(twodads::field_t::f_theta_x, 0);
-        dft_c2r(twodads::field_t::f_theta_y, 0);
-
-        dft_c2r(twodads::field_t::f_omega, t_src);
-        dft_c2r(twodads::field_t::f_omega_x, 0);
-        dft_c2r(twodads::field_t::f_omega_y, 0);
-
-        dft_c2r(twodads::field_t::f_tau, t_src);
-        dft_c2r(twodads::field_t::f_tau_x, 0);
-        dft_c2r(twodads::field_t::f_tau_y, 0);
-
-        dft_c2r(twodads::field_t::f_strmf, 0);
-        dft_c2r(twodads::field_t::f_strmf_x, 0);
-        dft_c2r(twodads::field_t::f_strmf_y, 0);
-    }
-*/
 }
 
 
@@ -593,7 +561,7 @@ void slab_bc :: write_output(const size_t t_src)
 void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
 {
     arr_real* arr{nullptr};
-    size_t tout{0};
+    size_t t_out{0};
     // Iterate over list of fields we want in the HDF file
     for(auto it : get_config().get_output())
     { 
@@ -602,16 +570,21 @@ void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
         if(it == twodads::output_t::o_theta ||
            it == twodads::output_t::o_omega ||
            it == twodads::output_t::o_tau)
-        {tout = t_src;}
-        else{tout = 0;}
+        {
+            t_out = t_src;
+        }
+        else
+        {
+            t_out = 0;
+        }
 
-        assert(tout < arr -> get_tlevs());
-
+        assert(t_out < arr -> get_tlevs());
+        assert(arr -> is_transformed(t_out) == false);
 #ifdef DEVICE
-        output.surface(it, utility :: create_host_vector(arr), tout, time);
+        output.surface(it, utility :: create_host_vector(arr), t_out, time);
 #endif
 #ifdef HOST
-        output.surface(it, arr, tout, time);
+        output.surface(it, arr, t_out, time);
 #endif
     }
     output.increment_output_counter();
@@ -628,9 +601,6 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
-    //}
-    //if(get_config().get_grid_type() == twodads::grid_t::vertex_centered)
-    //{
             (*myfft).dft_r2c(theta_rhs.get_tlev_ptr(t_dst), reinterpret_cast<twodads::cmplx_t*>(theta_rhs.get_tlev_ptr(t_dst)));
             theta_rhs.set_transformed(t_dst, true);
 
@@ -655,14 +625,29 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 
 void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
-    //std::cout << "rhs_omega_ic, t_src=" << t_src << ", t_dst = " << t_dst << std::endl;
     // Compute poisson bracket
-    pbracket(twodads::field_t::f_omega, twodads::field_t::f_strmf, twodads::field_t::f_omega_rhs,
-             t_src, 0, t_dst);
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            // Derivative fields have only 1 time index. Do not use t_src here.
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(strmf_x, omega_y, strmf_y, omega_x, omega_rhs,
+                                  0, 0, t_dst);
+            break;
+
+        case twodads::grid_t::cell_centered:
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, t_src, t_dst);
+            break;
+    }
+
 
     const twodads::real_t ic{1.0};
     // - theta_y
-    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t {return (lhs - ic * rhs);},
+    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
+                          {
+                              return (lhs - ic * rhs);
+                          },
                           theta_y, 0, t_dst);           
 }
 
@@ -670,8 +655,22 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
     //std::cout << "rhs_theta_lin, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
-    pbracket(twodads::field_t::f_theta, twodads::field_t::f_strmf, twodads::field_t::f_theta_rhs,
-             t_src, 0, t_dst);
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            // Derivative fields have only 1 time index. Do not use t_src here.
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(strmf_x, theta_y, strmf_y, theta_x, theta_rhs,
+                                  0, 0, t_dst);
+            break;
+
+        case twodads::grid_t::cell_centered:
+            // Input to Arakawa scheme is from in-place DFTs of dynamic fields.
+            // Get data from t_src.
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, t_src, t_dst);
+            break;
+    }
 }
 
 
