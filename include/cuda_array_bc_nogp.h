@@ -475,131 +475,7 @@ public:
         check_bounds(tidx_lhs + 1, 0, 0);
         detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});   
     }
-    /// Initialize all elements to zero. Making this private results in compile error:
-    /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
-    //cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
-    /*
-    inline void initialize()
-    {
-        for(size_t t = 0; t < get_tlevs(); t++)
-        {
-            initialize(t);
-        }
-    }
-
-    inline void initialize(const size_t tidx)
-    {
-        detail :: impl_apply(get_tlev_ptr(tidx), 
-                             [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t& geom) -> T {return(0.0);}, 
-                             get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
-    }
-    */
-
-/*
-    cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
-    {
-        // Check for self-assignment
-        if(this == &rhs)
-            return(*this);
-
-        check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-        for(size_t t = 0; t < get_tlevs(); t++)
-        {
-            my_alloc.copy(rhs.get_tlev_ptr(t), rhs.get_tlev_ptr(t) + rhs.get_geom().get_nelem_per_t(), get_tlev_ptr(t));
-            set_transformed(t, rhs.is_transformed(t));
-        }
-        return (*this);
-    }
-
-
-    cuda_array_bc_nogp<T, allocator>& operator+=(const cuda_array_bc_nogp<T, allocator>& rhs)
-    {
-        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
-        check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
-        assert(is_transformed(0) == rhs.is_transformed(0));
-
-        detail :: impl_elementwise(get_tlev_ptr(0), 
-                                   rhs.get_tlev_ptr(0), 
-                                   [] LAMBDACALLER (const T a, const T b) -> T {return(a + b);},
-                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
-        return *this;
-    }
-
-    cuda_array_bc_nogp<T, allocator>& operator+=(const T rhs)
-    {
-        detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
-                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
-        return *this;
-    }
-
-
-    cuda_array_bc_nogp<T, allocator>& operator-=(const cuda_array_bc_nogp<T, allocator>& rhs)
-    {
-        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
-        check_bounds(1, rhs.get_nx(), rhs.get_my());
-        assert(is_transformed(0) == rhs.is_transformed(0));
-
-        detail :: impl_elementwise(get_tlev_ptr(0), 
-                                   rhs.get_tlev_ptr(0), 
-                                   [] LAMBDACALLER (T a, T b) -> T {return(a - b);},
-                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
-        return *this;
-    }
-    
-
-    cuda_array_bc_nogp<T, allocator>& operator-=(const T rhs)
-    {
-        detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value - rhs);}, 
-                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
-        return *this;
-    }
-    
-    cuda_array_bc_nogp<T, allocator>& operator*=(const cuda_array_bc_nogp<T, allocator>& rhs)
-    {
-        // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
-        check_bounds(1, rhs.get_nx(), rhs.get_my());
-        assert(is_transformed(0) == rhs.is_transformed(0));
-
-        detail :: impl_elementwise(get_tlev_ptr(0), 
-                                   rhs.get_tlev_ptr(0), 
-                                   [] LAMBDACALLER (T a, T b) -> T {return(a * b);},
-                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
-        return *this;
-    }
-    
-
-    cuda_array_bc_nogp<T, allocator>& operator*=(const T rhs)
-    {
-        detail :: impl_apply(get_tlev_ptr(0), 
-                             [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
-                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
-        return *this;
-    }
-
-
-    cuda_array_bc_nogp<T, allocator> operator+(const cuda_array_bc_nogp<T, allocator>& rhs) const
-    {
-        cuda_array_bc_nogp<T, allocator> result(this);
-        result += rhs;
-        return(result);
-    }
-
-    cuda_array_bc_nogp<T, allocator> operator-(const cuda_array_bc_nogp<T, allocator>& rhs) const
-    {
-        cuda_array_bc_nogp<T, allocator> result(this);
-        result -= rhs;
-        return(result);
-    }
-
-    cuda_array_bc_nogp<T, allocator> operator*(const cuda_array_bc_nogp<T, allocator>& rhs) const
-    {
-        cuda_array_bc_nogp<T, allocator> result(this);
-        result *= rhs;
-        return(result);
-    }  
-*/      
+       
 
 	///@brief Copy data from t_src to t_dst
 	inline void copy(const size_t tidx_dst, const size_t tidx_src)
@@ -715,7 +591,7 @@ private:
 
 
 template <typename T, template<typename> class allocator>
-cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layout_t _geom, const twodads::bvals_t<T> _bvals, size_t _tlevs) : 
+cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layout_t _geom, const twodads::bvals_t<T> _bvals, const size_t _tlevs) : 
         boundaries(_bvals), 
         geom(_geom), 
         tlevs(_tlevs),

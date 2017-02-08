@@ -120,7 +120,7 @@ class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
             diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
             diag_u(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1)
         {
-            init_diagonal(1);
+            init_diagonal(1, bvals.get_bc_left(), bvals.get_bc_right());
             init_diagonals_ul();
         }
         ~integrator_karniadakis_fd_t() 
@@ -134,7 +134,7 @@ class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
         // init_diagonals() initializes the diagonal elements used for elliptic solver.
         // The main diagonal depends on the order of the integrator and is called in constructor for first level
         // and subsequently the first time when a higher level integrator routine is called
-        void init_diagonal(size_t);
+        void init_diagonal(const size_t, const twodads::bc_t, const twodads::bc_t);
         // It should really be private, but then nvcc complains
         // An explicit __device__ lambda cannot be defined in a member function that has private or protected access within its class
         // The upper and lower diagonals are the same for all time levels and are initialized once by the constructor
@@ -177,24 +177,78 @@ class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tlev)
+void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tlev,
+                                                                const twodads::bc_t bcond_left,
+                                                                const twodads::bc_t bcond_right)
 {
     // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
     const T alpha{twodads::alpha[tlev - 1][0]};
     
+    // Initialize the main diagonal to alpha_0 + 2 * rx + ky^2 * diff * dt
+    // The first and last element on the main diagonal depend on the left and 
+    // right boundary condition respectively:
+    // 3 * rx for bc_dirichlet
+    // 1 * rx for bc_neumann
+    T val_left{0.0};
+    T val_right{0.0};
+
+    switch(bcond_left)
+    {
+        case twodads::bc_t::bc_dirichlet:
+            val_left = 3.0;
+            break;
+        case twodads::bc_t::bc_neumann:
+            val_right = 1.0;
+            break;
+        case twodads::bc_t::bc_periodic:
+            // Fall through
+        default:
+            throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");
+    }
+
+    switch(bcond_right)
+    {
+        case twodads::bc_t::bc_dirichlet:
+            val_right = 3.0;
+            break;
+        case twodads::bc_t::bc_neumann:
+            val_right = 1.0;
+            break;
+        case twodads::bc_t::bc_periodic:
+            // Fall through
+        default:
+            throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");        
+    }
+
+    std::cout<< "val_left = " << val_left << "\tval_right = " << val_right << std::endl;
+
+    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
+    {
+        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
+        const T ky2{twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx)};
+        
+        if (m == 0)
+            return(CuCmplx<T>(val_left * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+        else if (m == geom.get_my() - 1)
+            return(CuCmplx<T>(val_right * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+        else
+            return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+    }, 0);
+
+    /*
     diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
         // ky runs with index n (the kernel addressing function, see cuda::thread_idx)
         const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
         const T ky2{twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx)};
-        if(m == 0 && (n == 0 || n == geom.get_nx() - 1))
-        {
+        // Boundary conditions apply to all boundary elements of all modes (at n=0) 
+        if(m == 0 || m == geom.get_my() - 1)
             return(CuCmplx<T>{3.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0});    
-        }
-        return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+        else
+            return(input);
     }, 0);
-    
+    */
     set_diag_order(tlev);
 }
 
@@ -267,7 +321,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     if(order == 1)
     {
         // Initialize the main diagonal for first order time step
-        if(get_diag_order() != 1) {init_diagonal(1);}
+        if(get_diag_order() != 1) 
+            init_diagonal(1, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
         const T alpha1{twodads::alpha[0][1]};
         const T beta1_dt{twodads::beta[0][0] * get_tint_params().get_deltat()};
@@ -283,7 +338,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     else if(order == 2)
     {
         // Initialize main diagonal for second order time step
-        if(get_diag_order() != 2) {init_diagonal(2);}
+        if(get_diag_order() != 2) 
+            init_diagonal(2, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
         // Sum up previous time steps in t_dst:
         const T alpha2{twodads::alpha[1][2]};
@@ -311,7 +367,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
     else if (order == 3)
     {   
-        if(get_diag_order() != 3) {init_diagonal(3);}
+        if(get_diag_order() != 3) 
+            init_diagonal(3, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
         // Sum up previous time steps in t_dst:
         const T alpha3{twodads::alpha[2][3]};
@@ -370,7 +427,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             add_to_boundary_left = bval_left_hat * get_rx() * 2.0;
             break;
         case twodads::bc_t::bc_neumann:
-            add_to_boundary_left = bval_left_hat * get_rx() * field.get_geom().get_deltax() * -1.0;
+            add_to_boundary_left = -1.0 * bval_left_hat * get_rx() * field.get_geom().get_deltax();
+            break;
         case twodads::bc_t::bc_periodic:
         default:
             throw not_implemented_error(std::string("Periodic boundary conditions not supported by this integrator"));
@@ -383,7 +441,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             add_to_boundary_right = bval_right_hat * get_rx() * 2.0;
             break;
         case twodads::bc_t::bc_neumann:
-            add_to_boundary_right = bval_right_hat * get_rx() * field.get_geom().get_deltax() * -1.0;
+            add_to_boundary_right = bval_right_hat * get_rx() * field.get_geom().get_deltax();
+            break;
         case twodads::bc_t::bc_periodic:
         default:
             throw not_implemented_error(std::string("Periodic boundary conditions not supported by this integrator"));
@@ -480,7 +539,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     field.set_transformed(t_dst, true);
 
     const T diff{get_tint_params().get_diff()};
-    const T hv{get_tint_params().get_hv()};
+    //const T hv{get_tint_params().get_hv()};
     const T dt{get_tint_params().get_deltat()};
 
     switch(order)

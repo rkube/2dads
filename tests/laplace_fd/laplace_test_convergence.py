@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from codestash.num.fd import d2_dx2
 
 #Nx_arr = np.array([64, 128, 256, 512, 1024, 2048, 4096], dtype='int')
-Nx_arr = np.array([256, 512, 1024], dtype='int')
+Nx_arr = np.array([256, 512, 1024, 2048], dtype='int')
 L2_arr = np.zeros(Nx_arr.shape[0], dtype='float64')
 L = 20.
 
@@ -27,7 +27,7 @@ def sol_an(x, y):
 
 
 for idx, Nx in enumerate(Nx_arr):
-    sol_num = np.loadtxt("test_laplace_solnum_%d.dat" % (Nx))[:Nx, :Nx]
+    sol_num = np.loadtxt("test_laplace_solnum_%d_host.dat" % (Nx))[:Nx, :Nx]
 
     dx = L / float(Nx)
     xrg = -0.5 * L + (np.arange(Nx) + 0.5) * dx

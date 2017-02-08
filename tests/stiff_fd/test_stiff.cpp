@@ -25,8 +25,8 @@ int main(void)
         // input:
         //      omega is transformed
         //      strmf is irrelevant
-        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 1, 0);
-        my_slab.update_real_fields(order - 1);
+        //my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 1, 0);
+        //my_slab.update_real_fields(order - 1);
         
         
         for(size_t tl = 0; tl < order; tl++)

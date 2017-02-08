@@ -203,10 +203,10 @@ namespace twodads {
                 switch(bv.get_bc_left())
                 {
                     case twodads::bc_t::bc_dirichlet:
-                        os << " dirichlet ";
+                        os << " dirichlet: ";
                         break;
                     case twodads::bc_t::bc_neumann:
-                        os << " neumann ";
+                        os << " neumann: ";
                         break;
                     case twodads::bc_t::bc_periodic:
                         os << " periodic ";
@@ -217,10 +217,10 @@ namespace twodads {
                 switch(bv.get_bc_right())
                 {
                     case twodads::bc_t::bc_dirichlet:
-                        os << " dirichlet ";
+                        os << " dirichlet: ";
                         break;
                     case twodads::bc_t::bc_neumann:
-                        os << " neumann ";
+                        os << " neumann: ";
                         break;
                     case twodads::bc_t::bc_periodic:
                         os << " periodic ";

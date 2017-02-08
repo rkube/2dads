@@ -71,7 +71,7 @@ int main(void)
 
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
         my_slab.update_real_fields(order - 2);
-        my_slab.write_output(order - 2, tstep * my_config.get_deltat());
+        //my_slab.write_output(order - 2, tstep * my_config.get_deltat());
         my_slab.rhs(order - 3, order - 2);
         tstep++;
 
@@ -82,7 +82,7 @@ int main(void)
 
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
         my_slab.update_real_fields(order - 3);
-        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
+        //my_slab.write_output(order - 3, tstep * my_config.get_deltat());
         my_slab.rhs(0, order - 3);
         tstep++;
 

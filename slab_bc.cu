@@ -118,8 +118,6 @@ void slab_bc :: dft_r2c(const twodads::field_t fname, const size_t tidx)
     arr_real* arr{get_field_by_name.at(fname)};
     assert(((*arr).is_transformed(tidx) == false) && "slab_bc :: dft_r2c: Array is already transformed");
 
-    std::cerr << "dft_r2c" << std::endl;
-
     (*myfft).dft_r2c((*arr).get_tlev_ptr(tidx), reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)));
     (*arr).set_transformed(tidx, true);
 }
@@ -129,8 +127,6 @@ void slab_bc :: dft_c2r(const twodads::field_t fname, const size_t tidx)
 {
     arr_real* arr{get_field_by_name.at(fname)};
     assert((*arr).is_transformed(tidx) && "slab_bc :: dft_c2r: Array is not transformed");
-
-    std::cerr << "dft_c2r" << std::endl;
 
     (*myfft).dft_c2r(reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)), (*arr).get_tlev_ptr(tidx));
     utility :: normalize(*arr, tidx);
@@ -340,26 +336,6 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 
     my_derivs -> dy((*arr_src), (*arr_dst), t_src, t_dst, order);
 }
-
-/* Legacy method
-// Compute Poisson brackets
-// res = {f, g} = f_y g_x - g_y f_x
-// Input:
-// fname_arr_f: array where f is stored
-// fname_arr_g: array where g is stored
-// fname_arr_res: array where we store the result
-// t_src: time level at which f and g are taken
-// t_dst: time level where we store the result in res
-void slab_bc :: pbracket(const twodads::field_t fname_arr_f, const twodads::field_t fname_arr_g, const twodads::field_t fname_arr_res,
-                         const size_t t_srcf, const size_t t_srcg, const size_t t_dst)
-{
-    arr_real* f_arr = get_field_by_name.at(fname_arr_f);
-    arr_real* g_arr = get_field_by_name.at(fname_arr_g);
-    arr_real* res_arr = get_field_by_name.at(fname_arr_res);
-
-    my_derivs -> pbracket((*f_arr), (*g_arr), (*res_arr), t_srcf, t_srcg, t_dst);
-}
-*/
 
 
 // Invert the laplace equation
@@ -599,8 +575,7 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
         case twodads::grid_t::vertex_centered:
             // Derivative fields have only 1 time index. Do not use t_src here.
             // Store in t_dst time index of RHS
-            my_derivs -> pbracket(strmf_x, omega_y, strmf_y, omega_x, omega_rhs,
-                                  0, 0, t_dst);
+            my_derivs -> pbracket(strmf_x, omega_y, strmf_y, omega_x, omega_rhs, 0, 0, t_dst);
             break;
 
         case twodads::grid_t::cell_centered:

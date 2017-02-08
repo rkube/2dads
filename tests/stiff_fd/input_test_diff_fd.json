@@ -4,67 +4,67 @@
             "runnr": 0,
             "geometry": 
             {
-                "xleft"  : -1.0,
-                "xright" : 1.0,
-                "ylow"   : -1.0,
-                "yup"    : 1.0,
-                "Nx"     : 256,
+                "xleft"  : -10.0,
+                "xright" : 10.0,
+                "ylow"   : -10.0,
+                "yup"    : 10.0,
+                "Nx"     : 128,
                 "padx"   : 0,
-                "My"     : 256,
+                "My"     : 128,
                 "pady"   : 2,
                 "grid_type" : "cell",
 
                 "theta_bc_left" : "dirichlet",
-                "theta_bval_left" : 0.0,
-                "theta_bc_right" : "dirichlet",
+                "theta_bval_left" : 1.0,
+                "theta_bc_right" : "neumann",
                 "theta_bval_right" : 0.0,
 
                 "tau_bc_left" : "dirichlet",
-                "tau_bval_left" : 0.0,
+                "tau_bval_left" : 1.0,
                 "tau_bc_right" : "dirichlet",
-                "tau_bval_right" : 0.0,
+                "tau_bval_right" : 1.0,
 
                 "omega_bc_left" : "dirichlet",
-                "omega_bval_left" : 0.0,
+                "omega_bval_left" : 1.0,
                 "omega_bc_right" : "dirichlet",
-                "omega_bval_right" : 0.0,
+                "omega_bval_right" : 1.0,
 
                 "strmf_bc_left" : "dirichlet",
-                "strmf_bval_left" : 0.0,
+                "strmf_bval_left" : 1.0,
                 "strmf_bc_right" : "dirichlet",
-                "strmf_bval_right" : 0.0
+                "strmf_bval_right" : 1.0
             },
             "integrator":
             {
                 "scheme"    : "karniadakis",
                 "level"     : 4,
-                "deltat"    : 0.001,
-                "tend"      : 0.101,
+                "deltat"    : 0.1,
+                "tend"      : 10.0,
                 "hypervisc" : 0
             },
             "model":
             {
-                "rhs_theta" : "rhs_theta_lin",
-                "diff_theta": 1e-3,
-                "rhs_omega" : "rhs_omega_ic",
-                "diff_omega": 1e-3,
+                "rhs_theta" : "rhs_theta_null",
+                "diff_theta": 1e-1,
+                "rhs_omega" : "rhs_omega_null",
+                "diff_omega": 1e-1,
                 "rhs_tau"  : "rhs_tau_null",
-                "diff_tau"  : 1e-3,
+                "diff_tau"  : 1e-1,
                 "parameters": [0.0, 1.0, 2.0]
             },
             "initial":
             {
-                "init_func_theta" : "arakawa_f",
-                "initc_theta" : [0.0],
-                "init_func_omega" : "arakawa_g",
-                "initc_omega" : [0.0],
-                "init_func_tau" : "constant",
-                "initc_tau"   : [0.0]
+                "init_func_theta" : "gaussian",
+                "initc_theta" : [1.0, 1.0, 0.0, 0.0, 1.0],
+                "init_func_omega" : "gaussian",
+                "initc_omega" : [0.0, 1.0, 0.0, 0.0, 1.0],
+                "init_func_tau" : "gaussian",
+                "initc_tau"   : [0.0, 1.0, 0.0, 0.0, 1.0]
             },
             "output":
             {
                 "tout": 0.1,
-                "fields" : ["theta", "theta_x", "theta_y", "omega", "strmf"]
+                "fields" : ["theta"]
             },
             "diagnostics":
             {

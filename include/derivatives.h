@@ -1369,7 +1369,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                     add_to_boundary_right = -2.0 * bval_right_hat;
                     break;
                 case twodads::bc_t::bc_neumann:
-                    add_to_boundary_right = -1.0 * src.get_geom().get_deltax() * bval_right_hat;
+                    add_to_boundary_right = src.get_geom().get_deltax() * bval_right_hat;
                     break;
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
