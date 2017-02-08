@@ -1,6 +1,5 @@
 /*
- * Test a slab where the arrays support various boundary conditions
- *
+ * Driver slab where the arrays support various boundary conditions
  */
 
 
@@ -48,15 +47,13 @@ class slab_bc
         using arr_cmpl = cuda_array_bc_nogp<cmplx_t, allocator_device>;
         using dft_t = cufft_object_t<value_t>;
         using deriv_t = deriv_fd_t<value_t, allocator_device>;
-        using integrator_t = integrator_karniadakis_t<value_t, allocator_device>;
 #endif //DEVICE
 
 #ifdef HOST
         using arr_real = cuda_array_bc_nogp<value_t, allocator_host>;
         using arr_cmpl = cuda_array_bc_nogp<cmplx_t, allocator_host>;
         using dft_t = fftw_object_t<value_t>;
-        using deriv_t = deriv_fd_t<value_t, allocator_host>;
-        using integrator_t = integrator_karniadakis_t<value_t, allocator_host>;
+        using deriv_t = deriv_fd_t<value_t, allocator_host>; 
 #endif //HOST
 
         // typedef calls to functions that compute the implicit part for time integration.
@@ -75,21 +72,11 @@ class slab_bc
 
         void initialize();
 
-/*
-        void initialize_invlaplace(const twodads::field_t, const size_t);
-        void initialize_sine(const twodads::field_t, const size_t);
-        void initialize_arakawa(const twodads::field_t, const twodads::field_t, const size_t);
-        void initialize_derivativesx(const twodads::field_t, const size_t);
-        void initialize_derivativesy(const twodads::field_t, const size_t);
-        void initialize_dfttest(const twodads::field_t, const size_t);
-        void initialize_gaussian(const twodads::field_t, const size_t);
-*/
-
         void invert_laplace(const twodads::field_t, const twodads::field_t, const size_t, const size_t);
 
         void d_dx(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
         void d_dy(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
-        void pbracket(const twodads::field_t, const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
+        //void pbracket(const twodads::field_t, const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
 
         void integrate(const twodads::dyn_field_t, const size_t);
         void update_real_fields(const size_t);

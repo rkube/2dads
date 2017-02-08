@@ -42,18 +42,18 @@ namespace twodads {
     constexpr real_t PI{3.141592653589793};
     constexpr real_t TWOPI{6.2831853071795864769};  ///< $2.0 \pi$
     constexpr real_t FOURPIS{39.47841760435743};    ///< $4.0 * \pi^2$
-    constexpr real_t epsilon{0.000001}; //10^-6
+    constexpr real_t epsilon{0.000001};             ///< $\epsilon = 10^-6$
     constexpr real_t Sigma{-3.185349};
-
-    constexpr size_t max_initc{6}; /// < Maximal number of initial conditions
-    
-    constexpr int io_w{12}; //width of fields used in cout
-    constexpr int io_p{8}; //precision when printing with cout
+    constexpr size_t max_initc{6};                  ///< Maximal number of initial conditions
+    constexpr int io_w{12};                         ///< width of text fields used in cout
+    constexpr int io_p{8};                          ///< precision when printing with cout
 
 
     // Coefficients for stiffly stable time integration
     constexpr real_t alpha[3][4] = {{1.0, 1.0, 0.0, 0.0}, {1.5, 2.0, -0.5, 0}, {11.0/6.0, 3.0, -1.5, 1.0/3.0}};
     constexpr real_t beta[3][3] = {{1.0, 0.0, 0.0}, {2.0, -1.0, 0.0}, {3.0, -3.0, 1.0}};
+    enum class tint_order_t {o1_t, o2_t, o3_t};
+
 
     // To access the alpha and beta arrays in cuda, we need a wrapper crutch.
     // Accessing alpha and beta in vec.apply in device code fails without error :/
@@ -268,21 +268,23 @@ namespace twodads {
     } __attribute__ ((aligned (8)));
 
 
-
     // Dynamic fields
     // c++11 can used scoped enums, i.e. in a cpp it reads dyn_field_t::f_theta
     // in c++98 (used by nvcc) just use f_theta
     // Make sure, all members of enums have a different name
-    enum class dyn_field_t {f_theta, ///< theta, thermodynamic variable
-                            f_tau, ///<tau, electron temperature
-    		                f_omega  ///< oemga, vorticity
-                            };
+    enum class dyn_field_t 
+    {
+        f_theta, ///< theta, thermodynamic variable
+        f_tau, ///<tau, electron temperature
+    	f_omega  ///< omega, vorticity
+    };
 
     /*! \brief Field types
      * \param f_theta
-     *
      */
-    enum class field_t {f_theta, ///< \f$\theta\f$
+    enum class field_t 
+    {
+        f_theta,    ///< \f$\theta\f$
         f_theta_x,  ///< \f$\theta_x  \f$, radial derivative of theta
         f_theta_y,  ///< \f$ \theta_y \f$, poloidal derivative of theta
         f_omega,    ///< \f$ \Omega   \f$
@@ -298,35 +300,30 @@ namespace twodads {
         f_tmp_x,    ///< tmp field
         f_tmp_y,    ///< tmp field
         f_theta_rhs,///< rhs for time integration
-        f_tau_rhs,///< rhs for time integration
+        f_tau_rhs,  ///< rhs for time integration
         f_omega_rhs ///< rhs for time integration
     };
 
-    /// List of fields of Fourier coefficients
-    enum class field_k_t {f_theta_hat,  ///< Fourier coefficients of theta, tlevs time levels
-        f_theta_x_hat,  ///< Fourier coefficients of radial derivative of theta, only current time level
-        f_theta_y_hat, ///<  Fourier coefficients of poloidal derivative of theta, only current time level
-        f_tau_hat, f_tau_x_hat, f_tau_y_hat,
-        f_omega_hat, f_omega_x_hat, f_omega_y_hat,
-        f_strmf_hat, f_strmf_x_hat, f_strmf_y_hat,
-        f_theta_rhs_hat, f_tau_rhs_hat, f_omega_rhs_hat, f_tmp_hat};
                
     /// Initialization function
-    enum class init_fun_t {init_NA, ///< Not available, throws an error
-        init_arakawa_f, ///< Initialize test function for arakawa bracket (f)
-        init_arakawa_g, ///< Initialize test function for arakawa bracket (g)
-        init_gaussian,  ///< Initializes gaussian profile 
-        init_constant, ///< Initialize field with constant value
-        init_sine, ///< Initializes sinusoidal profile for theta
-        init_mode, ///< Initializes single modes for theta_hat
-        init_turbulent_bath, ///< Initialize all modes randomly
-        init_lamb_dipole ///<Lamb Dipole
+    enum class init_fun_t 
+    {
+        init_NA,              ///< Not available, throws an error
+        init_arakawa_f,       ///< Initialize test function for arakawa bracket (f)
+        init_arakawa_g,       ///< Initialize test function for arakawa bracket (g)
+        init_gaussian,        ///< Initializes gaussian profile 
+        init_constant,        ///< Initialize field with constant value
+        init_sine,            ///< Initializes sinusoidal profile for theta
+        init_mode,            ///< Initializes single modes for theta_hat
+        init_turbulent_bath,  ///< Initialize all modes randomly
+        init_lamb_dipole      ///<Lamb Dipole
     };
 
     /*!
      * Defines the right hand side to use
      */
-    enum class rhs_t {
+    enum class rhs_t 
+    {
         rhs_theta_ns,          ///< Navier-Stokes equation
         rhs_theta_lin,         ///< interchange model, linear
         rhs_theta_log,         ///< Logarithmic interchange model
@@ -349,7 +346,9 @@ namespace twodads {
     /*!
      * Enumerate diagnostic functions
      */
-    enum class diagnostic_t {diag_blobs,  ///< Information on blob dynamics
+    enum class diagnostic_t 
+    {
+        diag_blobs,         ///< Information on blob dynamics
         diag_com_theta,     ///< COM dynamics on theta field
         diag_com_tau,       ///< COM dynamics of tau field
         diag_max_theta,     ///< max dynamics on theta
@@ -367,12 +366,21 @@ namespace twodads {
     /*!
      *  Available full output of fields
      */
-    enum class output_t {o_theta,  ///< Theta, thermodynamic variable
+    enum class output_t 
+    {
+        o_theta,  ///< Theta, thermodynamic variable
         o_theta_x, ///< Radial derivative of theta
         o_theta_y, ///< Poloidal derivative of theta
-        o_omega, o_omega_x, o_omega_y, 
-        o_tau, o_tau_x, o_tau_y,
-        o_strmf, o_strmf_x, o_strmf_y}; 
+        o_omega, 
+        o_omega_x, 
+        o_omega_y, 
+        o_tau, 
+        o_tau_x, 
+        o_tau_y,
+        o_strmf,
+        o_strmf_x, 
+        o_strmf_y
+    }; 
 
     /*!
      * Domain layout passed to diagnostic functions

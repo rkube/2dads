@@ -52,20 +52,93 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
         }
     }
 }
+
+// Compute wavenumbers for derivation in Fourier-space
+// kmap_d1 holds (kx, ky) wavenumbers
+// kmap_d2 holds (kx^2, ky^2) wavenumbers 
+//
+// To compute derivatives in Fourier space do:
+//      u_x_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].re())
+//      u_y_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].im())
+//
+//      u_xx_hat[index] = u_hat[index] * kmap_d2.re()
+//      u_yy_hat[index] = u_hat[index] * kmap_d2.im()
+//
+// for the entire array 
+//
+
+template <typename T>
+__global__
+void kernel_gen_coeffs(CuCmplx<T>* kmap_d1, CuCmplx<T>* kmap_d2, twodads::slab_layout_t geom)
+{
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+    const T two_pi_Lx{twodads::TWOPI / geom.get_Lx()};
+    const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom.get_my() - 1) * 2) * geom.get_deltay())}; 
+
+    CuCmplx<T> tmp1(0.0, 0.0);
+    CuCmplx<T> tmp2(0.0, 0.0);
+
+    if(row < geom.get_nx() / 2)
+        tmp1.set_re(two_pi_Lx * T(row));
+
+    else if (row == geom.get_nx() / 2)
+        tmp1.set_re(0.0);
+    else
+        tmp1.set_re(two_pi_Lx * (T(row) - T(geom.get_nx())));
+
+    if(col < geom.get_my() - 1)
+    {
+        tmp1.set_im(two_pi_Ly * T(col));
+        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
+    }
+    else
+    {
+        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
+        tmp1.set_im(0.0);
+    }
+
+    if(col < geom.get_my() && row < geom.get_nx())
+    {
+        kmap_d1[index] = tmp1;
+        kmap_d2[index] = tmp2;
+    }
+}
+
+// Multiply the input array with the real/imaginary part of the map. Store result in output
+template <typename T, typename O>
+__global__
+void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
+                            twodads::slab_layout_t geom)
+{
+    const size_t col{cuda :: thread_idx :: get_col()};
+    const size_t row{cuda :: thread_idx :: get_row()};
+    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
+
+    if(col < geom.get_my() && row < geom.get_nx())
+    {
+        out[index] = op_func(in[index], map[index]);
+    }
+}
+
+
 #endif //__CUDACC__
 }
 
 namespace utility
 {
     template <typename T>
-    void print(cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev, std::ostream& os)
+    void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tidx, std::ostream& os)
     {
         address_t<T>* address = vec.get_address_ptr();
+        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my()  + vec.get_geom().get_pad_y(): vec.get_geom().get_my()};
+
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
-            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            for(size_t m = 0; m < nelem_m; m++)
             {
-                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address).get_elem(vec.get_tlev_ptr(tidx), n, m) << "\t";
             }
             os << std::endl;
         }
@@ -73,15 +146,17 @@ namespace utility
 
 
     template <typename T>
-    void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev, std::string fname)
+    void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tidx, std::string fname)
     {
         std::ofstream os(fname, std::ofstream::trunc);
         address_t<T>* address = vec.get_address_ptr();
+        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my() : vec.get_geom().get_my() + vec.get_geom().get_pad_y()};
+
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
-            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            for(size_t m = 0; m < nelem_m; m++)
             {
-                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address)(vec.get_tlev_ptr(tlev), n, m) << "\t";
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address).get_elem(vec.get_tlev_ptr(tidx), n, m) << "\t";
             }
             os << std::endl;
         }
@@ -304,6 +379,106 @@ namespace utility
 #endif //CUDACC
 
 
+    namespace bispectral
+    {
+#ifdef __CUDACC__
+    template <typename T>
+    void init_deriv_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
+                           cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
+                           const twodads::slab_layout_t geom_my21,
+                           allocator_device<T>)
+    {
+        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
+        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
+                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
+
+        device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
+        gpuErrchk(cudaPeekAtLastError());    
+    }
+#endif //__CUDACC__
+
+#ifndef __CUDACC__
+    template <typename T>
+    void init_deriv_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
+                           cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
+                           const twodads::slab_layout_t& geom_my21,
+                           allocator_host<T>)
+    {
+        const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
+        const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
+
+        size_t n{0};
+        size_t m{0};
+        // Access data in coeffs_dy via T get_elem function below.
+        address_t<CuCmplx<T>>* arr_dy1{coeffs_dy1.get_address_ptr()};
+        address_t<CuCmplx<T>>* arr_dy2{coeffs_dy2.get_address_ptr()};
+  
+        CuCmplx<T>* dy1_data = coeffs_dy1.get_tlev_ptr(0);
+        CuCmplx<T>* dy2_data = coeffs_dy2.get_tlev_ptr(0);
+        
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = 0..nx/2-1
+        for(n = 0; n < geom_my21.get_nx() / 2; n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2
+        n = geom_my21.get_nx() / 2;
+        for(m = 0; m < geom_my21.get_my() - 1; m++)
+        {
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+        m = geom_my21.get_my() - 1;
+
+        (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
+        (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+        (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
+        (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        // n = nx/2+1 .. Nx-2
+        for(n = geom_my21.get_nx() / 2 + 1; n < geom_my21.get_nx(); n++)
+        {
+            for(m = 0; m < geom_my21.get_my() - 1; m++)
+            {
+                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
+
+                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
+                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+            }
+            
+            m = geom_my21.get_my() - 1;
+            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
+            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
+
+            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
+            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
+        }
+    }
+#endif // __CUDACC__
+
+    }
 
 }
 

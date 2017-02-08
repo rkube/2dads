@@ -1,5 +1,4 @@
 {
-    "_comment": "this is a comment",
     "2dads":         
         {
             "runnr": 0,
@@ -13,26 +12,26 @@
                 "padx"   : 0,
                 "My"     : 128,
                 "pady"   : 2,
-                "grid_type" : "cell",
+                "grid_type" : "vertex",
 
-                "theta_bc_left" : "dirichlet",
+                "theta_bc_left" : "periodic",
                 "theta_bval_left" : 0.0,
-                "theta_bc_right" : "dirichlet",
+                "theta_bc_right" : "periodic",
                 "theta_bval_right" : 0.0,
 
-                "tau_bc_left" : "dirichlet",
+                "tau_bc_left" : "periodic",
                 "tau_bval_left" : 0.0,
-                "tau_bc_right" : "dirichlet",
+                "tau_bc_right" : "periodic",
                 "tau_bval_right" : 0.0,
 
-                "omega_bc_left" : "dirichlet",
+                "omega_bc_left" : "periodic",
                 "omega_bval_left" : 0.0,
-                "omega_bc_right" : "dirichlet",
+                "omega_bc_right" : "periodic",
                 "omega_bval_right" : 0.0,
 
-                "strmf_bc_left" : "dirichlet",
+                "strmf_bc_left" : "periodic",
                 "strmf_bval_left" : 0.0,
-                "strmf_bc_right" : "dirichlet",
+                "strmf_bc_right" : "periodic",
                 "strmf_bval_right" : 0.0
             },
             "integrator":

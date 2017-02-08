@@ -34,8 +34,6 @@
  *
  * Ghost points are to be computed on the fly, not stored in memory
  * They can be access by the address object
- *
- *
  */
 
 #ifndef cuda_array_bc_H_
@@ -71,11 +69,9 @@ struct dim3{
 };
 
 #define LAMBDACALLER
-
 #endif //ifndef __CUDACC
 
 #ifdef __CUDACC__
-
 #define LAMBDACALLER __device__
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -109,11 +105,11 @@ inline void gpuVerifyLaunch(const char* file, int line)
 namespace device
 {
 #ifdef __CUDACC__
-    /// Return true if row and column are within geom(excluding padded rows/cols)
+    /// Return true if row and column are within geom(include padded columns if is_transformed is true)
     /// Return false if row or column is outside the geometry
-    __device__ inline bool good_idx(size_t row, size_t col, const twodads::slab_layout_t geom)
+    __device__ inline bool good_idx(const size_t row, const size_t col, const twodads::slab_layout_t geom, const bool is_transformed)
     {
-        return((row < geom.get_nx()) && (col < geom.get_my()));
+        return((row < geom.get_nx()) && (col < (is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()));
     }
 
 
@@ -132,20 +128,20 @@ namespace device
     /// op_func(T, size_t, size_t, slab_layout_t)
     template <typename T, typename O>
     __global__
-    void kernel_apply_single(T* array_d_t, O device_func, const twodads::slab_layout_t geom) 
+    void kernel_apply_single(T* array_d_t, O device_func, const twodads::slab_layout_t geom, const bool is_transformed) 
     {
         const size_t col{cuda :: thread_idx :: get_col()};
         const size_t row{cuda :: thread_idx :: get_row()};
         const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
 
-        if (good_idx(row, col, geom))
+        if (good_idx(row, col, geom, is_transformed))
             array_d_t[index] = device_func(array_d_t[index], row, col, geom);
     }
 
 
     template<typename T, typename O, size_t ELEMS>
     __global__
-    void kernel_apply_unroll(T* array_d_t, O device_func, const twodads::slab_layout_t geom) 
+    void kernel_apply_unroll(T* array_d_t, O device_func, const twodads::slab_layout_t geom, const bool is_transformed) 
     {
         const size_t row{cuda :: thread_idx :: get_row()};
 
@@ -154,7 +150,7 @@ namespace device
 
         for(size_t n = 0; n < ELEMS; n++)
         {
-            if (good_idx(row, col_0 + n, geom))
+            if (good_idx(row, col_0 + n, geom, is_transformed))
                 array_d_t[index_0 + n] = device_func(array_d_t[index_0 + n], row, col_0 + n, geom);
         }
     }
@@ -163,13 +159,13 @@ namespace device
     /// Perform element-wise arithmetic operation lhs[idx] = op(lhs[idx], rhs[idx])
     template<typename T, typename O>
     __global__
-    void kernel_elementwise(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom)
+    void kernel_elementwise(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom, const bool is_transformed)
     {
         const size_t col{cuda :: thread_idx :: get_col()};
         const size_t row{cuda :: thread_idx :: get_row()};
         const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col};
 
-        if(good_idx(row, col, geom))
+        if(good_idx(row, col, geom, is_transformed))
         {
             lhs[index] = device_func(lhs[index], rhs[index]);
         }
@@ -178,7 +174,7 @@ namespace device
 
     template<typename T, typename O, size_t ELEMS>
     __global__
-    void kernel_elementwise_unroll(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom)
+    void kernel_elementwise_unroll(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom, const bool is_transformed)
     {
         const size_t col_0{cuda :: thread_idx :: get_col() * ELEMS};
         const size_t row{cuda :: thread_idx :: get_row()};
@@ -186,7 +182,7 @@ namespace device
 
         for(size_t n = 0; n < ELEMS; n++)
         {
-            if(good_idx(row, col_0 + n, geom))
+            if(good_idx(row, col_0 + n, geom, is_transformed))
             {
                 lhs[index_0 + n] = device_func(lhs[index_0 + n], rhs[index_0 + n]);
             }
@@ -232,28 +228,32 @@ template <typename T, template <typename> class allocator> class cuda_array_bc_n
 namespace host
 {
     template <typename T, typename O>
-    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom)
+    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom, const bool is_transformed)
     {
         size_t index{0};
         size_t m{0};
 
+        // Loop over the padded elements if the array is transformed
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()};
+        
+        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
 #pragma omp parallel for private(index, m)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {
         // We find out what My (geom.get_my()) is at runtime. To vectorize the loop
         // find out how how many iterations we need to do when handling 4 elements
         // per iteration. The remaining elements are done sequentially
-            for(m = 0; m < geom.get_my() - (geom.get_my() % 4); m += 4)
+            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
             {
-                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                index = n * my_plus_pad + m;
                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
                 data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
                 data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
                 data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
             }
-            for(; m < geom.get_my(); m++)
+            for(; m < nelem_m; m++)
             {
-                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                index = n * (my_plus_pad) + m;
                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
             }
 
@@ -261,26 +261,30 @@ namespace host
     }
 
     template <typename T, typename O>
-    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom)
+    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom, bool is_transformed)
     {
         size_t index{0};
         size_t m{0};
 
+        // Loop over the padded elements if the array is transformed
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()};
+        
+        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
 #pragma omp parallel for private(index, m)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {   
             // Loop vectorization scheme follows host_apply (above)
-            for(m = 0; m < geom.get_my() - (geom.get_my() % 4); m += 4)
+            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
             {
-                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                index = n * my_plus_pad + m;
                 lhs[index] = host_func(lhs[index], rhs[index]);
                 lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
                 lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
                 lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
             }
-            for(; m < geom.get_my(); m++)
+            for(; m < nelem_m; m++)
             {
-                index = n * (geom.get_my() + geom.get_pad_y()) + m;
+                index = n * my_plus_pad + m;
                 lhs[index] = host_func(lhs[index], rhs[index]);
             }
         }
@@ -336,26 +340,18 @@ namespace detail
         return data_tlev_ptr_hostcopy[tidx];
     }
 
-    template <typename T>
-    inline void impl_initialize(T* data_ptr, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_device<T>)
+
+    template <typename T, typename F>
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
-        device :: kernel_apply_single<<<grid, block>>>(data_ptr, 
-                                      [] __device__ (T value, size_t n, size_t m, twodads::slab_layout_t& geom) -> T {return(T(0.0));},
-                                      geom);
+        device :: kernel_apply_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(data_ptr, myfunc, geom, transformed);   
         gpuErrchk(cudaPeekAtLastError());
     }
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
+    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
-        device :: kernel_apply_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(data_ptr, myfunc, geom);   
-        gpuErrchk(cudaPeekAtLastError());
-    }
-
-    template <typename T, typename F>
-    inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
-    {
-        device :: kernel_elementwise_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(x, rhs, myfunc, geom);
+        device :: kernel_elementwise_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(x, rhs, myfunc, geom, transformed);
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -406,24 +402,17 @@ namespace detail
     }
 
 
-    template <typename T>
-    void impl_initialize(T* data_ptr, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
+    template <typename T, typename F>
+    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, [] (T value, size_t n, size_t m, twodads::slab_layout_t geom) -> T {return(T(0.0));}, geom);
+        host :: host_apply(data_ptr, myfunc, geom, transformed);
     }
 
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
+    inline void impl_elementwise(T* lhs, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, myfunc, geom);
-    }
-
-
-    template <typename T, typename F>
-    inline void impl_elementwise(T* lhs, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const dim3& grid, const dim3& block, allocator_host<T>)
-    {
-        host :: host_elementwise(lhs, rhs, myfunc, geom);
+        host :: host_elementwise(lhs, rhs, myfunc, geom, transformed);
     }
 
     template <typename T>
@@ -465,7 +454,7 @@ public:
     template <typename F> inline void apply(F myfunc, const size_t tidx)
     {
         check_bounds(tidx + 1, 0, 0);
-        detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), get_grid_unroll(), get_block(), allocator_type{});   
+        detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), is_transformed(tidx), get_grid_unroll(), get_block(), allocator_type{});   
     }
 
 
@@ -475,14 +464,16 @@ public:
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
-        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});
+        assert(is_transformed(tidx_lhs) == rhs.is_transformed(tidx_rhs));
+
+        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | rhs.is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});
     }
 
     template<typename F> inline void elementwise(F myfunc, const size_t tidx_lhs, const size_t tidx_rhs)
     {
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
-        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), get_tlev_ptr(tidx_rhs), myfunc, get_geom(), get_grid(), get_block(), allocator_type{});   
+        detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});   
     }
     /// Initialize all elements to zero. Making this private results in compile error:
     /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
@@ -499,7 +490,7 @@ public:
     {
         detail :: impl_apply(get_tlev_ptr(tidx), 
                              [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t& geom) -> T {return(0.0);}, 
-                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
+                             get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
 
     cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
@@ -522,10 +513,12 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(rhs.get_tlevs(), rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (const T a, const T b) -> T {return(a + b);},
-                                   get_geom(), get_grid(), get_block(), allocator_type{});
+                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
         return *this;
     }
 
@@ -533,7 +526,7 @@ public:
     {
         detail :: impl_apply(get_tlev_ptr(0), 
                              [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
-                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
+                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
 
@@ -542,10 +535,12 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(1, rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a - b);},
-                                   get_geom(), get_grid(), get_block(), allocator_type{});
+                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
         return *this;
     }
     
@@ -554,7 +549,7 @@ public:
     {
         detail :: impl_apply(get_tlev_ptr(0), 
                              [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value - rhs);}, 
-                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
+                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
     
@@ -562,10 +557,12 @@ public:
     {
         // Call check_bounds with tlevs=1 as we apply elementwise on tlev0
         check_bounds(1, rhs.get_nx(), rhs.get_my());
+        assert(is_transformed(0) == rhs.is_transformed(0));
+
         detail :: impl_elementwise(get_tlev_ptr(0), 
                                    rhs.get_tlev_ptr(0), 
                                    [] LAMBDACALLER (T a, T b) -> T {return(a * b);},
-                                   get_geom(), get_grid(), get_block(), allocator_type{});
+                                   get_geom(), is_transformed(0) | rhs.is_transformed(0), get_grid(), get_block(), allocator_type{});
         return *this;
     }
     
@@ -574,7 +571,7 @@ public:
     {
         detail :: impl_apply(get_tlev_ptr(0), 
                              [=] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(value + rhs);}, 
-                             get_geom(), get_grid_unroll(), get_block(), allocator_type{});
+                             get_geom(), is_transformed(0), get_grid_unroll(), get_block(), allocator_type{});
         return *this;
     }
 
@@ -607,6 +604,8 @@ public:
         check_bounds(tidx_dst + 1, 0, 0);
         check_bounds(tidx_src + 1, 0, 0);
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
+        
+        set_transformed(tidx_dst, is_transformed(tidx_src));
     }
 
 	///@brief Copy data from src, t_src to t_dst
@@ -616,6 +615,8 @@ public:
         src.check_bounds(tidx_src + 1, 0, 0);
         assert(get_geom() == src.get_geom());
         my_alloc.copy(src.get_tlev_ptr(tidx_src), src.get_tlev_ptr(tidx_src) + src.get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
+
+        set_transformed(tidx_dst, src.is_transformed(tidx_src));
     }
 
 	///@brief Move data from t_src to t_dst, zero out t_src
@@ -626,8 +627,8 @@ public:
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
         //detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
         detail :: impl_apply(get_tlev_ptr(tidx_src), 
-        [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
-        get_geom(), get_grid_unroll(), get_block(), allocator_type{});
+                             [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
+                             get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
 
 	// Advance time levels
@@ -635,6 +636,9 @@ public:
     {
         detail :: impl_advance(get_tlev_ptr(), get_tlevs(), allocator_type{});
         initialize(0);
+        for(size_t tidx = get_tlevs() - 1; tidx > 0; tidx--)
+            set_transformed(tidx, is_transformed(tidx - 1));
+        set_transformed(0, false);
     }
 
 	// Access to private members

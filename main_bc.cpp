@@ -23,13 +23,44 @@ int main(void)
     {
         slab_bc my_slab(my_config);
         my_slab.initialize();
+        // output:
+        // FD: all fields are complex
+        // BS: all fields are complex
 
         std::cout << "Inverting laplace" << std::endl;
+        // input:
+        // FD: src.is_transformed(t_src) = true
+        // BS: src.is_transformed(t_src) = true
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 1, 0);
+        // output:
+        // FD: dst.is_transformed(t_dst) = true 
+        // BS: dst.is_transformed(t_dst) = true
         std::cout << "...done. Calculating RHS" << std::endl;
-        my_slab.rhs(order - 2, order - 1);
+        // input:
+        // FD:
+        // BS: field.is_transformed(t_src) = true
+        my_slab.update_real_fields(order - 1);
+        // output:
+        // FD:
+        // BS: field.is_transformed(t_src) = false
+        std::cout << "...done. Updating real fields";
 
+        // input:
+        // FD: field.is_transformed(t_src) = false
+        // BS: field.is_transformed(t_src) = false
         my_slab.write_output(order - 1, tstep * my_config.get_deltat());
+        // output:
+        // FD: field.is_transformed(t_src) = false
+        // BS: field.is_transformed(t_src) = false
+
+        // input:
+        // FD:
+        // BS: field.is_tranformed(t_src) = false
+        my_slab.rhs(order - 2, order - 1);
+        // output:
+        // FD:
+        // BS: rhs.is_transformed(t_dst) = true
+
 
         tstep++;
 
@@ -40,9 +71,8 @@ int main(void)
 
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
         my_slab.update_real_fields(order - 2);
-        my_slab.rhs(order - 3, order - 2);
-
         my_slab.write_output(order - 2, tstep * my_config.get_deltat());
+        my_slab.rhs(order - 3, order - 2);
         tstep++;
 
 /////////////////////////////////////////////////////////////////////////
@@ -52,10 +82,10 @@ int main(void)
 
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
         my_slab.update_real_fields(order - 3);
+        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
         my_slab.rhs(0, order - 3);
 
-        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
-
+/////////////////////////////////////////////////////////////////////////
         for(; tstep < num_tsteps; tstep++)
         {
         	std::cout << tstep << "/" << num_tsteps << std::endl;
@@ -65,14 +95,14 @@ int main(void)
 
             my_slab.invert_laplace(twodads::field_t::f_omega, 
                                    twodads::field_t::f_strmf, 0, 0);
-            my_slab.rhs(0, 0);
+            my_slab.update_real_fields(0);
 
             if((tstep % output_step) == 0)
             {
                 std::cout << "step " << tstep << "/" << num_tsteps << ": writing output" << std::endl;
                 my_slab.write_output(0);
             }
-
+            my_slab.rhs(0, 0);
             my_slab.advance();
         }
 
