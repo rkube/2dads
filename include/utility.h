@@ -167,16 +167,14 @@ namespace utility
     template <typename T>
     void normalize(cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tlev)
     {
-        switch(vec.get_bvals().get_bc_left())
+        switch(vec.get_geom().get_grid())
         {
-            case twodads::bc_t::bc_dirichlet:
-            // fall through
-            case twodads::bc_t::bc_neumann:
+            case twodads::grid_t::cell_centered:
                 vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                           {return(value / T(geom.get_nx()));},
                           tlev);
                 break;
-            case twodads::bc_t::bc_periodic:
+            case twodads::grid_t::vertex_centered:
                 vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                           {return(value / T(geom.get_nx() * geom.get_my()));},
                           tlev);
@@ -361,15 +359,14 @@ namespace utility
     template <typename T>
     void normalize(cuda_array_bc_nogp<T, allocator_device>& vec, const size_t tlev)
     {
-        switch (vec.get_bvals().get_bc_left())
+        switch (vec.get_geom().get_grid())
         {
-            case twodads::bc_t::bc_dirichlet:
-            case twodads::bc_t::bc_neumann:
+            case twodads::grid_t::cell_centered:
                 vec.apply([] __device__ (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                           {return(value / T(geom.get_my()));}, 
                           tlev);
                 break;
-            case twodads::bc_t::bc_periodic:
+            case twodads::grid_t::vertex_centered:
                 vec.apply([] __device__ (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                           {return value / T(geom.get_nx() * geom.get_my());},
                           tlev);

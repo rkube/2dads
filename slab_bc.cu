@@ -405,42 +405,6 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
             break;
     }
 
-
-    /*
-    switch(get_config().get_grid_type())
-    {
-        case twodads::grid_t::cell_centered:
-        // For cell-centered grids we use the semi-spectral method which assumes the 
-        // fields are all real
-            for(size_t tidx  = 0; tidx < arr -> get_tlevs(); tidx++)
-                assert(arr -> is_transformed(tidx) == false);
-
-            for(size_t tidx = 0; tidx < arr_rhs -> get_tlevs(); tidx++)
-                assert(arr_rhs -> is_transformed(tidx) == false);
-            break;
-
-        case twodads::grid_t::vertex_centered:
-        // For vertex-centered grids we use the bispectral method which assumes
-        // the past time steps are represented by their Fourier coefficients
-            for(size_t tidx = 0; tidx < arr -> get_tlevs(); tidx++)
-            {
-
-                }
-            }
-
-            for(size_t tidx = 0; tidx < arr_rhs -> get_tlevs(); tidx++)
-            {
-                if(arr_rhs -> is_transformed(tidx) == false)
-                {
-                    (*myfft).dft_r2c((*arr_rhs).get_tlev_ptr(tidx), reinterpret_cast<twodads::cmplx_t*>((*arr_rhs).get_tlev_ptr(tidx)));
-                    arr_rhs -> set_transformed(tidx, true);
-                }
-            }
-            break;
-
-    }
-    */
-
     // Pass real arrays to the time integration routine
     // tint leaves gives the newest time step transformed.
     if(order == 1)
@@ -527,6 +491,10 @@ void slab_bc :: advance()
     theta.advance();
     omega.advance();
     tau.advance();
+
+    theta_rhs.advance();
+    omega_rhs.advance();
+    tau_rhs.advance();
 } 
 
 // Write output

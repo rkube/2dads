@@ -76,7 +76,6 @@ class slab_bc
 
         void d_dx(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
         void d_dy(const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
-        //void pbracket(const twodads::field_t, const twodads::field_t, const twodads::field_t, const size_t, const size_t, const size_t);
 
         void integrate(const twodads::dyn_field_t, const size_t);
         void update_real_fields(const size_t);

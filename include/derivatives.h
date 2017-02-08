@@ -1295,10 +1295,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         #endif //DEVICE
 
         deriv_fd_t(const twodads::slab_layout_t&);    
-        ~deriv_fd_t()
-        {
-            //delete myfft;
-        }
+        ~deriv_fd_t() {}
 
         virtual void dx(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
@@ -1447,7 +1444,6 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         const twodads::slab_layout_t geom;          // Layout for Nx * My arrays
         const twodads::slab_layout_t geom_my21;     // Layout for spectrally transformed NX * My21 arrays
         const twodads::slab_layout_t geom_transpose;     // Transposed complex layout (My21 * Nx) for the tridiagonal solver
-        //dft_object_t<twodads::real_t>* myfft;
         elliptic_t* my_solver;
 
         // Coefficient storage for spectral derivation
@@ -1477,7 +1473,6 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t& _geom) :
                    (get_geom().get_my() + 2) / 2, 0,
                    get_geom().get_nx(), 0,
                    get_geom().get_grid()},
-    //myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_1d)},
     my_solver{new elliptic_t(get_geom())},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy1{get_geom_my21(), 
@@ -1593,7 +1588,6 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                 get_geom().get_nx(), get_geom().get_pad_x(),
                 (get_geom().get_my() + 2) / 2, 0, 
                 get_geom().get_grid()}, 
-                //myfft{new dft_library_t(get_geom(), twodads::dft_t::dft_2d)},
                 coeffs_d1(get_geom_my21(),
                           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_periodic, twodads::bc_t::bc_periodic, cmplx_t{0.0}, cmplx_t{0.0}), 
                           1),
@@ -1703,7 +1697,6 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
     private:
         const twodads::slab_layout_t geom;
         const twodads::slab_layout_t geom_my21;
-        //dft_object_t<twodads::real_t>* myfft;
 
         // Coefficients for spectral derivation
         cmplx_arr coeffs_d1;

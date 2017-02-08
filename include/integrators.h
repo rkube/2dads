@@ -496,13 +496,14 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
                                 t_dst, t_src1);
 
             // u^{0} += beta_1 N^{-1}
+            
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[0][0] * dt);},
                             explicit_part, t_dst, t_src1 - 1);
-
+            
             // u^{0} /= (1.0 + dt * (diff * k^2 ))
             field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T 
                             {
-                                return(lhs / (twodads::alpha[0][0] + rhs * diff + rhs * rhs * rhs * hv));
+                                return(lhs / (twodads::alpha[0][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);                       
             break;
 
@@ -520,6 +521,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::alpha[1][1]);},
                             t_dst, t_src1);
 
+
             // u^{0} += dt * beta_2 * N^{-2}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[1][1] * dt);},
                             explicit_part, t_dst, t_src2 - 1);
@@ -530,7 +532,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T
                             {
-                                return(lhs / (twodads::alpha[1][0] + rhs * diff + rhs * rhs * rhs * hv));
+                                return(lhs / (twodads::alpha[1][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);
             break;
 
@@ -566,7 +568,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T
                             {
-                                return(lhs / (twodads::alpha[2][0] + rhs * diff + rhs * rhs * rhs * hv));
+                                return(lhs / (twodads::alpha[2][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);
             break;
         

@@ -59,7 +59,7 @@ int main(void)
         my_slab.rhs(order - 2, order - 1);
         // output:
         // FD:
-        // BS: rhs.is_transformed(t_dst) = true
+        // BS: rhs.is_transformed(t_dst) = true; field.is_trasformed(t_src) = true
 
 
         tstep++;
@@ -84,6 +84,7 @@ int main(void)
         my_slab.update_real_fields(order - 3);
         my_slab.write_output(order - 3, tstep * my_config.get_deltat());
         my_slab.rhs(0, order - 3);
+        tstep++;
 
 /////////////////////////////////////////////////////////////////////////
         for(; tstep < num_tsteps; tstep++)
@@ -92,18 +93,18 @@ int main(void)
             my_slab.integrate(twodads::dyn_field_t::f_theta, 3);
             my_slab.integrate(twodads::dyn_field_t::f_omega, 3);
             my_slab.integrate(twodads::dyn_field_t::f_tau, 3);
+            my_slab.advance();
 
-            my_slab.invert_laplace(twodads::field_t::f_omega, 
-                                   twodads::field_t::f_strmf, 0, 0);
-            my_slab.update_real_fields(0);
+            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, 1, 0);
+
+            my_slab.update_real_fields(1);
 
             if((tstep % output_step) == 0)
             {
                 std::cout << "step " << tstep << "/" << num_tsteps << ": writing output" << std::endl;
-                my_slab.write_output(0);
+                my_slab.write_output(1);
             }
-            my_slab.rhs(0, 0);
-            my_slab.advance();
+            my_slab.rhs(0, 1);
         }
 
     }

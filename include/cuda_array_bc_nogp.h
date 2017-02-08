@@ -234,14 +234,14 @@ namespace host
         size_t m{0};
 
         // Loop over the padded elements if the array is transformed
-        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()};
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
         
         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
 #pragma omp parallel for private(index, m)
         for(size_t n = 0; n < geom.get_nx(); n++)
         {
-        // We find out what My (geom.get_my()) is at runtime. To vectorize the loop
-        // find out how how many iterations we need to do when handling 4 elements
+        // nelem_m is determined at runtime. To vectorize the loop
+        // determine the number of total iterations when handling 4 elements
         // per iteration. The remaining elements are done sequentially
             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
             {
@@ -267,7 +267,7 @@ namespace host
         size_t m{0};
 
         // Loop over the padded elements if the array is transformed
-        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()};
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
         
         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
 #pragma omp parallel for private(index, m)
@@ -478,6 +478,7 @@ public:
     /// Initialize all elements to zero. Making this private results in compile error:
     /// /home/rku000/source/2dads/include/cuda_array_bc_nogp.h(414): error: An explicit __device__ lambda 
     //cannot be defined in a member function that has private or protected access within its class ("cuda_array_bc_nogp")
+    /*
     inline void initialize()
     {
         for(size_t t = 0; t < get_tlevs(); t++)
@@ -492,7 +493,9 @@ public:
                              [] LAMBDACALLER (T value, const size_t n, const size_t m, const twodads::slab_layout_t& geom) -> T {return(0.0);}, 
                              get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
+    */
 
+/*
     cuda_array_bc_nogp<T, allocator>& operator=(const cuda_array_bc_nogp<T, allocator>& rhs)
     {
         // Check for self-assignment
@@ -596,7 +599,7 @@ public:
         result *= rhs;
         return(result);
     }  
-      
+*/      
 
 	///@brief Copy data from t_src to t_dst
 	inline void copy(const size_t tidx_dst, const size_t tidx_src)
@@ -625,17 +628,19 @@ public:
         check_bounds(tidx_dst + 1, 0, 0);
         check_bounds(tidx_src + 1, 0, 0);
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
-        //detail :: impl_initialize(get_tlev_ptr(tidx_src), get_geom(), get_grid(), get_block(), allocator_type{});
-        detail :: impl_apply(get_tlev_ptr(tidx_src), 
-                             [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
-                             get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
+        apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, 0);
+        //detail :: impl_apply(get_tlev_ptr(tidx_src), 
+        //                     [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
+        //                     get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
 
 	// Advance time levels
 	inline void advance()
     {
         detail :: impl_advance(get_tlev_ptr(), get_tlevs(), allocator_type{});
-        initialize(0);
+        apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, 0);
+        
+        //initialize(0);
         for(size_t tidx = get_tlevs() - 1; tidx > 0; tidx--)
             set_transformed(tidx, is_transformed(tidx - 1));
         set_transformed(0, false);
@@ -737,7 +742,10 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
     detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
     // Initialize the address object
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
-    initialize();
+    for(size_t tidx = 0; tidx < tlevs; tidx++)
+            apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, tidx);
+
+    //initialize();
 }
 
 
