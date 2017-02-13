@@ -15,7 +15,6 @@ int main(void)
 {
     slab_config_js my_config(std::string("input.json"));
     const size_t order{my_config.get_tint_params(twodads::dyn_field_t::f_theta).get_tlevs()};
-    std::cout << "Integrating: order = " << order << std::endl;
     size_t tstep{0};
     const size_t num_tsteps{static_cast<size_t>(std::round(my_config.get_tend() / my_config.get_deltat()))};
     const size_t output_step{static_cast<size_t>(std::round(my_config.get_tout() / my_config.get_deltat()))};

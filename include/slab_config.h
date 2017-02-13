@@ -119,7 +119,7 @@ class slab_config_js
 
         std::vector<twodads::diagnostic_t> get_diagnostics() const;
         std::vector<twodads::output_t> get_output() const;
-        std::vector<twodads::real_t> get_model_params() const;
+        std::vector<twodads::real_t> get_model_params(const twodads::dyn_field_t) const;
 
         bool check_consistency() const;
 
