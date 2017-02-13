@@ -198,7 +198,7 @@ std::vector<twodads::real_t> slab_config_js :: get_model_params() const
 std::vector<twodads::real_t> slab_config_js :: get_model_params(const twodads::dyn_field_t fname) const
 {
     auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
-    std::string node_name = "2dads.model.params_" + std::get<0>(*it);
+    std::string node_name = "2dads.model.parameters_" + std::get<0>(*it);
 
     std::vector<twodads::real_t> res;
     for(auto cell : pt.get_child(node_name))

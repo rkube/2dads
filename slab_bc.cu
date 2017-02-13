@@ -178,6 +178,7 @@ void slab_bc :: initialize()
         switch(get_config().get_init_func_t(it.first))
         {
 
+/*
         case twodads::init_fun_t::init_arakawa_f:
             // -Sin[2 \[Pi] y] Sin[2 \[Pi] y] * Sin[2 \[Pi] x] Sin[2 \[Pi] x]
             (*field).apply([] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
@@ -199,6 +200,7 @@ void slab_bc :: initialize()
             }, tidx);
             field -> set_transformed(tidx, false);
             break;
+*/
 
 
         case twodads::init_fun_t::init_constant:
@@ -569,7 +571,11 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 
 void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
-    // Compute poisson bracket
+    const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
+    const twodads::real_t ic{model_params[1]};
+
+    // Compute poisson bracket {phi, omega}
+    /*
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
@@ -583,28 +589,26 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
             my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, t_src, t_dst);
             break;
     }
+    */
 
-
-    const twodads::real_t ic{1.0};
-    // - theta_y
+    // {phi, omega} - ic * theta_y
+    assert(theta_y.is_transformed(0) == false);
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {
-                              return (lhs - ic * rhs);
-                          },
-                          theta_y, 0, t_dst);           
+                          {return (lhs - ic * rhs);}, theta_y, 0, t_dst);           
 }
 
 
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
     //std::cout << "rhs_theta_lin, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
+
+    // Compute poisson bracket, {phi, theta}
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
             // Derivative fields have only 1 time index. Do not use t_src here.
             // Store in t_dst time index of RHS
-            my_derivs -> pbracket(strmf_x, theta_y, strmf_y, theta_x, theta_rhs,
-                                  0, 0, t_dst);
+            my_derivs -> pbracket(strmf_x, theta_y, strmf_y, theta_x, theta_rhs, 0, 0, t_dst);
             break;
 
         case twodads::grid_t::cell_centered:
