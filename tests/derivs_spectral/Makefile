@@ -1,4 +1,4 @@
-include ../../Makefile_linux.inc
+include ../../Makefile_osx.inc
 
 .PHONY: clean
 

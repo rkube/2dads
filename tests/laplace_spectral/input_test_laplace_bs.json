@@ -8,9 +8,9 @@
                 "xright" : 20.0,
                 "ylow"   : -20.0,
                 "yup"    : 20.0,
-                "Nx"     : 128,
+                "Nx"     : 64,
                 "padx"   : 0,
-                "My"     : 128,
+                "My"     : 64,
                 "pady"   : 2,
                 "grid_type" : "vertex",
 
