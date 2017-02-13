@@ -1271,7 +1271,6 @@ class deriv_base_t
 };
 
 
-
 /*
  * Implmentation of finite difference, spectral derivation and elliptical solvers for
  * 1d semi-periodic boundary geometries
@@ -1414,6 +1413,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
             detail :: fd :: impl_arakawa(u, v, dst, t_srcu, t_srcv, t_dst, allocator<T>{});
         }
 
+
         virtual void pbracket(const cuda_array_bc_nogp<T, allocator>& f_x,
                               const cuda_array_bc_nogp<T, allocator>& f_y,
                               const cuda_array_bc_nogp<T, allocator>& g_x,
@@ -1423,6 +1423,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         {
             throw not_implemented_error("This method is not implemented for finite differences\n");
         }
+
 
         void init_diagonals();
 

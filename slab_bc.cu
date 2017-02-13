@@ -166,7 +166,7 @@ void slab_bc :: initialize()
         // Get the initial conditions from the config file
         std::vector<twodads::real_t> initvals{get_config().get_initc(it.first)};
 
-        // We are initializing at the latest time level of the array
+        // Initializing at the largest time level of the array
         const size_t tidx{get_config().get_tint_params(it.first).get_tlevs() - 1};
 
         twodads::real_t iv0{0.0};
@@ -175,34 +175,8 @@ void slab_bc :: initialize()
         twodads::real_t iv3{0.0};
         twodads::real_t iv4{0.0};
 
-        switch(get_config().get_init_func_t(it.first))
+        switch(get_config().get_init_func_t(it.first)) 
         {
-
-/*
-        case twodads::init_fun_t::init_arakawa_f:
-            // -Sin[2 \[Pi] y] Sin[2 \[Pi] y] * Sin[2 \[Pi] x] Sin[2 \[Pi] x]
-            (*field).apply([] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-            {
-                const twodads::real_t x{geom.get_x(n)};
-                const twodads::real_t y{geom.get_y(m)};
-                return(-1.0 * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * x));
-            }, tidx);
-            field -> set_transformed(tidx, false);
-            break;
-
-        case twodads::init_fun_t::init_arakawa_g:
-            // Sin[ \[Pi] x] *Sin[\[Pi] y]
-            (*field).apply([] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
-            {
-                const twodads::real_t x{geom.get_x(n)};
-                const twodads::real_t y{geom.get_y(m)};
-                return(sin(twodads::PI * x) * sin(twodads::PI * y));
-            }, tidx);
-            field -> set_transformed(tidx, false);
-            break;
-*/
-
-
         case twodads::init_fun_t::init_constant:
             std::cout << "Initializing constant" << initvals[0] << std::endl;
 
@@ -222,7 +196,7 @@ void slab_bc :: initialize()
             std::cout << std::endl;
 
             // We need 4 initial values
-            assert(initvals.size() == 5 && "Initializing a Gaussian requires at least 5 initvals");
+            assert(initvals.size() > 4 && "Initializing a Gaussian requires at least 5 initvals");
             iv0 = initvals[0];
             iv1 = initvals[1];
             iv2 = initvals[2];
@@ -249,7 +223,7 @@ void slab_bc :: initialize()
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 const twodads::real_t x{geom.get_x(n)};
-                const twodads::real_t y{geom.get_y(m)};
+                //const twodads::real_t y{geom.get_y(m)};
                 return(x);
             }, tidx);
             field -> set_transformed(tidx, false);
@@ -320,7 +294,7 @@ void slab_bc :: d_dx(const twodads::field_t fname_src, const twodads::field_t fn
             break;
     }
 
-    my_derivs -> dx((*arr_src), (*arr_dst), t_src, t_dst, order); 
+    my_derivs -> dx((*arr_src), (*arr_dst), t_src, t_dst, order);
 }
 
 
@@ -333,10 +307,11 @@ void slab_bc :: d_dy(const twodads::field_t fname_src, const twodads::field_t fn
 
     // Cell-centered grid uses spectral derivation in y. Transform.
     // Vertex-centered grid uses spectral derivation in y. Transform.
-    if(arr_src -> is_transformed(t_src) == false)
-        dft_r2c(fname_src, t_src);
+    assert(arr_src -> is_transformed(t_src));
 
     my_derivs -> dy((*arr_src), (*arr_dst), t_src, t_dst, order);
+    // Mark output as transformed
+    arr_dst -> set_transformed(t_dst, true);
 }
 
 
@@ -345,7 +320,13 @@ void slab_bc :: invert_laplace(const twodads::field_t in, const twodads::field_t
 {
     arr_real* in_arr{get_field_by_name.at(in)};
     arr_real* out_arr{get_field_by_name.at(out)};
+
+    assert(in_arr -> is_transformed(t_src));
+    
     my_derivs -> invert_laplace((*in_arr), (*out_arr), t_src, t_dst);
+
+    assert(in_arr -> is_transformed(t_src));
+    assert(out_arr -> is_transformed(t_dst));
 }
 
 // Integrate the field in time
@@ -389,7 +370,12 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
     {
         // second order integration: Source is at tlevs - 1,
         // next time step data is writte to tlevs - 2 
+        assert(arr_rhs -> is_transformed(tlevs - 2) == false);
+        assert(arr -> is_transformed(tlevs - 1) == false);
+
         tint_ptr -> integrate((*arr), (*arr_rhs), tlevs - 1, 0, 0, tlevs - 2, order);
+
+        assert(arr -> is_transformed(tlevs - 2) == true);
     }
     else if (order == 2)
     {
@@ -405,8 +391,18 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
 }
 
 
+/*
+ * Update all real fields. 
+ * Input is taken from t_src, or 0 in case of strmf.
+ * Output is written back to t_src or 0 respectively.
+ */
 void slab_bc :: update_real_fields(const size_t t_src)
 {
+    //dft_r2c(twodads::field_t::f_theta, t_src);
+    assert(theta.is_transformed(t_src) == true);
+    assert(omega.is_transformed(t_src) == true);
+    assert(tau.is_transformed(t_src) == true);
+    assert(strmf.is_transformed(0) == true);
     switch(get_config().get_grid_type())
     {
         // Using semi-spectral methods, compute the y derivatives in fourier space
@@ -418,9 +414,16 @@ void slab_bc :: update_real_fields(const size_t t_src)
             d_dy(twodads::field_t::f_strmf, twodads::field_t::f_strmf_y, 1, 0, 0);
 
             dft_c2r(twodads::field_t::f_theta, t_src);
+            dft_c2r(twodads::field_t::f_theta_y, 0);
+
             dft_c2r(twodads::field_t::f_omega, t_src);
+            dft_c2r(twodads::field_t::f_omega_y, 0);
+
             dft_c2r(twodads::field_t::f_tau, t_src);
+            dft_c2r(twodads::field_t::f_tau_y, 0);
+
             dft_c2r(twodads::field_t::f_strmf, 0);
+            dft_c2r(twodads::field_t::f_strmf_y, 0);
 
             d_dx(twodads::field_t::f_theta, twodads::field_t::f_theta_x, 1, t_src, 0);
             d_dx(twodads::field_t::f_omega, twodads::field_t::f_omega_x, 1, t_src, 0);
@@ -460,6 +463,22 @@ void slab_bc :: update_real_fields(const size_t t_src)
             dft_c2r(twodads::field_t::f_strmf_y, 0);
             break;
     }
+
+    assert(theta.is_transformed(t_src) == false);
+    assert(theta_x.is_transformed(0) == false);
+    assert(theta_y.is_transformed(0) == false);
+
+    assert(omega.is_transformed(t_src) == false);
+    assert(omega_x.is_transformed(0) == false);
+    assert(omega_y.is_transformed(0) == false);
+
+    assert(tau.is_transformed(t_src) == false);
+    assert(tau_x.is_transformed(0) == false);
+    assert(tau_y.is_transformed(0) == false);
+
+    assert(strmf.is_transformed(0) == false);
+    assert(strmf_x.is_transformed(0) == false);
+    assert(strmf_y.is_transformed(0) == false);
 }
 
 
@@ -474,34 +493,6 @@ void slab_bc :: advance()
     omega_rhs.advance();
     tau_rhs.advance();
 } 
-
-// Write output
-void slab_bc :: write_output(const size_t t_src)
-{
-    arr_real* arr{nullptr};
-    size_t tout{0};
-    // Iterate over list of fields we want in the HDF file
-    for(auto it : get_config().get_output())
-    { 
-        arr = get_output_by_name.at(it);
-
-        if(it == twodads::output_t::o_theta ||
-           it == twodads::output_t::o_omega ||
-           it == twodads::output_t::o_tau)
-        {tout = t_src;}
-        else{tout = 0;}
-
-        assert(tout < arr -> get_tlevs());
-
-#ifdef DEVICE
-        output.surface(it, utility :: create_host_vector(arr), tout);
-#endif
-#ifdef HOST
-        output.surface(it, arr, tout);
-#endif
-    }
-    output.increment_output_counter();
-}
 
 
 void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
@@ -540,6 +531,31 @@ void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            break;
+
+        case twodads::grid_t::cell_centered:
+            assert(theta.is_transformed(t_src) == false);
+            assert(theta_x.is_transformed(0) == false);
+            assert(theta_y.is_transformed(0) == false);
+
+            assert(omega.is_transformed(t_src) == false);
+            assert(omega_x.is_transformed(0) == false);
+            assert(omega_y.is_transformed(0) == false);
+
+            assert(strmf.is_transformed(0) == false);
+            assert(strmf_x.is_transformed(0) == false);
+            assert(strmf_y.is_transformed(0) == false);
+
+            assert(tau.is_transformed(t_src) == false);
+            assert(tau_x.is_transformed(0) == false);
+            assert(tau_y.is_transformed(0) == false);
+            
+            break;
+    }
+
     (this ->* theta_rhs_func)(t_dst, t_src);
     (this ->* omega_rhs_func)(t_dst, t_src);
     (this ->* tau_rhs_func)(t_dst, t_src);
@@ -547,15 +563,9 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
-            (*myfft).dft_r2c(theta_rhs.get_tlev_ptr(t_dst), reinterpret_cast<twodads::cmplx_t*>(theta_rhs.get_tlev_ptr(t_dst)));
-            theta_rhs.set_transformed(t_dst, true);
-
-            (*myfft).dft_r2c(omega_rhs.get_tlev_ptr(t_dst), reinterpret_cast<twodads::cmplx_t*>(omega_rhs.get_tlev_ptr(t_dst)));
-            omega_rhs.set_transformed(t_dst, true);
-
-            (*myfft).dft_r2c(tau_rhs.get_tlev_ptr(t_dst), reinterpret_cast<twodads::cmplx_t*>(tau_rhs.get_tlev_ptr(t_dst)));
-            tau_rhs.set_transformed(t_dst, true);
-
+            dft_r2c(twodads::field_t::f_theta_rhs, t_dst);
+            dft_r2c(twodads::field_t::f_omega_rhs, t_dst);
+            dft_r2c(twodads::field_t::f_tau_rhs, t_dst);
             dft_r2c(twodads::field_t::f_theta, t_src);
             dft_r2c(twodads::field_t::f_omega, t_src);
             dft_r2c(twodads::field_t::f_tau, t_src);
@@ -563,7 +573,8 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
             break;
 
         case twodads::grid_t::cell_centered:
-            // Do not transform
+            // Transform strmf into Fourier space
+            dft_r2c(twodads::field_t::f_strmf, 0);
             break;
     }
 }
@@ -575,7 +586,6 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
     const twodads::real_t ic{model_params[1]};
 
     // Compute poisson bracket {phi, omega}
-    /*
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
@@ -586,13 +596,17 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 
         case twodads::grid_t::cell_centered:
             // Store in t_dst time index of RHS
-            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, t_src, t_dst);
+            assert(omega.is_transformed(t_src) == false && "rhs_omega_ic:: omega(t_src) must be in configuration space");
+            assert(strmf.is_transformed(0) == false && "rhs_omega_ic :: strmf(0) must be in configuration space");
+            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
             break;
     }
-    */
+    
 
     // {phi, omega} - ic * theta_y
     assert(theta_y.is_transformed(0) == false);
+    assert(omega_rhs.is_transformed(t_dst) == false);
+
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
                           {return (lhs - ic * rhs);}, theta_y, 0, t_dst);           
 }
@@ -615,7 +629,7 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
             // Input to Arakawa scheme is from in-place DFTs of dynamic fields.
             // Get data from t_src.
             // Store in t_dst time index of RHS
-            my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, t_src, t_dst);
+            my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, 0, t_dst);
             break;
     }
 }
@@ -630,4 +644,4 @@ slab_bc :: ~slab_bc()
     delete myfft;
 }
 
-// End of file slab_bc.cu
+// End of file slab_bc.cpp
