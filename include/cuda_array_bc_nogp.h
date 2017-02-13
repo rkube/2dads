@@ -289,7 +289,6 @@ namespace host
             }
         }
     }
-
 }
 
 
@@ -505,9 +504,6 @@ public:
         check_bounds(tidx_src + 1, 0, 0);
         my_alloc.copy(get_tlev_ptr(tidx_src), get_tlev_ptr(tidx_src) + get_geom().get_nelem_per_t(), get_tlev_ptr(tidx_dst));
         apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, 0);
-        //detail :: impl_apply(get_tlev_ptr(tidx_src), 
-        //                     [] LAMBDACALLER (const T value, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> T {return(T(0.0));},
-        //                     get_geom(), true, get_grid_unroll(), get_block(), allocator_type{});
     }
 
 	// Advance time levels

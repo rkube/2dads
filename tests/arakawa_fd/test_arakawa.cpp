@@ -26,53 +26,76 @@
 
 using namespace std;
 using real_arr = cuda_array_bc_nogp<twodads::real_t, allocator_host>;
+using my_derivs = deriv_fd_t<twodads::real_t, allocator_host>;
 
 int main(void)
 { 
     stringstream fname;
     slab_config_js my_config(std::string("input_test_arakawa_fd.json"));
-    const size_t t_src{my_config.get_tlevs() - 1};
-    {
-        slab_bc my_slab(my_config);
-        my_slab.initialize();
 
-        real_arr sol_an(my_config.get_geom(), my_config.get_bvals(twodads::field_t::f_theta), 1);
+    my_derivs der(my_config.get_geom());
 
-        sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t 
-                {
-                    twodads::real_t x{geom.get_x(n)};
-                    twodads::real_t y{geom.get_y(m)};
-                    return(16.0 * twodads::PI * twodads::PI * cos(twodads::PI * x) * cos(twodads::PI * y) * (cos(twodads::TWOPI * x) - cos(twodads::TWOPI * y)) * sin(twodads::PI * x) * sin(twodads::PI * x) * sin(twodads::PI * y) * sin(twodads::PI * y));
-                }, 
-                0);
+    const size_t t_src{0};
 
-        fname.str(string(""));
-        fname << "test_arakawa_solan_" << my_config.get_nx() << "_out.dat";
-        utility :: print(sol_an, 0, fname.str());
+    real_arr f(my_config.get_geom(), my_config.get_bvals(twodads::field_t::f_theta), 1);
+    real_arr g(my_config.get_geom(), my_config.get_bvals(twodads::field_t::f_theta), 1);
+    real_arr sol_num(my_config.get_geom(), my_config.get_bvals(twodads::field_t::f_theta), 1);
+    real_arr sol_an(my_config.get_geom(), my_config.get_bvals(twodads::field_t::f_theta), 1);
+    
 
-        fname.str(string(""));
-        fname << "test_arakawa_f_" << my_config.get_nx() << "_in.dat";
-        utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), t_src, fname.str());
+    f.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        {
+            twodads::real_t x{geom.get_x(n)};
+            twodads::real_t y{geom.get_y(m)};
+            return (-1.0 * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * x) * sin(twodads::TWOPI * y) * sin(twodads::TWOPI * y));
+        }, 0);
 
-        fname.str(string(""));
-        fname << "test_arakawa_g_" << my_config.get_nx() << "_in.dat";
-        utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_omega)), t_src, fname.str());
+    g.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+        {
+            twodads::real_t x{geom.get_x(n)};
+            twodads::real_t y{geom.get_y(m)};
+            return (sin(twodads::PI * x) * sin(twodads::PI * y));
+        }, 0);
 
-        my_slab.pbracket(twodads::field_t::f_theta, twodads::field_t::f_omega, twodads::field_t::f_strmf, t_src, t_src, 0);
+    sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t 
+            {
+                twodads::real_t x{geom.get_x(n)};
+                twodads::real_t y{geom.get_y(m)};
+                return(16.0 * twodads::PI * twodads::PI * cos(twodads::PI * x) * cos(twodads::PI * y) * (cos(twodads::TWOPI * x) - cos(twodads::TWOPI * y)) * sin(twodads::PI * x) * sin(twodads::PI * x) * sin(twodads::PI * y) * sin(twodads::PI * y));
+            }, 
+            0);
 
-        fname.str(string(""));
-        fname << "test_arakawa_solnum_" << my_config.get_nx() << "_out.dat";
-        utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_strmf)), 0, fname.str());
-       
-        real_arr sol_num(my_slab.get_array_ptr(twodads::field_t::f_strmf));
-        sol_num -= sol_an;
+    fname.str(string(""));
+    fname << "test_arakawa_solan_" << my_config.get_nx() << "_out.dat";
+    utility :: print(sol_an, 0, fname.str());
 
-        cout << "sol_num - sol_an: Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_num, 0) << endl;
+    fname.str(string(""));
+    fname << "test_arakawa_f_" << my_config.get_nx() << "_in.dat";
+    utility :: print(f, 0, fname.str());
 
-        fname.str(string(""));
-        fname << "test_arakawa_diff_" << my_config.get_nx() << "_out.dat";
-        utility :: print(sol_num, 0, fname.str());
-    }
+    fname.str(string(""));
+    fname << "test_arakawa_g_" << my_config.get_nx() << "_in.dat";
+    utility :: print(g, 0, fname.str());
+
+    der.pbracket(f, g, sol_num, 0, 0, 0);
+
+    fname.str(string(""));
+    fname << "test_arakawa_solnum_" << my_config.get_nx() << "_out.dat";
+    utility :: print(sol_num, 0, fname.str());
+    
+    //real_arr sol_num(my_slab.get_array_ptr(twodads::field_t::f_strmf));
+    //sol_num -= sol_an;
+    sol_num.elementwise([] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+        {
+            return(lhs - rhs);
+        }, sol_an, 0, 0);
+
+
+    cout << "sol_num - sol_an: Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_num, 0) << endl;
+
+    fname.str(string(""));
+    fname << "test_arakawa_diff_" << my_config.get_nx() << "_out.dat";
+    utility :: print(sol_num, 0, fname.str());
 }
 
 // End of file test_arakawa.cpp

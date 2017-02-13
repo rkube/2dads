@@ -72,8 +72,6 @@ const std::map<std::string, twodads::diagnostic_t> slab_config_js::diagnostic_ma
 
 const std::map<std::string, twodads::init_fun_t> slab_config_js::init_func_map 
 {
-    {"arakawa_f", twodads::init_fun_t::init_arakawa_f},
-    {"arakawa_g", twodads::init_fun_t::init_arakawa_g},
     {"constant", twodads::init_fun_t::init_constant}, 
     {"gaussian", twodads::init_fun_t::init_gaussian},
     {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole},
@@ -184,12 +182,16 @@ std::vector<twodads::output_t> slab_config_js :: get_output() const
     return(res);
 }
 
-std::vector<twodads::real_t> slab_config_js :: get_model_params() const
+
+std::vector<twodads::real_t> slab_config_js :: get_model_params(const twodads::dyn_field_t fname) const
 {
+    auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
+    std::string node_name = "2dads.model.parameters_" + std::get<0>(*it);
+
     std::vector<twodads::real_t> res;
-    for(auto it : pt.get_child("2dads.model.parameters"))
-        res.push_back(it.second.get_value<twodads::real_t>());
-    
+    for(auto cell : pt.get_child(node_name))
+        res.push_back(cell.second.get_value<twodads::real_t>());
+
     return(res);
 }
 
@@ -227,9 +229,15 @@ twodads::stiff_params_t slab_config_js :: get_tint_params(const twodads::dyn_fie
 {
     auto it = std::find_if(dyn_fname_map.begin(), dyn_fname_map.end(), finder<twodads::dyn_field_t>(fname));
 
+    // Get the diffusion parameter, the first entry in the parameters_fname vector
+    auto mparams = pt.get_child(std::string("2dads.model.parameters_" + std::get<0>(*it)));
+    std::vector<twodads::real_t> res;
+    for(auto cell : mparams)
+        res.push_back(cell.second.get_value<twodads::real_t>());
+
     twodads::stiff_params_t sp(
         get_deltat(), get_Lx(), get_Ly(),
-        pt.get<twodads::real_t>(std::string("2dads.model.diff_") + std::get<0>(*it)),
+        res[0],
         pt.get<twodads::real_t>("2dads.integrator.hypervisc"), 
         get_nx(), get_my21(), get_tlevs()
     );
@@ -261,6 +269,27 @@ bool slab_config_js :: check_consistency() const
     {
         throw config_error(std::string("Periodic boundary conditions in the x-direction are not allowed when using a cell-centered grid. Use a vertex centered grid"));
     }
+
+    if(get_grid_type() == twodads::grid_t::vertex_centered &&
+        (get_bvals(twodads::field_t::f_theta).get_bc_left() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_theta).get_bc_right() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_omega).get_bc_left() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_omega).get_bc_right() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_strmf).get_bc_left() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_strmf).get_bc_right() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_tau).get_bc_left() != twodads::bc_t::bc_periodic
+         ||
+         get_bvals(twodads::field_t::f_tau).get_bc_right() != twodads::bc_t::bc_periodic))
+    {
+        throw config_error(std::string("Periodic boundary conditions in the x-direction are required when using a vertex-centered\n"));
+    }
+
 
     assert(get_my() % 4 == 0);
     assert(get_nx() % 4 == 0);

@@ -209,8 +209,6 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tle
             throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");        
     }
 
-    std::cout<< "val_left = " << val_left << "\tval_right = " << val_right << std::endl;
-
     diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
         const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
@@ -283,10 +281,10 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 {
     // Set up the data for time integrations:
     // Sum up the implicit and explicit terms into t_dst 
-    // DFT r2c
+    // Fourier transform the sum
     // Add boundary terms to ky=0 mode for n=0, Nx-1
     // Call tridiagonal solver
-    // DFT c2r
+    // Return result in Fourier space
 
 
     // In the following we define local constants for the coefficients such that the
@@ -436,12 +434,6 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
 
     detail :: impl_solve_tridiagonal(field, get_diag_u(), get_diag(), get_diag_l(), t_dst, get_ell_solver(), allocator<T>{});
-
-    // Field is overwritten with the solution, don't subtract boundary terms before inverse transformation
-    // Inverse DFT of the result
-    (*myfft).dft_c2r(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), field.get_tlev_ptr(t_dst));
-    utility :: normalize(field, t_dst);
-    field.set_transformed(t_dst, false);    
 }
 
 
