@@ -28,12 +28,6 @@ namespace detail
                                 solvers :: elliptic_base_t* ell_solver,
                                 allocator_device<T>)
     {   
-        //solvers :: elliptic_cublas_t my_ell_solver(field.get_geom());
-        //my_ell_solver.solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
-        //                    reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
-        //                    diag_l.get_tlev_ptr(0), 
-        //                    diag.get_tlev_ptr(0), 
-        //                    diag_u.get_tlev_ptr(0));
         ell_solver -> solve(reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)), 
                             reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0), 
@@ -54,12 +48,6 @@ namespace detail
                                 solvers :: elliptic_base_t* ell_solver,
                                 allocator_host<T>)
     {
-        //solvers :: elliptic_mkl_t my_ell_solver(field.get_geom());
-        //my_ell_solver.solve(nullptr,
-        //                    reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
-        //                    diag_l.get_tlev_ptr(0) + 1,
-        //                    diag.get_tlev_ptr(0),
-        //                    diag_u.get_tlev_ptr(0));  
         ell_solver -> solve(nullptr,
                             reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)),
                             diag_l.get_tlev_ptr(0) + 1,
@@ -236,19 +224,6 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tle
             return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
     }, 0);
 
-    /*
-    diag.apply([=] LAMBDACALLER (CuCmplx<T> input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
-    {
-        // ky runs with index n (the kernel addressing function, see cuda::thread_idx)
-        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
-        const T ky2{twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx)};
-        // Boundary conditions apply to all boundary elements of all modes (at n=0) 
-        if(m == 0 || m == geom.get_my() - 1)
-            return(CuCmplx<T>{3.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0});    
-        else
-            return(input);
-    }, 0);
-    */
     set_diag_order(tlev);
 }
 
@@ -536,7 +511,6 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
     assert(order < 4);
     assert(get_k2_map().is_transformed(0));
-    field.set_transformed(t_dst, true);
 
     const T diff{get_tint_params().get_diff()};
     //const T hv{get_tint_params().get_hv()};
@@ -554,8 +528,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[0][1]);}, 
                                 t_dst, t_src1);
 
-            // u^{0} += beta_1 N^{-1}
-            
+            // u^{0} += beta_1 N^{-1}    
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[0][0] * dt);},
                             explicit_part, t_dst, t_src1 - 1);
             
@@ -564,7 +537,9 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
                             {
                                 return(lhs / (twodads::alpha[0][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);                       
+            field.set_transformed(t_dst, true);
             break;
+
 
         case 2:
             assert(field.is_transformed(t_src1));
@@ -593,6 +568,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
                             {
                                 return(lhs / (twodads::alpha[1][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);
+            field.set_transformed(t_dst, true);
             break;
 
         case 3:    
@@ -629,6 +605,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
                             {
                                 return(lhs / (twodads::alpha[2][0] + rhs * diff));
                             }, get_k2_map(), 0, t_dst);
+            field.set_transformed(t_dst, true);
             break;
         
         default:

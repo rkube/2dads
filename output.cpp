@@ -168,6 +168,8 @@ void output_h5_t :: surface(twodads::output_t field_name,
                             const size_t tidx,
                             const twodads::real_t time)
 {
+    // Make sure that we write a real dataset
+    assert(src.is_transformed(tidx) == false);
     // Dataset name is /[NOST]/[0-9]*
     std::string dataset_name(fname_map.at(field_name) + "/" + to_string(get_output_counter()));
 

@@ -11,7 +11,7 @@ INCLUDES = -I/Users/ralph/source/2dads/include -I/usr/local/cuda/include -I${MKL
 
 #LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5 -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
 #LFLAGS = -L${MKLROOT}/lib -L${IOMPDIR} -L/Users/ralph/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -lpthread -lm -ldl
-LFLAGS = -L/Users/ralph/local/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3 -L${MKLROOT}/lib  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
+LFLAGS = -L/Users/ralph/local/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3 -L${MKLROOT}/lib  -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
 
 NVCC	= /Developer/NVIDIA/CUDA-8.0/bin/nvcc
 
