@@ -45,12 +45,12 @@
             "model":
             {
                 "rhs_theta" : "rhs_theta_null",
-                "diff_theta": 1e-1,
+                "parameters_theta": [1e-3, 0.0],
                 "rhs_omega" : "rhs_omega_null",
-                "diff_omega": 1e-1,
+                "parameters_omega": [1e-3, 0.0],
                 "rhs_tau"  : "rhs_tau_null",
+                "parameters_tau": [1e-3, 0.0],
                 "diff_tau"  : 1e-1,
-                "parameters": [0.0, 1.0, 2.0]
             },
             "initial":
             {

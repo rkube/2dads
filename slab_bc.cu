@@ -152,13 +152,13 @@ void slab_bc :: initialize()
                                      twodads::field_t::f_tau_y);
 
     // Map a dynamic field name to its real field, x and y derivatives
-    auto map_theta = std::map<twodads::dyn_field_t, decltype(tuple_theta)>
+    auto map_fields = std::map<twodads::dyn_field_t, decltype(tuple_theta)>
         {{twodads::dyn_field_t::f_theta, tuple_theta},
          {twodads::dyn_field_t::f_omega, tuple_omega}, 
          {twodads::dyn_field_t::f_tau, tuple_tau}};
 
     // Iterate over the dynamic fields and initialize them
-    for(auto it : map_theta)
+    for(auto it : map_fields)
     {
         // The field we are going to initialize
         arr_real* field{get_field_by_name.at(std::get<0>(it.second))};
@@ -364,18 +364,59 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
             break;
     }
 
-    // Pass real arrays to the time integration routine
+    // The driver code for slab-objects shold ensure that for first order integration
+    // arr[tlevs - 1], arr[tlevs - 2], and arr_rhs[tlevs - 2] are real, irrespective of
+    // the used grid when entering slab_bc :: integrate.
+    // If we have a vertex centered grid they need to be transformed into fourier space.
+    // Second and third order integrators need more fields to be transformed. 
+    
+    if(get_config().get_grid_type() == twodads::grid_t::vertex_centered)
+    {
+        std::vector<size_t> arr_idx;
+        std::vector<size_t> arr_rhs_idx;
+        if(order == 1)
+        {
+            arr_idx.push_back(tlevs - 1);
+            (*arr).set_transformed(tlevs - 2, true);
+            arr_rhs_idx.push_back(tlevs - 2);
+        } else if (order == 2)
+        {
+            arr_idx.push_back(tlevs - 2);
+            arr_idx.push_back(tlevs - 1);
+            (*arr).set_transformed(tlevs - 3, true);
+            arr_rhs_idx.push_back(tlevs - 3);
+            arr_rhs_idx.push_back(tlevs - 2);
+        } else if (order == 3)
+        {
+            arr_idx.push_back(tlevs - 3);
+            arr_idx.push_back(tlevs - 2);
+            arr_idx.push_back(tlevs - 1);
+            (*arr).set_transformed(0, true);
+            arr_rhs_idx.push_back(tlevs - 4);
+            arr_rhs_idx.push_back(tlevs - 3);
+            arr_rhs_idx.push_back(tlevs - 2);
+        }
+
+        for(auto tidx : arr_idx)
+        {
+            (*myfft).dft_r2c((*arr).get_tlev_ptr(tidx), 
+                              reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)));
+            (*arr).set_transformed(tidx, true);
+        }
+        for(auto tidx : arr_rhs_idx)
+        {
+            (*myfft).dft_r2c((*arr_rhs).get_tlev_ptr(tidx), 
+                             reinterpret_cast<twodads::cmplx_t*>((*arr_rhs).get_tlev_ptr(tidx)));
+            (*arr_rhs).set_transformed(tidx, true);
+        }
+    }
+
     // tint leaves gives the newest time step transformed.
     if(order == 1)
     {
         // second order integration: Source is at tlevs - 1,
         // next time step data is writte to tlevs - 2 
-        assert(arr_rhs -> is_transformed(tlevs - 2) == false);
-        assert(arr -> is_transformed(tlevs - 1) == false);
-
         tint_ptr -> integrate((*arr), (*arr_rhs), tlevs - 1, 0, 0, tlevs - 2, order);
-
-        assert(arr -> is_transformed(tlevs - 2) == true);
     }
     else if (order == 2)
     {

@@ -8,7 +8,7 @@ CC	= /home/rku000/local/bin/clang++
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
 CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
-#CFLAGS = -O3 -march=native -std=c++11 -Wall -fopenmp -DMKL_ILP64 -Rpass-analysis=loop-vectorize
+#CFLAGS = -DMKL_ILP64 -O3  -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
  
 INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include  -I/home/rku000/local/include -I${MKLROOT}/include 
 

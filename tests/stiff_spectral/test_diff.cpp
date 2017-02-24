@@ -10,7 +10,7 @@ using namespace std;
 
 int main(void)
 {
-    slab_config_js my_config(std::string("input_test_diff_fd.json"));
+    slab_config_js my_config(std::string("input_test_diff_spectral.json"));
     const size_t order{my_config.get_tint_params(twodads::dyn_field_t::f_theta).get_tlevs()};
 
     size_t tstep{0};
@@ -20,18 +20,27 @@ int main(void)
     {
         slab_bc my_slab(my_config);
         my_slab.initialize();
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 1, 0);
         std::cout << "Slab initialized" << std::endl;
         my_slab.update_real_fields(order - 1);
         my_slab.write_output(order - 1, 0.0);
 
         ////////////////////////////////////////////////////////////////////////
         my_slab.integrate(twodads::dyn_field_t::f_theta, 1);
+        my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
+        my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
+
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
         my_slab.update_real_fields(order - 2);
         my_slab.write_output(order - 2, tstep * my_config.get_deltat());
         tstep++;
 
         ////////////////////////////////////////////////////////////////////////
         my_slab.integrate(twodads::dyn_field_t::f_theta, 2);
+        my_slab.integrate(twodads::dyn_field_t::f_omega, 2);
+        my_slab.integrate(twodads::dyn_field_t::f_tau, 2);
+
+        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
         my_slab.update_real_fields(order - 3);
         my_slab.write_output(order - 3, tstep * my_config.get_deltat());
         tstep++;
@@ -39,7 +48,12 @@ int main(void)
         for(; tstep < num_tsteps; tstep++)
         {
             my_slab.integrate(twodads::dyn_field_t::f_theta, 3);
+            my_slab.integrate(twodads::dyn_field_t::f_omega, 3);
+            my_slab.integrate(twodads::dyn_field_t::f_tau, 3);
+
             my_slab.advance();
+
+            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
             my_slab.update_real_fields(1);
 
             if((tstep % output_step) == 0)

@@ -58,6 +58,7 @@ int main(void)
         my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
         my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
 
+/*
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
         my_slab.update_real_fields(order - 2);
 
@@ -109,5 +110,6 @@ int main(void)
             my_slab.rhs(0, 0);
             my_slab.advance();
         }
+*/
     }
 }

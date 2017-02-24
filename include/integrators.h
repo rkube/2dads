@@ -293,6 +293,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
     if(order == 1)
     {
+        assert(field.is_transformed(t_src1) == false);
+        assert(explicit_part.is_transformed(t_dst) == false);
         // Initialize the main diagonal for first order time step
         if(get_diag_order() != 1) 
             init_diagonal(1, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
@@ -511,8 +513,8 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     switch(order)
     {
         case 1:
-            assert(field.is_transformed(t_src1));
-            assert(explicit_part.is_transformed(t_src1 - 1));
+            assert(field.is_transformed(t_src1) == true);
+            assert(explicit_part.is_transformed(t_src1 - 1) == true);
             assert(get_k2_map().is_transformed(0));
 
 
