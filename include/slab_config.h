@@ -70,7 +70,7 @@ class slab_config_js
     public:
         slab_config_js(std::string); 
 
-        const boost::property_tree::ptree& get_pt()  {return(pt);};
+        const boost::property_tree::ptree& get_pt() const  {return(pt);};
 
         size_t get_runnr() const {return(pt.get<size_t>("2dads.runnr"));};
         twodads::real_t get_xleft() const {return(pt.get<twodads::real_t>("2dads.geometry.xleft"));};

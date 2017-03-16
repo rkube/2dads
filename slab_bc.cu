@@ -394,19 +394,6 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
             arr_rhs_idx.push_back(tlevs - 4);
         }
 
-        /*
-        std::cout << "slab_bc :: integrate" << std::endl;
-        std :: cout << "true is " << true << std::endl;
-        for(auto tidx : arr_idx)
-        {
-            std::cout << "arr.is_transformed(" << tidx << ") = " << arr -> is_transformed(tidx) << std::endl;
-        }
-
-        for(auto tidx : arr_rhs_idx)
-        {
-            std::cout << "arr_rhs.is_transformed(" << tidx << ") = " << arr_rhs -> is_transformed(tidx) << std::endl;
-        }
-        */
         for(auto tidx : arr_idx)
         {
             assert(arr -> is_transformed(tidx) == false);
@@ -584,30 +571,21 @@ void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {
-    //switch(get_config().get_grid_type())
-    //{
-    //    case twodads::grid_t::vertex_centered:
-    //        break;
+    assert(theta.is_transformed(t_src) == false);
+    assert(theta_x.is_transformed(0) == false);
+    assert(theta_y.is_transformed(0) == false);
 
-    //    case twodads::grid_t::cell_centered:
-            assert(theta.is_transformed(t_src) == false);
-            assert(theta_x.is_transformed(0) == false);
-            assert(theta_y.is_transformed(0) == false);
+    assert(omega.is_transformed(t_src) == false);
+    assert(omega_x.is_transformed(0) == false);
+    assert(omega_y.is_transformed(0) == false);
 
-            assert(omega.is_transformed(t_src) == false);
-            assert(omega_x.is_transformed(0) == false);
-            assert(omega_y.is_transformed(0) == false);
+    assert(strmf.is_transformed(0) == false);
+    assert(strmf_x.is_transformed(0) == false);
+    assert(strmf_y.is_transformed(0) == false);
 
-            assert(strmf.is_transformed(0) == false);
-            assert(strmf_x.is_transformed(0) == false);
-            assert(strmf_y.is_transformed(0) == false);
-
-            assert(tau.is_transformed(t_src) == false);
-            assert(tau_x.is_transformed(0) == false);
-            assert(tau_y.is_transformed(0) == false);
-            
-    //        break;
-    //}
+    assert(tau.is_transformed(t_src) == false);
+    assert(tau_x.is_transformed(0) == false);
+    assert(tau_y.is_transformed(0) == false);            
 
     (this ->* theta_rhs_func)(t_dst, t_src);
     (this ->* omega_rhs_func)(t_dst, t_src);
@@ -626,8 +604,6 @@ inline void slab_bc :: rhs_theta_null(const size_t t_dst, const size_t t_src)
 
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
-    //std::cout << "rhs_theta_lin, t_src = " << t_src << ", t_dst = " << t_dst << std::endl;
-
     // Compute poisson bracket, {phi, theta}
     switch(get_config().get_grid_type())
     {

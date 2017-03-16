@@ -5,7 +5,7 @@
 
 #include "output.h"
 
-using namespace std;
+//using namespace std;
 using namespace H5;
 
 // Constructor of the base class
@@ -53,10 +53,15 @@ output_h5_t :: output_h5_t(const slab_config_js& config) :
     group_strmf_y{new Group(output_file -> createGroup("/Sy"))},
 	dspace_file{nullptr}
 {
+
+    using boost::property_tree::ptree;
+    using boost::property_tree::write_json;
+
     // ds_memsize is the dimension of the memory allocaed by cuda_array_bc_npgp.
     // This includes the padding
     const hsize_t ds_memsize[] = {get_geom().get_nx() + get_geom().get_pad_x(), get_geom().get_my() + get_geom().get_pad_y()};
 	const hsize_t offset[] = {0,0};
+
     // count is the number of elements we are selecting in the dataspaces
     // associated with the output fields. This ignores all padding.
     const hsize_t ds_fsize[] = {get_geom().get_nx(), get_geom().get_my()};
@@ -79,18 +84,26 @@ output_h5_t :: output_h5_t(const slab_config_js& config) :
 
     DataSpace* dspace;
 
-#ifdef DEBUG
-		std::cout << "Initializing HDF5 output\n";
-		std::cout << "Output file " << output_file -> getFileName() << " created. Id: " << output_file -> getId() << "\n";
-        std::cout << "ds_memsize = [" << ds_memsize[0] << ", " << ds_memsize[1] << "]" << std::endl;
-        std::cout << "ds_fsize = [" << ds_fsize[0] << ", " << ds_fsize[1] << "]" << std::endl;
-#endif //DEBUG
+    // Serialize configuration to string and write to file
+    // https://support.hdfgroup.org/ftp/HDF5/examples/misc-examples/stratt.cpp
+    std::ostringstream config_str;
+    write_json(config_str, config.get_pt(), false);
+
+    // Create new Dataspace for json ptree
+    DataSpace config_dataspace = DataSpace(H5S_SCALAR);
+    // Create string datatype
+    StrType strdatatype(PredType::C_S1, config_str.str().size());
+    // Create a net Dataset in the output file
+    DataSet dset_config{output_file -> createDataSet(H5std_string("input.json"), strdatatype, DataSpace(H5S_SCALAR))};
+    dset_config.write(config_str.str(), strdatatype);
+
+    //Attribute myatt_in = dset_config.createAttribute(ATTR_NAME, strdatatype, attr_dataspace);
+    //myatt_in.write(strdatatype, strwritebuf); 
 
     output_file -> flush(H5F_SCOPE_LOCAL);
     output_file -> close();
 
     delete output_file;
-
 
     for(auto it : config.get_output())
     {
@@ -131,13 +144,10 @@ void output_h5_t :: surface(twodads::output_t field_name,
 {
     // Dataset name is /[NOST]/[0-9]*
     const twodads::real_t time{twodads::real_t(get_output_counter()) * get_dtout()};
-
-    //stringstream foo;
-    //foo << fname_map.at(field_name) << "/" << to_string(get_output_counter());
-    //string dataset_name(foo.str());
-    std::string dataset_name(fname_map.at(field_name) + "/" + to_string(get_output_counter()));
+    std::string dataset_name(fname_map.at(field_name) + "/" + std::to_string(get_output_counter()));
 
 
+    // Open data file for writing
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];
 
@@ -157,8 +167,12 @@ void output_h5_t :: surface(twodads::output_t field_name,
     Attribute att = dataset -> createAttribute("time", PredType::NATIVE_DOUBLE, att_space);
     att.write(PredType::NATIVE_DOUBLE, &time);
 
-	delete dataset;
+    // Flush and close data file
+    output_file -> flush(H5F_SCOPE_LOCAL);
+    output_file -> close();
     delete output_file;
+
+	delete dataset;
 }	
 
 // Same as above but pass the time attribute explicitly instead of computing
@@ -171,7 +185,7 @@ void output_h5_t :: surface(twodads::output_t field_name,
     // Make sure that we write a real dataset
     assert(src.is_transformed(tidx) == false);
     // Dataset name is /[NOST]/[0-9]*
-    std::string dataset_name(fname_map.at(field_name) + "/" + to_string(get_output_counter()));
+    std::string dataset_name(fname_map.at(field_name) + "/" + std::to_string(get_output_counter()));
 
     output_file = new H5File(filename, H5F_ACC_RDWR);
     DataSpace* dspace_ptr = dspace_map[field_name];
