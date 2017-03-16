@@ -89,16 +89,16 @@ const std::map<std::string, twodads::rhs_t> slab_config_js::rhs_func_map
     {"rhs_theta_full", twodads::rhs_t::rhs_theta_full}, 
     {"rhs_theta_hwmod", twodads::rhs_t::rhs_theta_hwmod},
     {"rhs_theta_sheath_nlin", twodads::rhs_t::rhs_theta_sheath_nlin},
-    {"rhs_theta_null", twodads::rhs_t::rhs_null},
+    {"rhs_theta_null", twodads::rhs_t::rhs_theta_null},
     {"rhs_tas_sheath_nlin", twodads::rhs_t::rhs_tau_sheath_nlin},
-    {"rhs_tau_null", twodads::rhs_t::rhs_null},
+    {"rhs_tau_null", twodads::rhs_t::rhs_tau_null},
     {"rhs_omega_ns", twodads::rhs_t::rhs_omega_ns},
     {"rhs_omega_hw", twodads::rhs_t::rhs_omega_hw},
     {"rhs_omega_hwmod", twodads::rhs_t::rhs_omega_hwmod},
     {"rhs_omega_hwzf", twodads::rhs_t::rhs_omega_hwzf},
     {"rhs_omega_ic", twodads::rhs_t::rhs_omega_ic},
     {"rhs_omega_sheath_nlin", twodads::rhs_t::rhs_omega_sheath_nlin}, 
-    {"rhs_omega_null", twodads::rhs_t::rhs_null}
+    {"rhs_omega_null", twodads::rhs_t::rhs_omega_null}
 };
 
 

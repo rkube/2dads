@@ -380,24 +380,21 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
             arr_idx.push_back(tlevs - 1);
             (*arr).set_transformed(tlevs - 2, true);
             arr_rhs_idx.push_back(tlevs - 2);
-        } else if (order == 2)
+        } 
+        else if (order == 2)
         {
             arr_idx.push_back(tlevs - 2);
-            //arr_idx.push_back(tlevs - 1);
             (*arr).set_transformed(tlevs - 3, true);
             arr_rhs_idx.push_back(tlevs - 3);
-            //arr_rhs_idx.push_back(tlevs - 2);
-        } else if (order == 3)
+        } 
+        else if (order == 3)
         {
             arr_idx.push_back(tlevs - 3);
-            //arr_idx.push_back(tlevs - 2);
-            //arr_idx.push_back(tlevs - 1);
             (*arr).set_transformed(0, true);
             arr_rhs_idx.push_back(tlevs - 4);
-            //arr_rhs_idx.push_back(tlevs - 3);
-            //arr_rhs_idx.push_back(tlevs - 2);
         }
 
+        /*
         std::cout << "slab_bc :: integrate" << std::endl;
         std :: cout << "true is " << true << std::endl;
         for(auto tidx : arr_idx)
@@ -409,7 +406,7 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
         {
             std::cout << "arr_rhs.is_transformed(" << tidx << ") = " << arr_rhs -> is_transformed(tidx) << std::endl;
         }
-
+        */
         for(auto tidx : arr_idx)
         {
             assert(arr -> is_transformed(tidx) == false);
@@ -612,7 +609,6 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
     //        break;
     //}
 
-    std :: cout << "Updating RHS" << std::endl;
     (this ->* theta_rhs_func)(t_dst, t_src);
     (this ->* omega_rhs_func)(t_dst, t_src);
     (this ->* tau_rhs_func)(t_dst, t_src);
@@ -625,7 +621,6 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 
 inline void slab_bc :: rhs_theta_null(const size_t t_dst, const size_t t_src)
 {
-    std::cout << "rhs_theta_null" << std::endl;
 }
 
 
@@ -654,7 +649,6 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 
 inline void slab_bc :: rhs_omega_null(const size_t t_dst, const size_t t_src)
 {
-    std::cout << "omega_rhs_null" << std::endl;
     // Do nothing
 }
 
@@ -690,7 +684,6 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 
 inline void slab_bc :: rhs_tau_null(const size_t t_dst, const size_t t_src)
 {
-    std::cout << "tau_rhs_null" << std::endl;
     // Do nothing
 }
 
