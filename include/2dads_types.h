@@ -61,8 +61,8 @@ namespace twodads {
     //constexpr __device__ real_t get_alpha(size_t t, size_t k) {return(alpha[t][k]);};
     //constexpr __device__ real_t get_beta(size_t t, size_t k) {return(beta[t][k]);};
 
-    // Boundary conditions: Dirichlet, Neumann, periodic
-    enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic};
+    // Boundary conditions: Dirichlet, Neumann, periodic, null
+    enum class bc_t {bc_dirichlet, bc_neumann, bc_periodic, bc_null};
     // vertex centered: x = x_left + n * delta_x
     // cell centered: x = x_left + (n + 1/2) * delta_x
     enum class grid_t {vertex_centered, cell_centered};
@@ -173,8 +173,8 @@ namespace twodads {
         public:
             CUDAMEMBER bvals_t(bc_t _bc_left, bc_t _bc_right, T _bv_l, T _bv_r)
                                : bc_left(_bc_left), bc_right(_bc_right), 
-                                 bval_left(_bv_l), bval_right(_bv_r) {};
-
+                                 bval_left(_bv_l), bval_right(_bv_r) {}
+                                 
             CUDAMEMBER inline bc_t get_bc_left() const {return(bc_left);};
             CUDAMEMBER inline bc_t get_bc_right() const {return(bc_right);};
 
@@ -211,6 +211,9 @@ namespace twodads {
                     case twodads::bc_t::bc_periodic:
                         os << " periodic ";
                         break;
+                    case twodads::bc_t::bc_null:
+                        os << " null ";
+                        break;
                 }
                 os << bv.get_bv_left() << "\tRight";
 
@@ -224,6 +227,9 @@ namespace twodads {
                         break;
                     case twodads::bc_t::bc_periodic:
                         os << " periodic ";
+                        break;
+                    case twodads::bc_t::bc_null:
+                        os << " null ";
                         break;
                 }
                 os << bv.get_bv_right() << std::endl;

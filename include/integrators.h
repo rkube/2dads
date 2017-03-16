@@ -69,7 +69,7 @@ class integrator_base_t
     public:
         integrator_base_t(){}
         virtual ~integrator_base_t() {}
-        // Integration with real fields, overloaded by integrator_karniadakis_fd_t
+        
         virtual void integrate(cuda_array_bc_nogp<T, allocator>&, 
                                const cuda_array_bc_nogp<T, allocator>&, 
                                const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
@@ -104,9 +104,9 @@ class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
             my_solver{new elliptic_t(get_geom())},
             diag_order{1},
             // Pass a complex bvals_t to these guys. They don't really need it though.
-            diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
-            diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
-            diag_u(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1)
+            diag(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
+            diag_l(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1),
+            diag_u(get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, CuCmplx<T>{0.0}, CuCmplx<T>{0.0}), 1)
         {
             init_diagonal(1, bvals.get_bc_left(), bvals.get_bc_right());
             init_diagonals_ul();
@@ -303,7 +303,8 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         const T beta1_dt{twodads::beta[0][0] * get_tint_params().get_deltat()};
 
         // u^{0} = alpha_1 u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, 
+                          t_dst, t_src1);
 
         // u^{0} += beta_1 N^{-1}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, 
@@ -453,7 +454,6 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
         {
             k2_map.set_transformed(0, true);
             init_k2_map();
-            std::cout << "integrator_karniadakis_bs_t constructed" << std::endl;
         }
 
         void integrate(cuda_array_bc_nogp<T, allocator>&,
@@ -507,33 +507,30 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     assert(get_k2_map().is_transformed(0));
 
     const T diff{get_tint_params().get_diff()};
-    //const T hv{get_tint_params().get_hv()};
     const T dt{get_tint_params().get_deltat()};
 
     switch(order)
     {
         case 1:
-            assert(field.is_transformed(t_src1) == true);
-            assert(explicit_part.is_transformed(t_src1 - 1) == true);
+            assert(field.is_transformed(t_src1));
+            assert(explicit_part.is_transformed(t_src1 - 1));
             assert(get_k2_map().is_transformed(0));
-
-
+    
             // u^{0} = alpha_1 u^{-1}
-            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[0][1]);}, 
-                                t_dst, t_src1);
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[order - 1][1]);}, 
+                              t_dst, t_src1);
 
             // u^{0} += beta_1 N^{-1}    
-            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[0][0] * dt);},
-                            explicit_part, t_dst, t_src1 - 1);
+            field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[order - 1][0] * dt);},
+                              explicit_part, t_dst, t_src1 - 1);
             
             // u^{0} /= (1.0 + dt * (diff * k^2 ))
-            field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T 
-                            {
-                                return(lhs / (twodads::alpha[0][0] + rhs * diff));
-                            }, get_k2_map(), 0, t_dst);                       
+            field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T 
+                              {
+                                  return(lhs / (twodads::alpha[order - 1][0] + dt * k2 * diff));
+                              }, get_k2_map(), 0, t_dst);                       
             field.set_transformed(t_dst, true);
             break;
-
 
         case 2:
             assert(field.is_transformed(t_src1));
@@ -541,21 +538,23 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
             assert(explicit_part.is_transformed(t_src2 - 1));
             assert(explicit_part.is_transformed(t_src1 - 1));
+
+            assert(get_k2_map().is_transformed(0));
             
             // u^{0} = alpha_2 * u^{-2}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[1][2]);},
-                            t_dst, t_src2);
+                              t_dst, t_src2);
             // u^{0} += alpha_1 * u^{-1}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::alpha[1][1]);},
-                            t_dst, t_src1);
+                              t_dst, t_src1);
 
 
             // u^{0} += dt * beta_2 * N^{-2}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[1][1] * dt);},
-                            explicit_part, t_dst, t_src2 - 1);
+                              explicit_part, t_dst, t_src2 - 1);
             // u^{0} += dt * beta_1 * N^{-1}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[1][0] * dt);},
-                            explicit_part, t_dst, t_src1 - 1);
+                              explicit_part, t_dst, t_src1 - 1);
 
             // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T rhs) -> T

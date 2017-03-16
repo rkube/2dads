@@ -96,10 +96,12 @@ class address_t
                     case twodads::bc_t::bc_neumann:
                         gp_interpolator_left = new bval_interpolator_neumann_left<T>(bv.get_bv_left());
                         break;
-                    // Periodic BCs in x are not implemented with FDs. set a nullptr and hope it fails somewhere down the line
-                    // with an illegal memory access :)
+
+                    // Periodic BCs in x are not implemented with finite difference schemes.
                     case twodads::bc_t::bc_periodic:
-                    default:
+                    // fall through
+                    case twodads::bc_t::bc_null:
+                    // do nothing
                         break;
                 }
            
@@ -112,8 +114,11 @@ class address_t
                     case twodads::bc_t::bc_neumann:
                         gp_interpolator_right = new bval_interpolator_neumann_right<T>(bv.get_bv_right());
                         break;
+                    
                     case twodads::bc_t::bc_periodic:
-                    default:
+                    // fall through
+                    case twodads::bc_t::bc_null:
+                    // do nothing
                         break;
                 }
             };
@@ -136,7 +141,7 @@ class address_t
                 // Periodic BCs in x are not implemented with FDs. set a nullptr and hope it fails somewhere down the line
                 // with an illegal memory access :)
                 case twodads::bc_t::bc_periodic:
-                default:
+                case twodads::bc_t::bc_null:
                     break;
             }
        
@@ -150,7 +155,7 @@ class address_t
                     gp_interpolator_right = new bval_interpolator_neumann_right<T>(bv.get_bv_right());
                     break;
                 case twodads::bc_t::bc_periodic:
-                default:
+                case twodads::bc_t::bc_null:
                     break;
             }
         }

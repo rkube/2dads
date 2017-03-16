@@ -1362,6 +1362,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
                     break;
+                case twodads::bc_t::bc_null:
+                    std::cerr << "Null boundary conditions not implemented by this class. We shouldn't be here!'" << std::endl;
+                    break;
             }
 
             switch(src.get_bvals().get_bc_right())
@@ -1374,6 +1377,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                     break;
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
+                    break;
+                case twodads::bc_t::bc_null:
+                    std::cerr << "Null boundary conditions not implemented by this class. We shouldn't be here!'" << std::endl;
                     break;
             }    
 

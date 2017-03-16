@@ -37,12 +37,7 @@ int main(void)
         //      all fields (tidx = order-1) are real
         my_slab.update_real_fields(order - 1);
            
-        for(size_t tl = 0; tl < order; tl++)
-        {
-            fname.str(string(""));
-            fname << "test_stiff_theta_" << my_config.get_nx() << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());        
-        }
+        my_slab.write_output(order - 1, tstep * my_config.get_deltat());
         // rhs: spectral version
         // input:
         //      all fields (tidx = order-1) are real
@@ -53,42 +48,29 @@ int main(void)
 
         // Integrate first time step
         std::cout << "Integrating: t = " << tstep << std::endl;
-        tstep = 1;
         my_slab.integrate(twodads::dyn_field_t::f_theta, 1);
         my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
         my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
+        tstep++;
 
-/*
+
+
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
         my_slab.update_real_fields(order - 2);
-
-        for(size_t tl = 0; tl < order; tl++)
-        {
-            fname.str(string(""));
-            fname << "test_stiff_theta_" << my_config.get_nx() << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());  
-        }
-
+        my_slab.write_output(order - 2, tstep * my_config.get_deltat());
         my_slab.rhs(order - 3, order - 2);
 
         //// Integrate second time step
         std::cout << "Integrating: t = " << tstep << std::endl;
-        tstep = 2;
         my_slab.integrate(twodads::dyn_field_t::f_theta, 2);
         my_slab.integrate(twodads::dyn_field_t::f_omega, 2);
         my_slab.integrate(twodads::dyn_field_t::f_tau, 2);
+        tstep++;
 
         my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
         my_slab.update_real_fields(order - 3);
-
-        for(size_t tl = 0; tl < order; tl++)
-        {
-            fname.str(string(""));
-            fname << "test_stiff_theta_" << my_config.get_nx() << "_a" << tl << "_t" << tstep << "_host.dat";
-            utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());      
-        }
-        
-        my_slab.rhs(order - 4, order - 3);
+        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
+        my_slab.rhs(0, order - 3);
     
         for(; tstep < num_tstep; tstep++)
         {
@@ -97,19 +79,13 @@ int main(void)
             my_slab.integrate(twodads::dyn_field_t::f_theta, 3);
             my_slab.integrate(twodads::dyn_field_t::f_omega, 3);
             my_slab.integrate(twodads::dyn_field_t::f_tau, 3);
-
-            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, 0, 0);
-            my_slab.update_real_fields(0);
-
-            for(size_t tl = 0; tl < order; tl++)
-            {
-                fname.str(string(""));
-                fname << "test_stiff_theta_" << my_config.get_nx() << "_a" << tl << "_t" << tstep << "_host.dat";
-                utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_theta)), tl, fname.str());        
-            }
-            my_slab.rhs(0, 0);
             my_slab.advance();
+
+            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, 1, 0);
+            my_slab.update_real_fields(1);
+            my_slab.write_output(1, tstep * my_config.get_deltat());
+
+            my_slab.rhs(0, 1);
         }
-*/
     }
 }

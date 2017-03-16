@@ -48,7 +48,8 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
                        {twodads::field_t::f_strmf_x,   &strmf_x},
                        {twodads::field_t::f_strmf_y,   &strmf_y},
                        {twodads::field_t::f_theta_rhs, &theta_rhs},
-                       {twodads::field_t::f_omega_rhs, &omega_rhs}},
+                       {twodads::field_t::f_omega_rhs, &omega_rhs},
+                       {twodads::field_t::f_tau_rhs, &tau_rhs}},
     get_dfield_by_name{ {twodads::dyn_field_t::f_theta, &theta},
                         {twodads::dyn_field_t::f_omega, &omega},
                         {twodads::dyn_field_t::f_tau,   &tau}},
@@ -382,31 +383,45 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
         } else if (order == 2)
         {
             arr_idx.push_back(tlevs - 2);
-            arr_idx.push_back(tlevs - 1);
+            //arr_idx.push_back(tlevs - 1);
             (*arr).set_transformed(tlevs - 3, true);
             arr_rhs_idx.push_back(tlevs - 3);
-            arr_rhs_idx.push_back(tlevs - 2);
+            //arr_rhs_idx.push_back(tlevs - 2);
         } else if (order == 3)
         {
             arr_idx.push_back(tlevs - 3);
-            arr_idx.push_back(tlevs - 2);
-            arr_idx.push_back(tlevs - 1);
+            //arr_idx.push_back(tlevs - 2);
+            //arr_idx.push_back(tlevs - 1);
             (*arr).set_transformed(0, true);
             arr_rhs_idx.push_back(tlevs - 4);
-            arr_rhs_idx.push_back(tlevs - 3);
-            arr_rhs_idx.push_back(tlevs - 2);
+            //arr_rhs_idx.push_back(tlevs - 3);
+            //arr_rhs_idx.push_back(tlevs - 2);
+        }
+
+        std::cout << "slab_bc :: integrate" << std::endl;
+        std :: cout << "true is " << true << std::endl;
+        for(auto tidx : arr_idx)
+        {
+            std::cout << "arr.is_transformed(" << tidx << ") = " << arr -> is_transformed(tidx) << std::endl;
+        }
+
+        for(auto tidx : arr_rhs_idx)
+        {
+            std::cout << "arr_rhs.is_transformed(" << tidx << ") = " << arr_rhs -> is_transformed(tidx) << std::endl;
         }
 
         for(auto tidx : arr_idx)
         {
+            assert(arr -> is_transformed(tidx) == false);
             (*myfft).dft_r2c((*arr).get_tlev_ptr(tidx), 
-                              reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)));
+                             reinterpret_cast<twodads::cmplx_t*>((*arr).get_tlev_ptr(tidx)));
             (*arr).set_transformed(tidx, true);
         }
         for(auto tidx : arr_rhs_idx)
         {
+            assert(arr_rhs -> is_transformed(tidx) == false);
             (*myfft).dft_r2c((*arr_rhs).get_tlev_ptr(tidx), 
-                             reinterpret_cast<twodads::cmplx_t*>((*arr_rhs).get_tlev_ptr(tidx)));
+                              reinterpret_cast<twodads::cmplx_t*>((*arr_rhs).get_tlev_ptr(tidx)));
             (*arr_rhs).set_transformed(tidx, true);
         }
     }
@@ -572,12 +587,12 @@ void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {
-    switch(get_config().get_grid_type())
-    {
-        case twodads::grid_t::vertex_centered:
-            break;
+    //switch(get_config().get_grid_type())
+    //{
+    //    case twodads::grid_t::vertex_centered:
+    //        break;
 
-        case twodads::grid_t::cell_centered:
+    //    case twodads::grid_t::cell_centered:
             assert(theta.is_transformed(t_src) == false);
             assert(theta_x.is_transformed(0) == false);
             assert(theta_y.is_transformed(0) == false);
@@ -594,62 +609,23 @@ void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
             assert(tau_x.is_transformed(0) == false);
             assert(tau_y.is_transformed(0) == false);
             
-            break;
-    }
+    //        break;
+    //}
 
+    std :: cout << "Updating RHS" << std::endl;
     (this ->* theta_rhs_func)(t_dst, t_src);
     (this ->* omega_rhs_func)(t_dst, t_src);
     (this ->* tau_rhs_func)(t_dst, t_src);
 
-    switch(get_config().get_grid_type())
-    {
-        case twodads::grid_t::vertex_centered:
-            dft_r2c(twodads::field_t::f_theta_rhs, t_dst);
-            dft_r2c(twodads::field_t::f_omega_rhs, t_dst);
-            dft_r2c(twodads::field_t::f_tau_rhs, t_dst);
-            dft_r2c(twodads::field_t::f_theta, t_src);
-            dft_r2c(twodads::field_t::f_omega, t_src);
-            dft_r2c(twodads::field_t::f_tau, t_src);
-
-            break;
-
-        case twodads::grid_t::cell_centered:
-            // Transform strmf into Fourier space
-            dft_r2c(twodads::field_t::f_strmf, 0);
-            break;
-    }
+    assert(theta_rhs.is_transformed(t_dst) == false);
+    assert(omega_rhs.is_transformed(t_dst) == false);
+    assert(tau_rhs.is_transformed(t_dst) == false);
 }
 
 
-void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
+inline void slab_bc :: rhs_theta_null(const size_t t_dst, const size_t t_src)
 {
-    const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
-    const twodads::real_t ic{model_params[1]};
-
-    // Compute poisson bracket {phi, omega}
-    switch(get_config().get_grid_type())
-    {
-        case twodads::grid_t::vertex_centered:
-            // Derivative fields have only 1 time index. Do not use t_src here.
-            // Store in t_dst time index of RHS
-            my_derivs -> pbracket(strmf_x, omega_y, strmf_y, omega_x, omega_rhs, 0, 0, t_dst);
-            break;
-
-        case twodads::grid_t::cell_centered:
-            // Store in t_dst time index of RHS
-            assert(omega.is_transformed(t_src) == false && "rhs_omega_ic:: omega(t_src) must be in configuration space");
-            assert(strmf.is_transformed(0) == false && "rhs_omega_ic :: strmf(0) must be in configuration space");
-            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
-            break;
-    }
-    
-
-    // {phi, omega} - ic * theta_y
-    assert(theta_y.is_transformed(0) == false);
-    assert(omega_rhs.is_transformed(t_dst) == false);
-
-    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, theta_y, 0, t_dst);           
+    std::cout << "rhs_theta_null" << std::endl;
 }
 
 
@@ -674,6 +650,50 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
             break;
     }
 }
+
+
+inline void slab_bc :: rhs_omega_null(const size_t t_dst, const size_t t_src)
+{
+    std::cout << "omega_rhs_null" << std::endl;
+    // Do nothing
+}
+
+
+void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
+{
+    const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
+    const twodads::real_t ic{model_params[1]};
+
+    // Compute poisson bracket {phi, omega}
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(strmf_x, omega_y, strmf_y, omega_x, omega_rhs, 0, 0, t_dst);
+            break;
+
+        case twodads::grid_t::cell_centered:
+            // Store in t_dst time index of RHS
+            assert(omega.is_transformed(t_src) == false && "rhs_omega_ic:: omega(t_src) must be in configuration space");
+            assert(strmf.is_transformed(0) == false && "rhs_omega_ic :: strmf(0) must be in configuration space");
+            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
+            break;
+    }
+    
+
+    // {phi, omega} - ic * theta_y
+
+    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
+                          {return (lhs - ic * rhs);}, theta_y, 0, t_dst);           
+}
+
+
+inline void slab_bc :: rhs_tau_null(const size_t t_dst, const size_t t_src)
+{
+    std::cout << "tau_rhs_null" << std::endl;
+    // Do nothing
+}
+
 
 
 slab_bc :: ~slab_bc()
