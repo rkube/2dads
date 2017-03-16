@@ -2,13 +2,11 @@ MKLROOT	= /home/rku000/local/intel/mkl
 IOMPDIR = /home/rku000/local/intel/compilers_and_libraries/linux/lib/intel64
 
 CC	= /home/rku000/local/bin/clang++
-#CC = /usr/bin/g++
-
 
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
 CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
-#CFLAGS = -DMKL_ILP64 -O3  -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
+#CFLAGS = -DMKL_ILP64 -O3  -stdlib=libc++ -std=c++14 -Wall -fopenmp 
  
 INCLUDES = -I/home/rku000/source/2dads/include -I/usr/local/cuda/include  -I/home/rku000/local/include -I${MKLROOT}/include 
 

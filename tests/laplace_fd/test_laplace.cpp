@@ -65,7 +65,10 @@ int main(void)
         utility :: print((*my_slab.get_array_ptr(twodads::field_t::f_strmf)), t_src, fname.str());
 
         // Get the analytic solution
-        sol_an -= my_slab.get_array_ptr(twodads::field_t::f_strmf);
+        sol_an.elementwise([] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+            {
+                return(lhs - rhs);
+            }, sol_an, 0, 0);
         cout << "Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_an, t_src) << endl;
     } // Let managed memory go out of scope before calling cudaDeviceReset()
 }

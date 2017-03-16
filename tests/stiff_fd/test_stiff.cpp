@@ -1,5 +1,5 @@
 /*
- * Test time integration 
+ * Test time integration. Finite difference version
  */
 
 #include <iostream>

@@ -8,9 +8,9 @@
                 "xright" : 1.0,
                 "ylow"   : -1.0,
                 "yup"    : 1.0,
-                "Nx"     : 512,
+                "Nx"     : 128,
                 "padx"   : 0,
-                "My"     : 512,
+                "My"     : 128,
                 "pady"   : 2,
                 "grid_type" : "cell",
 
@@ -45,12 +45,11 @@
             "model":
             {
                 "rhs_theta" : "rhs_theta_lin",
-                "diff_theta": 1e-3,
+                "parameters_theta": [1e-3, 0.0],
                 "rhs_omega" : "rhs_omega_ic",
-                "diff_omega": 1e-3,
+                "parameters_omega": [1e-3, 0.0],
                 "rhs_tau"  : "rhs_tau_null",
-                "diff_tau"  : 1e-3,
-                "parameters": [0.0, 1.0, 2.0]
+                "parameters_tau"  : [1e-3, 0.0]
             },
             "initial":
             {

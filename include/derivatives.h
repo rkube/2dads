@@ -951,6 +951,7 @@ namespace detail
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                                     geom_my21);
+                dst.set_transformed(t_dst, true);
             }
             else if(order == 2)
             {
@@ -960,6 +961,7 @@ namespace detail
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * val_map.im());},
                                     geom_my21);
+                dst.set_transformed(t_dst, true);
             }
             else
             {
