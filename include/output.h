@@ -9,6 +9,9 @@
 #include <vector>
 #include <map>
 #include <H5Cpp.h>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+
 #include "2dads_types.h"
 #include "slab_config.h"
 #include "cuda_array_bc_nogp.h"

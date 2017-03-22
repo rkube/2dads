@@ -93,24 +93,13 @@ class slab_bc
 
         // The RHS functions below should not be called directly but via the pointers
         // stored in ***_rhs_func
-        void rhs_theta_null(const size_t t_dst, const size_t t_src)
-        {
-            // Do nothing
-        };
+        void rhs_theta_null(const size_t, const size_t);
+        void rhs_theta_lin(const size_t, const size_t);
 
-        void rhs_omega_null(const size_t t_dst, const size_t t_src)
-        {
-            // Do nothing
-        };
-
+        void rhs_omega_null(const size_t, const size_t);
         void rhs_omega_ic(const size_t, const size_t);
 
-        void rhs_tau_null(const size_t t_dst, const size_t t_src)
-        {
-            // Do nothing
-        };
-
-        void rhs_theta_lin(const size_t, const size_t);
+        void rhs_tau_null(const size_t, const size_t);
 
     private:
 

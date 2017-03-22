@@ -8,9 +8,9 @@
                 "xright" : 10.0,
                 "ylow"   : -10.0,
                 "yup"    : 10.0,
-                "Nx"     : 128,
+                "Nx"     : 64,
                 "padx"   : 0,
-                "My"     : 128,
+                "My"     : 64,
                 "pady"   : 2,
                 "grid_type" : "vertex",
 
@@ -38,18 +38,18 @@
             {
                 "scheme"    : "karniadakis",
                 "level"     : 4,
-                "deltat"    : 0.001,
+                "deltat"    : 0.01,
                 "tend"      : 1.0,
                 "hypervisc" : 0
             },
             "model":
             {
                 "rhs_theta" : "rhs_theta_null",
-                "parameters_theta": [1e-3, 0.0],
+                "parameters_theta": [1e-1, 0.0],
                 "rhs_omega" : "rhs_omega_null",
-                "parameters_omega": [1e-3, 0.0],
-                "rhs_tau"  : "rhs_tau_null",
-                "parameters_tau": [1e-3, 0.0]
+                "parameters_omega": [1e-1, 0.0],
+                "rhs_tau": "rhs_tau_null",
+                "parameters_tau": [1e-1, 0.0]
             },
             "initial":
             {
@@ -63,7 +63,7 @@
             "output":
             {
                 "tout": 0.1,
-                "fields" : ["theta", "omega", "tau"]
+                "fields" : ["theta", "omega", "strmf", "tau"]
             },
             "diagnostics":
             {

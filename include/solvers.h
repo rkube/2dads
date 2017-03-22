@@ -152,8 +152,6 @@ namespace solvers
 
             inline cuDoubleComplex* get_d_tmp_mat() {return(d_tmp_mat);};
 
-            //void solve(cuDoubleComplex* src, cuDoubleComplex* dst,
-            //           cuDoubleComplex* d_diag_l, cuDoubleComplex* d_diag, cuDoubleComplex* d_diag_u)
             virtual void solve(CuCmplx<twodads::real_t>* dummy_src, 
                                CuCmplx<twodads::real_t>* dummy_dst,
                                CuCmplx<twodads::real_t>* dummy_diag_l, 

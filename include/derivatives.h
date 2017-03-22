@@ -951,6 +951,7 @@ namespace detail
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
                                     geom_my21);
+                dst.set_transformed(t_dst, true);
             }
             else if(order == 2)
             {
@@ -960,6 +961,7 @@ namespace detail
                                     [] (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                                     {return(val_in * val_map.im());},
                                     geom_my21);
+                dst.set_transformed(t_dst, true);
             }
             else
             {
@@ -1360,6 +1362,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
                     break;
+                case twodads::bc_t::bc_null:
+                    std::cerr << "Null boundary conditions not implemented by this class. We shouldn't be here!'" << std::endl;
+                    break;
             }
 
             switch(src.get_bvals().get_bc_right())
@@ -1372,6 +1377,9 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                     break;
                 case twodads::bc_t::bc_periodic:
                     std::cerr << "Periodic boundary conditions not implemented by this class. We shouldn't be here!." << std::endl;
+                    break;
+                case twodads::bc_t::bc_null:
+                    std::cerr << "Null boundary conditions not implemented by this class. We shouldn't be here!'" << std::endl;
                     break;
             }    
 
