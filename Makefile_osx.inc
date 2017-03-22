@@ -1,7 +1,6 @@
 CC	= /Users/ralph/local/bin/clang++
-#CC	= /opt/local/bin/g++
 
-CFLAGS = -DDEBUG -DMKL_ILP_64 -O0 -g -std=c++11 -Wall 
+CFLAGS = -DDEBUG -DMKL_ILP_64 -O0 -g -std=c++14 -stdlib=libc++ -Wall 
 #CFLAGS = -O3 -march=native -std=c++11 -Wall
 
 MKLROOT	= /opt/intel/mkl
@@ -18,7 +17,7 @@ NVCC	= /Developer/NVIDIA/CUDA-8.0/bin/nvcc
 NVCCFLAGS	= -DDEBUG -O0 -g -pg -G -lineinfo -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin  --ptxas-options="-v"
 #NVCCFLAGS	= -O3 -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin
 
-CUDALFLAGS	= -L/usr/local/cuda/lib -L/Users/ralph/local/lib -lcufft -lcublas -lcusparse -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp 
+CUDALFLAGS	= -L/Developer/NVIDIA/CUDA-8.0/lib -L/Users/ralph/local/lib -lcufft -lcublas -lcusparse -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp 
 
 LFLAGS_OGL = -lglfw -lGLEW -lGL
 
