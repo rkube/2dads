@@ -14,7 +14,8 @@
 #include <exception>
 #include <map>
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #include "cublas_v2.h"
 #include "cusparse.h"
 #endif //__CUDACC__
@@ -22,7 +23,8 @@
 
 
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 class cublas_err : public std::exception
 {
     public:
