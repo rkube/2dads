@@ -221,6 +221,72 @@ namespace utility
         return sum;
     }
 
+    // Compute the center-of-mass of a vector
+    // Returns std::tuple<T, T, T> -> (sum, com_x, com_y)
+    //
+    template <typename T>
+    std::tuple<T, T, T> com(cuda_array_bc_nogp<T, allocator_host> vec, const size_t tlev)
+    {
+        address_t<T>* addr{vec.get_address_ptr()};
+        T* data_ptr = vec.get_tlev_ptr(tlev);
+
+        T sum{0.0};
+        T sum_x{0.0};
+        T sum_y{0.0};
+        T x{0.0};
+        T y{0.0};
+        T current_val{0.0};
+
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            x = vec.get_geom().x_left + (T(n) - vec.get_geom().cellshift) * vec.get_geom().delta_x;
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                y = vec.get_geom().y_lo + (T(m) - vec.get_geom().cellshift) * vec.get_geom().delta_y;
+                current_val = addr -> get_elem(data_ptr, n, m);
+                sum += current_val;
+                sum_x += current_val * x;
+                sum_y += current_val * y;
+                //std::cout << sum << "\t";
+            }
+            //std::cout << std::endl;
+        }
+
+        sum_x /= sum;
+        sum_y /= sum;
+
+        return std::tuple<T, T, T>(sum, sum_x, sum_y);
+    }
+
+    // Compute the indices where the field is maximal
+    template <typename T>
+    std::tuple<T, size_t, size_t> max_idx(cuda_array_bc_nogp<T, allocator_host> vec, const size_t tlev)
+    {
+        address_t<T>* addr{vec.get_address_ptr()};
+        T* data_ptr = vec.get_tlev_ptr(tlev);
+
+        size_t idx_max_x{0};
+        size_t idx_max_y{0};
+        T max_val{-1000.0};
+        T current_val{0.0};
+
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                current_val = addr -> get_elem(data_ptr, n, m);
+                if(current_val > max_val)
+                {
+                    max_val = current_val;
+                    idx_max_x = n;
+                    idx_max_y = m;
+                }
+            }
+        }
+
+        return std::tuple<T, size_t, size_t>(max_val, idx_max_x, idx_max_y);
+    }
+
 
 #ifdef __CUDACC__
     template <typename T>

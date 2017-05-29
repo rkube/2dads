@@ -11,6 +11,7 @@ map<twodads::rhs_t, slab_bc::rhs_func_ptr> slab_bc :: rhs_func_map = slab_bc::cr
 slab_bc :: slab_bc(const slab_config_js& _conf) :
     conf(_conf),
     output(_conf),
+    diagnostic(_conf),
 #ifdef DEVICE
     myfft{new cufft_object_t<twodads::real_t>(get_config().get_geom(), get_config().get_dft_t())},
 #endif //DEVICE
@@ -111,6 +112,20 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     {
         std::cerr << "Error in slab configuration: " << e.what() << std::endl;
     }
+
+    // Set correct data pointers in diagnostic
+    diagnostic.init_field_ptr(twodads::field_t::f_theta, &theta);
+    diagnostic.init_field_ptr(twodads::field_t::f_theta_x, &theta_x);
+    diagnostic.init_field_ptr(twodads::field_t::f_theta_y, &theta_y);
+    diagnostic.init_field_ptr(twodads::field_t::f_omega, &omega);
+    diagnostic.init_field_ptr(twodads::field_t::f_omega_x, &omega_x);
+    diagnostic.init_field_ptr(twodads::field_t::f_omega_y, &omega_y);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau, &tau);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau_x, &tau_x);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau_y, &tau_y);
+    diagnostic.init_field_ptr(twodads::field_t::f_strmf, &strmf);
+    diagnostic.init_field_ptr(twodads::field_t::f_strmf_x, &strmf_x);
+    diagnostic.init_field_ptr(twodads::field_t::f_strmf_y, &strmf_y);
 }
 
 
@@ -565,6 +580,25 @@ void slab_bc :: write_output(const size_t t_src, const twodads::real_t time)
 #endif
     }
     output.increment_output_counter();
+}
+
+void slab_bc :: diagnose(const size_t t_src, const twodads::real_t time)
+{
+    // Assert that all fields are real
+    assert(get_array_ptr(twodads::field_t::f_theta) -> is_transformed(t_src) == false);
+    assert(get_array_ptr(twodads::field_t::f_theta_x) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_theta_y) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_omega) -> is_transformed(t_src) == false);
+    assert(get_array_ptr(twodads::field_t::f_omega_x) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_omega_y) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_tau) -> is_transformed(t_src) == false);
+    assert(get_array_ptr(twodads::field_t::f_tau_x) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_tau_y) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_strmf) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_strmf_x) -> is_transformed(0) == false);
+    assert(get_array_ptr(twodads::field_t::f_strmf_y) -> is_transformed(0) == false);
+
+    diagnostic.write_diagnostics(time, get_config());
 }
 
 

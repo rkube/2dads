@@ -18,6 +18,7 @@ int main(void)
     size_t tstep{0};
     const size_t num_tsteps{static_cast<size_t>(std::round(my_config.get_tend() / my_config.get_deltat()))};
     const size_t output_step{static_cast<size_t>(std::round(my_config.get_tout() / my_config.get_deltat()))};
+    const size_t diag_step{static_cast<size_t>(std::round(my_config.get_tdiag() / my_config.get_deltat()))};
 
     {
         slab_bc my_slab(my_config);
@@ -95,9 +96,14 @@ int main(void)
                 std::cout << "step " << tstep << "/" << num_tsteps << ": writing output" << std::endl;
                 my_slab.write_output(1, tstep * my_config.get_deltat());
             }
+            if((tstep % diag_step) == 0)
+            {
+                // Logarithmic density field diagnostics are not implemented yet.
+                std::cout << "step " << tstep << "/" << num_tsteps << ": writing diagnostics" << std::endl;
+                my_slab.diagnose(1, tstep * my_config.get_deltat());
+            }
             my_slab.rhs(0, 1);
         }
-
     }
     std::cout << "Leaving scope" << std::endl;
 }

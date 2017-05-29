@@ -5,8 +5,8 @@ TEST_DIR = tests
 
 .PHONY: clean dist
 
-OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_host.o
-OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_device.o
+OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics_host.o $(OBJ_DIR)/slab_bc_host.o
+OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnosics.o $(OBJ_DIR)/slab_bc_device.o
 
 #shader.o: shader.cpp
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
@@ -23,9 +23,9 @@ slab_bc_host.o: slab_bc.cpp
 slab_bc_device.o: slab_bc.cu
 	$(CUDACC) $(NVCCFLAGS) $(DEFINES) -DDEVICE $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu 
 
-#diagnostics.o: diagnostics.cpp include/diagnostics.h
-#	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
-#
+diagnostics_host.o: diagnostics.cpp include/diagnostics.h
+	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES)-c -o $(OBJ_DIR)/diagnostics_host.o diagnostics.cpp 
+
 #diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
 #	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
 

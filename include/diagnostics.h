@@ -7,38 +7,51 @@
 #define DIAGNOSTICS_H
 
 #include "2dads_types.h"
-#include "cuda_types.h"
-#include "error.h"
 #include "slab_config.h"
-#include "slab_cuda.h"
-#include "diag_array.h"
+#include "cuda_array_bc_nogp.h"
+
 
 
 using namespace std;
 
-class diagnostics {
+class diagnostic_t {
 	public:
-		
-        /// Default constructor, pass a slab_config object.
-        /// This initializes the diagnostic arrays and diagnostic variables
-		diagnostics(slab_config const);
+        using value_t = twodads::real_t;
+
+#ifdef DEVICE
+        using arr_real = cuda_array_bc_nogp<value_t, allocator_device>;
+#endif
+
+#ifdef HOST
+        using arr_real = cuda_array_bc_nogp<value_t, allocator_host>;
+#endif
+
+        /// Default constructor, pass a slab_config_js object.
+		diagnostic_t(const slab_config_js&);
         /// does nothing
-		~diagnostics() {};
+		~diagnostic_t() {};
 
         /// Update the diag_array members from GPU memory. They are used to
         /// compute diagnostic quantities    
-        void update_arrays(slab_cuda&);
+        //void update_arrays(slab_cuda&);
 
+        void init_field_ptr(twodads::field_t, arr_real*);
         /// Call all diagnostic routines, as specified in the slab_config object
-        void write_diagnostics(twodads::real_t const, const slab_config&);
+        void write_diagnostics(const twodads::real_t, const slab_config_js&);
+
 
     private:
+        twodads::slab_layout_t slab_layout;
 		/// Initialize diagnostic routines: Write file headers
-		void init_diagnostic_output(string, string, bool&);
+		void init_diagnostic_output(const std::string, const string);
+
+        /// For data pointer lookup
+        /// TODO: Explore how to do this properly with a map.
+        const arr_real** get_dptr_by_name(const twodads::field_t);
 
 		/// @brief Write blob diagnostics:
         /// @detailed blobs.dat: t theta_max theta_max_x theta_max_y strmf_max strmf_max_x strmf_max_y int(theta) int(theta *x) int(theta_y) V_(X,COM) V(Y,COM) WXX WYY DXX DYY
-        void diag_blobs(twodads::real_t const);
+        void diag_blobs(const twodads::real_t);
         ///@brief Compute energy integrals for various turbulence models
         ///@param time Time of output
         ///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 <br>
@@ -56,39 +69,33 @@ class diagnostics {
         ///@detailed \f$D_{11} = \frac{1}{A} \int \mathrm{d}A\, \nabla_\perp \phi \nabla_\perp \Omega\f$ <br>
         ///@detailed \f$D_{12} = \frac{1}{A} \int \mathrm{d}A\, n_{xxx}^2 + n_{yyy}^2\f$ <br>
         ///@detailed \f$D_{13} = \frac{1}{A} \int \mathrm{d}A\, \phi_{xxx} \Omega_{xxx} + \phi_{yyy} \Omega_{yyy}\f$ <br>
-        void diag_energy(twodads::real_t const);
+        //void diag_energy(twodads::real_t const);
         /// @brief write output for probes
         /// @detailed Probe layout is in a square grid. Specifying num_probes = N_pr gives
         /// @detailed N_pr * N_pr probes in a equidistant grid, starting at n=m=0
         /// @detailed probe write n_tilde, n, phi, phi_tilde, omega, omega_tilde, phi_y_tilde, phi_x, phy_x_tilde
-        void diag_probes(twodads::real_t const);
+        //void diag_probes(twodads::real_t const);
         /// @brief Write simulation parameters to log file
-        void diag_rhs(twodads::real_t const);
+        //void diag_rhs(twodads::real_t const);
         /// @brief Creates a log file
-		void write_logfile();		
+		
+        void write_logfile();		
 	   
-        twodads::diag_data_t slab_layout;
-
-        diag_array<double> theta, theta_x, theta_y;
-        diag_array<double> omega, omega_x, omega_y;
-        diag_array<double> strmf, strmf_x, strmf_y;
-
-		twodads::real_t time; /// Real time 
-		twodads::real_t old_com_x; /// Old radial COM velocity of the blob
-		twodads::real_t old_com_y; /// Old poloidal COM velocity of the blob
-		twodads::real_t old_wxx; /// Old dispersion tensor of the blob
-		twodads::real_t old_wyy; /// Old dispersion tensor of the blob
-		twodads::real_t t_probe; /// Time for probe diagnostics
+        // const arr_real* makes the fields themself read-only.
+        const arr_real *theta_ptr, *theta_x_ptr, *theta_y_ptr;
+        const arr_real *omega_ptr, *omega_x_ptr, *omega_y_ptr;
+        const arr_real *tau_ptr, *tau_x_ptr, *tau_y_ptr;
+        const arr_real *strmf_ptr, *strmf_x_ptr, *strmf_y_ptr;
 	
-        unsigned int n_probes; /// Number of probes
-		bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
-        twodads::real_t theta_bg; /// Subtract uniform background on theta
+        //unsigned int n_probes; /// Number of probes
+		//bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
+        //twodads::real_t theta_bg; /// Subtract uniform background on theta
 		// Flags which output files have been initialized
-		bool init_flag_blobs; /// True if blobs.dat has been initialized
-        bool init_flag_energy; /// True if energy.dat has been initialized
-        bool init_flag_particles; /// Not implemented yet
-        bool init_flag_tprobe; /// Not implemented yet
-        bool init_flag_oprobe; /// Not implemented yet
+		//bool init_flag_blobs; /// True if blobs.dat has been initialized
+        //bool init_flag_energy; /// True if energy.dat has been initialized
+        //bool init_flag_particles; /// Not implemented yet
+        //bool init_flag_tprobe; /// Not implemented yet
+        //bool init_flag_oprobe; /// Not implemented yet
 };
 
 #endif //DIAGNOSTICS_H	

@@ -107,7 +107,7 @@ class slab_config_js
         std::string get_scheme() const {return(pt.get<std::string>("2dads.integrator.scheme"));};
         twodads::real_t get_deltat() const {return(pt.get<twodads::real_t>("2dads.integrator.deltat"));};
         twodads::real_t get_tend() const {return(pt.get<twodads::real_t>("2dads.integrator.tend"));};
-        twodads::real_t get_tdiag() const {return(pt.get<twodads::real_t>("2dads.diagnostics.xleft"));};
+        twodads::real_t get_tdiag() const {return(pt.get<twodads::real_t>("2dads.diagnostics.tdiag"));};
         twodads::real_t get_tout() const {return(pt.get<twodads::real_t>("2dads.output.tout"));};
 
         bool get_log_theta() const {return(log_theta);};

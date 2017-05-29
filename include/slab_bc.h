@@ -20,6 +20,7 @@
 #include "integrators.h"
 #include "slab_config.h"
 #include "output.h"
+#include "diagnostics.h"
 
 #ifdef __CUDACC__
 #include "cuda_types.h"
@@ -81,9 +82,8 @@ class slab_bc
         void update_real_fields(const size_t);
 
         void advance();
-
-        //void write_output(const size_t);
         void write_output(const size_t, const twodads::real_t);
+        void diagnose(const size_t, const twodads::real_t);
 
         arr_real* get_array_ptr(const twodads::field_t fname) const {return(get_field_by_name.at(fname));};
 
@@ -105,6 +105,7 @@ class slab_bc
 
         const slab_config_js conf;
         output_h5_t output;
+        diagnostic_t diagnostic;
         dft_object_t<twodads::real_t>* myfft;
 
 #ifdef DEVICE
