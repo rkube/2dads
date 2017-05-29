@@ -39,7 +39,8 @@ namespace cuda
     };
 #endif // _CUFFT_H_
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     struct thread_idx
     {
         static __device__ size_t get_col() {return(blockIdx.x * blockDim.x + threadIdx.x);}

@@ -6,57 +6,43 @@
 #include <cuda_array_bc_nogp.h>
 #include <utility.h>
 
-using namespace std;
 
-#ifndef HOST
-#ifndef DEVICE
-#warning "Please specify either -DHOST or -DDEVICE"
-#endif
+#ifdef __CUDACC__
+#warning main: compiling for device
 #endif
 
-
-#ifdef HOST
-#warning "HOST specified"
+#ifndef __CUDACC__
+#warning main: compiling for host
 #endif
 
-#ifdef DEVICE
-#warning "DEVICE specified"
-#endif
+using arr_real = cuda_array_bc_nogp<double, allocator_device>;
 
 int main(void)
 {
     using value_t = double;
 
-    size_t Nx{128};
-    size_t My{32};
+    size_t Nx{16};
+    size_t My{16};
     
-    const size_t tlevs{4};
-    cout << "Enter Nx: " << endl;
-    cin >> Nx;
-    cout << "Enter My: " << endl;
-    cin >> My;
+    const size_t tlevs{2};
+    //std::cout << "Enter Nx: " << std::endl;
+    //std::cin >> Nx;
+    //std::cout << "Enter My: " << std::endl;
+    //std::cin >> My;
 
     twodads::slab_layout_t my_geom(0.0, 1.0 / twodads::real_t(Nx), 0.0, 1.0 / twodads::real_t(My), Nx, 0, My, 2, twodads::grid_t::cell_centered);
     twodads::bvals_t<value_t> my_bvals{twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, 0.0, 0.0};
 
-    cout << "Entering scope" << endl;
-    {
-        #ifdef DEVICE
-        cuda_array_bc_nogp<value_t, allocator_device> vd (my_geom, my_bvals, tlevs);
-        vd.apply([] __device__ (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(1.2);}, 0);
-        vd.apply([] __device__ (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(2.2);}, 1);
-        vd.apply([] __device__ (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(3.2);}, 2);
-        vd.apply([] __device__ (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(4.2);}, 3);
-        cuda_array_bc_nogp<value_t, allocator_host> vh = utility :: create_host_vector(vd);
-        #endif //DEVICE
 
-        #ifdef HOST
-        cuda_array_bc_nogp<value_t, allocator_host> vh (my_geom, my_bvals, tlevs);
-        vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(1.2);}, 0);
-        vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(2.2);}, 1);
-        vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(3.2);}, 2);
-        vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(4.2);}, 3);
-        #endif //HOST
+    std::cout << "Entering scope" << std::endl;
+    {
+        arr_real vd (my_geom, my_bvals, tlevs);
+        /*
+        vd.apply([] LAMBDACALLER (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(1.2);}, 0);
+        vd.apply([] LAMBDACALLER (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(2.2);}, 1);
+        vd.apply([] LAMBDACALLER (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(3.2);}, 2);
+        vd.apply([] LAMBDACALLER (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(4.2);}, 3);
+        cuda_array_bc_nogp<value_t, allocator_host> vh = utility :: create_host_vector(vd);
 
         // Create a host copy and print the device data
         for(size_t t = 0; t < tlevs; t++)
@@ -73,8 +59,8 @@ int main(void)
         //    cout << t << endl;
         //    utility :: print(vh, t, std::cout);
         //} 
-
+        */
     }
-    cout << "Leaving scope and exiting" << endl;
+    std::cout << "Leaving scope and exiting" << std::endl;
     cudaDeviceReset();
 }

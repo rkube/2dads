@@ -54,14 +54,17 @@
 #include "allocators.h"
 
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#warning cuda_array_bc_nogp: compiling for device
 #include "cuda_types.h"
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#endif // __CUDACC__
+#endif // __CUDA__ && __CUDA_ARCH
 
 
-#ifndef __CUDACC__
+//#ifndef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
 struct dim3{
     int x;
     int y;
@@ -71,7 +74,8 @@ struct dim3{
 #define LAMBDACALLER
 #endif //ifndef __CUDACC
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define LAMBDACALLER __device__
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -104,12 +108,13 @@ inline void gpuVerifyLaunch(const char* file, int line)
 
 namespace device
 {
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     /// Return true if row and column are within geom(include padded columns if is_transformed is true)
     /// Return false if row or column is outside the geometry
     __device__ inline bool good_idx(const size_t row, const size_t col, const twodads::slab_layout_t geom, const bool is_transformed)
     {
-        return((row < geom.get_nx()) && (col < (is_transformed ? geom.get_my() + geom.get_pad_y(): geom.get_my()));
+        return((row < geom.get_nx()) && (col < (is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my())));
     }
 
 
@@ -299,7 +304,8 @@ namespace detail
     /// data_tlev_ptr[0] = data[0]
     /// data_tlev_ptr[1] = data[0] + nelem 
     /// ...
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     template <typename T>
     inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& geom, allocator_device<T>)
     {
@@ -595,13 +601,16 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         transformed{std::vector<bool>(get_tlevs(), 0)},
         address_2ptr{nullptr},
         address_ptr{nullptr},
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + get_geom().get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((get_nx() + get_geom().get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
         grid_unroll(grid.x / cuda :: elem_per_thread, grid.y),
 #endif //__CUDACC__
-#ifndef __CUDACC__
+
+//#ifndef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
         block{0, 0, 0},
         grid{0, 0, 0},
         grid_unroll{0, 0, 0},
@@ -612,6 +621,7 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
 {
     // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
     detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
+    
     // Initialize the address object
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
     for(size_t tidx = 0; tidx < tlevs; tidx++)

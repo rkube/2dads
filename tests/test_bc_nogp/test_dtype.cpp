@@ -2,26 +2,13 @@
  * Test the new and awesome no ghost point datatype with boundary condition support
  */
 
+#include "cuda_array_bc_nogp.h"
+
 #include <iostream>
-#include <cuda_array_bc_nogp.h>
-#include <utility.h>
+
+//#include <utility.h>
 
 using namespace std;
-
-#ifndef HOST
-#ifndef DEVICE
-#warning "Please specify -DDISPATCH=HOST or -DDISPATCH=DEVICE"
-#endif
-#endif
-
-
-#ifdef HOST
-#warning "HOST specified"
-#endif
-
-#ifdef DEVICE
-#warning "DEVICE specified"
-#endif
 
 int main(void)
 {
@@ -41,11 +28,13 @@ int main(void)
     cout << "Entering scope" << endl;
     {
         cuda_array_bc_nogp<value_t, allocator_host> vh (my_geom, my_bvals, tlevs);
+
+        /*
         vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(1.2);}, 0);
         vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(2.2);}, 1);
         vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(3.2);}, 2);
         vh.apply([] (value_t dummy, const size_t n, const size_t m, const twodads::slab_layout_t geom) -> value_t {return(4.2);}, 3);
-
+        
         // Create a host copy and print the device data
         for(size_t t = 0; t < tlevs; t++)
         {
@@ -61,7 +50,7 @@ int main(void)
         //    cout << t << endl;
         //    utility :: print(vh, t, std::cout);
         //} 
-
+        */
     }
     cout << "Leaving scope and exiting" << endl;
 }

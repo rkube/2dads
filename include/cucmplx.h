@@ -13,9 +13,12 @@
 #include <cmath>
 
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define CUDA_MEMBER __host__ __device__
-#else
+#endif
+
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
 #define CUDA_MEMBER
 #endif
 

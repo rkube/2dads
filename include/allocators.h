@@ -11,13 +11,15 @@
 #include <iostream>
 #include "error.h"
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #endif //__CUDACC__
 
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 template <typename T>
 struct deleter_device
 {
@@ -43,7 +45,7 @@ struct allocator_device
     allocator_device() noexcept{}
     template <class U> allocator_device(const allocator_device<U>&) noexcept{}
 
-    template <class Other> struct rebing{using other = allocator_device<Other>;};
+    template <class Other> struct rebind{using other = allocator_device<Other>;};
 
     // Allocate s * sizeof(T) bytes using cudaMalloc
     ptr_type allocate(size_t s)
@@ -172,7 +174,8 @@ struct my_allocator_traits<T*, allocator_host>
 };
 
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 template <typename T>
 struct my_allocator_traits<T, allocator_device>
 {

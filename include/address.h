@@ -4,7 +4,8 @@
  * Does addressing of array types and defines interpolators for boundary conditions
  */
 
-#ifdef __CUDACC__
+//#ifdef __CUDACC__
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define CUDA_MEMBER __host__ __device__
 #else
 #define CUDA_MEMBER

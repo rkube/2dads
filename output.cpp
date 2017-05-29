@@ -97,9 +97,6 @@ output_h5_t :: output_h5_t(const slab_config_js& config) :
     DataSet dset_config{output_file -> createDataSet(H5std_string("input.json"), strdatatype, DataSpace(H5S_SCALAR))};
     dset_config.write(config_str.str(), strdatatype);
 
-    //Attribute myatt_in = dset_config.createAttribute(ATTR_NAME, strdatatype, attr_dataspace);
-    //myatt_in.write(strdatatype, strwritebuf); 
-
     output_file -> flush(H5F_SCOPE_LOCAL);
     output_file -> close();
 
