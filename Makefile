@@ -1,67 +1,52 @@
 #
-include Makefile.inc
+include Makefile_linux.inc
 # Subdirectories
 TEST_DIR = tests
-OBJ_DIR = /home/rku000/source/2dads/obj/
 
 .PHONY: clean dist
 
-all: output.o initialize.o diagnostics.o diagnostics_cu.o slab_config.o slab_cuda.o shader.o
+OBJECTS_HOST=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_host.o
+OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/slab_bc_device.o
 
-DEFINES	= -DPINNED_HOST_MEMORY -DBOOST_NOINLINE='__attribute__ ((noinline))' 
-
-SOURCES_CPP=shader.cpp slab_config.cpp output.cpp slab_config.cpp
-SOURCES_CU=initialize.cu slab_cuda.cu
-
-OBJECTS=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnostics_cu.o $(OBJ_DIR)/initialize.o $(OBJ_DIR)/slab_cuda.o
-
-shader.o: shader.cpp
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
+#shader.o: shader.cpp
+#	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
 
 slab_config.o: slab_config.cpp include/slab_config.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp 
 
 output.o: output.cpp include/output.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/output.o output.cpp $(INCLUDES)
+	$(CC) $(CFLAGS) $(INCLUDES) -c -o $(OBJ_DIR)/output.o output.cpp 
 
-diagnostics.o: diagnostics.cpp include/diagnostics.h
-	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
+slab_bc_host.o: slab_bc.cpp
+	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp 
 
-diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
+slab_bc_device.o: slab_bc.cu
+	$(CUDACC) $(NVCCFLAGS) $(DEFINES) -DDEVICE $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu 
 
-initialize.o: initialize.cu include/initialize.h
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/initialize.o initialize.cu $(INCLUDES)
+#diagnostics.o: diagnostics.cpp include/diagnostics.h
+#	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics.o diagnostics.cpp $(INCLUDES)
+#
+#diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
+#	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
 
-slab_cuda.o: slab_cuda.cu include/slab_cuda.h include/cuda_array4.h
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/slab_cuda.o slab_cuda.cu $(INCLUDES)
+2dads_host: 
+	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_host main_bc.cpp $(OBJECTS_HOST) $(LFLAGS)
 
-2dads: slab_config.o output.o diagnostics_cu.o initialize.o slab_cuda.o
-	$(CC) $(CFLAGS) -o run/2dads $(OBJECTS) main3.cpp $(INCLUDES) $(LFLAGS) 
+# Profiling using gperftools
+2dads_profile: 
+	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_profile main_bc_profile.cpp $(OBJECTS_HOST) $(LFLAGS)  -ltcmalloc -lprofiler
 
-2dads_profile: slab_config.o initialize.o slab_cuda.o
-	$(CC) $(CFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
-	#$(CUDACC) $(CUDACFLAGS) -o run/2dads_profile $(OBJECTS) main.cpp $(INCLUDES) $(LFLAGS) 
-
-tests: cuda_array2 slab_cuda initialize output diagnostics
-	$(MAKE) -C $(TEST_DIR)
-
-# PIC objects
-pic_objs: $(SOURCES_CPP) $(SOURCES_CU)
-	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/slab_config_pic.o slab_config.cpp $(INCLUDES)
-	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/output_pic.o output.cpp $(INCLUDES)
-	$(CC) $(CFLAGS) $(DEFINES) -fPIC -c -o $(OBJ_DIR)/diagnostics_pic.o diagnostics.cpp $(INCLUDES)
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -Xcompiler -fPIC -c -o $(OBJ_DIR)/initialize_pic.o initialize.cu $(INCLUDES)
-	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -Xcompiler -fPIC -c -o $(OBJ_DIR)/slab_cuda_pic.o slab_cuda.cu $(INCLUDES)
-
+2dads_device: 
+#	$(CUDACC) $(CUDACFLAGS) -DDEVICE $(INCLUDES) -o run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
+	$(NVCC) $(NVCCFLAGS) -DDEVICE $(INCLUDES) -o run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
 
 dist:
 	rm -i dist/*.cpp
 	rm -i dist/*.cu
 	rm -i dist/include/*.h
 	cp -R *.cpp *.cu dist
-	cp Makefile dist/Makefile_nemesis
-	cp Makefile.inc dist/Makefile_nemesis.inc
+	cp Makefile dist/Makefile_osx
+	cp Makefile_osx.inc dist/Makefile_osx.inc
 	cp include/*.h dist/include/
 	tar cvfj 2dads-cuda-`date +%Y-%m-%d`.tar.bz2 dist/*
 

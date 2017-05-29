@@ -1,0 +1,5 @@
+Tests for slab based on datatype that allows non-periodic boundary conditions in x-direction
+
+Different binaries for host and device versions. Running them should yield
+identical results in L2-norm sense
+

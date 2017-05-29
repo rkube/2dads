@@ -1,7 +1,5 @@
 /*
- *
- * Implmentation of diagnostics class using cuda_darray
- *
+ * Implmentation of diagnostics functions
  */
 
 #include <fstream>
@@ -27,7 +25,12 @@ const map <twodads::diagnostic_t, std::string> dfile_fname{
 const map <twodads::diagnostic_t, std::string> dfile_header{
     {twodads::diagnostic_t::diag_energy,       "#01: time         #02: E           #03: K           #04: U            #05: T            #06: D            #07: A            #08: D_omega     #09: D_theta       #10: Gamma_tilde  #11: J_tilde      #12: CFL           \n"},
 	{twodads::diagnostic_t::diag_energy_ns,    "#01: time         #02: V           #03: O           #04: E            #05: D1           #06: D2           #07: D4           #08CFL\n"},
-    {twodads::diagnostic_t::diag_energy_local, "#01: time         #02: G           #03: E           #04: Gamma        #05: diss_xn      #06: diss_po      #07: diss_n2      #08: K\n"},
+// Conflict from merge with master, 2017-05-29
+//<<<<<<< HEAD
+//    {twodads::diagnostic_t::diag_energy_local, "#01: time         #02: G           #03: E           #04: Gamma        #05: diss_xn      #06: diss_po      #07: diss_n2      #08: K\n"},
+//=======
+    {twodads::diagnostic_t::diag_energy_local, "#01: time         #02: G           #03: E           #04: Gamma\n"},
+//>>>>>>> bc
 	{twodads::diagnostic_t::diag_probes,       "#01: time         #02: n_tilde     #03: n           #04: phi          #05: phi_tilde    #06: Omega        #07: Omega_tilde  #08: v_x         #09: v_y           #10: v_y_tilde    #11: Gamma_r\n"},
     {twodads::diagnostic_t::diag_com_theta,    "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(n)\n"},
     {twodads::diagnostic_t::diag_com_tau,      "#01: time         #02: X_com       #03: Y_com       #04: VX_com       #05: VY_com       #06: Wxx          #07: Wyy          #08: Dxx         #09: Dyy           #10: integral(t)\n"},
@@ -576,14 +579,23 @@ void diagnostics_cu :: diag_energy_local(const twodads::real_t time)
     const twodads::real_t E{0.5 * dA * ((strmf_x * strmf_x) + (strmf_y * strmf_y)).get_sum()};
     const twodads::real_t G(dA * (theta * x_arr).get_sum());
     const twodads::real_t Gamma{-1.0 * dA * (theta * strmf_y).get_sum()};
-    const twodads::real_t K{0.5 * dA * (theta * theta).get_sum()};
+//<<<<<<< HEAD
+//    const twodads::real_t K{0.5 * dA * (theta * theta).get_sum()};
+//=======
+//>>>>>>> bc
 
     der.d_dx2_dy2(theta, theta_xx, theta_yy);
     der.d_dx2_dy2(omega, omega_xx, omega_yy);
 
-    const twodads::real_t diss_xn{dA * (x_arr * (theta_xx + theta_yy)).get_sum()};
-    const twodads::real_t diss_n2{dA * (theta * (theta_xx + theta_yy)).get_sum()};
-    const twodads::real_t diss_po{dA * (strmf * (omega_xx + omega_yy)).get_sum()};
+// Merge conflict with master, 2017-05-29
+//<<<<<<< HEAD
+//    const twodads::real_t diss_xn{dA * (x_arr * (theta_xx + theta_yy)).get_sum()};
+//    const twodads::real_t diss_n2{dA * (theta * (theta_xx + theta_yy)).get_sum()};
+//    const twodads::real_t diss_po{dA * (strmf * (omega_xx + omega_yy)).get_sum()};
+//=======
+    const twodads::real_t diss_n{dA * (x_arr * theta_xx * theta_xx).get_sum()};
+    const twodads::real_t diss_o{dA * (strmf * omega_xx * omega_xx).get_sum()};
+//>>>>>>> bc
 
     output.open("cu_energy_local.dat", ios::app);
     if(output.is_open())
@@ -592,10 +604,16 @@ void diagnostics_cu :: diag_energy_local(const twodads::real_t time)
         output << setw(20) << std::fixed << std::setprecision(16) << E << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << G << "\t";
         output << setw(20) << std::fixed << std::setprecision(16) << Gamma << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << diss_xn << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << diss_po << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << diss_n2 << "\t";
-        output << setw(20) << std::fixed << std::setprecision(16) << K << endl;
+// Merge conflict with master, 2017-05-29
+//<<<<<<< HEAD
+//        output << setw(20) << std::fixed << std::setprecision(16) << diss_xn << "\t";
+//        output << setw(20) << std::fixed << std::setprecision(16) << diss_po << "\t";
+//        output << setw(20) << std::fixed << std::setprecision(16) << diss_n2 << "\t";
+//        output << setw(20) << std::fixed << std::setprecision(16) << K << endl;
+//=======
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_n << "\t";
+        output << setw(20) << std::fixed << std::setprecision(16) << diss_o << "\n";
+//>>>>>>> bc
         output.close();
     }
 }

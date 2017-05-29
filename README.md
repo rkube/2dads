@@ -1,10 +1,9 @@
 # 2dads
 Two dimensional diffusion advection solver.
 
-Solve coupled diffusion-advection equations
-df/dt + u \cdot \div f = ... + kappa \nabla^2 f
+Integrates a set of coupled diffusion-advection equations of the type
+df/dt + u \cdot \div f = NL(u) + kappa \nabla^2 f
 
-with a Fourier-Galerkin method on the GPU
+with Finite difference and spectral methods on the CPU/GPU (cuda).
 
-Not published due to license questions. For a copy, please send an email.
-
+Licensed under the MIT license.

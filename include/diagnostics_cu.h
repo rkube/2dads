@@ -1,8 +1,5 @@
 /*
  * diagnostics_cu.h
- *
- *  Created on: Feb 5, 2015
- *      Author: rku000
  */
 
 #ifndef DIAGNOSTICS_CU_H_

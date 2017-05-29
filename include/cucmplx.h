@@ -11,15 +11,17 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
-//#include "cucmplx.h"
 
-#ifdef __CUDACC__
+
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#warn CUDA_MEMBER defined
 #define CUDA_MEMBER __host__ __device__
 #else
 #define CUDA_MEMBER
 #endif
 
-
+constexpr size_t io_width{8};
+constexpr size_t io_prec{4};
 
 template<typename T>
 class CuCmplx
@@ -31,7 +33,6 @@ public:
     CUDA_MEMBER CuCmplx(unsigned int re) : data{T(re), T(0.0)} {};
     CUDA_MEMBER CuCmplx(T re, T im) : data{re, im} {};
     CUDA_MEMBER CuCmplx(const CuCmplx<T>& rhs) : data{rhs.re(), rhs.im()} {};
-    CUDA_MEMBER CuCmplx(const CuCmplx<T>* rhs) : data{rhs -> re(), rhs -> im()} {};
 
     CUDA_MEMBER inline T abs() const {return (sqrt(re() * re() + im() * im()));};
     // (a + ib) + (c + id) = (a + c) + i * (b + d)
@@ -39,7 +40,7 @@ public:
     CUDA_MEMBER inline CuCmplx<T> conj() const {return (CuCmplx(re(), -1.0 * im()));};
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator+=(const CuCmplx<T> & rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator+=(CuCmplx<T> rhs)
     {
     	data[0] += rhs.re();
     	data[1] += rhs.im();
@@ -47,21 +48,21 @@ public:
     }
 
 
-    CUDA_MEMBER CuCmplx<T> operator+(const CuCmplx<T>& rhs) const
+    CUDA_MEMBER CuCmplx<T> operator+(CuCmplx<T> rhs) const
     {
         CuCmplx<T> result(re() + rhs.re(), im() + rhs.im());
         return result;
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator+=(const T& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator+=(T rhs)
     {
     	data[0] += rhs;
     	return (*this);
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator+(const T& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator+(T rhs) const
     {
     	CuCmplx<T> result(re() + rhs, im());
     	return(result);
@@ -69,7 +70,7 @@ public:
 
 
     // (a + ib) - (c + id) = (a - c) + i(b - d)
-    CUDA_MEMBER inline CuCmplx<T> operator-=(const CuCmplx<T>& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator-=(CuCmplx<T> rhs)
     {
     	    data[0] -= rhs.re();
     	    data[1] -= rhs.im();
@@ -77,27 +78,27 @@ public:
 	}
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator-(const CuCmplx<T>& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator-(CuCmplx<T> rhs) const
     {
         CuCmplx<T> result(re() - rhs.re(), im() - rhs.im());
         return result;
     }
 
-    CUDA_MEMBER inline CuCmplx<T> operator-=(const T& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator-=(T rhs)
     {
         data[0] -= rhs;
         return (*this);
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator-(const T& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator-(T rhs) const
     {
         CuCmplx<T> result(re() - rhs, im());
         return result;
     }
 
     // (a + ib) * (c + id) = (ac - bd) + i(ad + bc)
-    CUDA_MEMBER inline CuCmplx<T> operator*=(const CuCmplx<T>& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator*=(CuCmplx<T> rhs)
 	{
     	// Create temporary variables, so that we don't overwrite temporary variables
         T new_real = data[0] * rhs.re() - data[1] * rhs.im();
@@ -113,7 +114,7 @@ public:
 	}
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator*(const CuCmplx<T>& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator*(CuCmplx<T> rhs) const
     {
         CuCmplx<T> result(data[0] * rhs.re() - data[1] * rhs.im(),
                           data[1] * rhs.re() + data[0] * rhs.im());
@@ -121,7 +122,7 @@ public:
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator*=(const T& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator*=(T rhs)
     {
     	data[0] *= rhs;
     	data[1] *= rhs;
@@ -129,14 +130,14 @@ public:
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator*(const T& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator*(T rhs) const
     {
     	CuCmplx<T> result(re() * rhs, im() * rhs);
     	return result;
     }
 
     // (a + ib) / (c + id) = 
-    CUDA_MEMBER inline CuCmplx<T> operator/=(const CuCmplx<T>& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator/=(CuCmplx<T> rhs)
 	{
     	// Create temporary variables so that we don't overwrite this
     	// with temporary results
@@ -150,14 +151,14 @@ public:
 	}
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator/(const CuCmplx<T> & rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator/(CuCmplx<T> rhs) const
     {
     	CuCmplx<T> result((re() * rhs.re() + im() * rhs.im()) / rhs.abs(),
     			          (im() * rhs.re() - re() * rhs.im()) / rhs.abs());
     	return(result);
     }
 
-    CUDA_MEMBER inline CuCmplx<T> operator/=(const T& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator/=(T rhs)
     {
         data[0] /= rhs;
         data[1] /= rhs;
@@ -166,41 +167,39 @@ public:
     }
 
 
-    CUDA_MEMBER inline CuCmplx<T> operator/(const T& rhs) const
+    CUDA_MEMBER inline CuCmplx<T> operator/(T rhs) const
     {
     	CuCmplx<T> result(re() / rhs, im() / rhs);
     	return(result);
     }
 
-    CUDA_MEMBER inline CuCmplx<T> operator=(const CuCmplx<T>& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator=(CuCmplx<T> rhs)
     {
     	set_re(rhs.re());
     	set_im(rhs.im());
     	return (*this);
     }
-    CUDA_MEMBER inline CuCmplx<T> operator=(const T& rhs)
+    CUDA_MEMBER inline CuCmplx<T> operator=(T rhs)
     {
     	set_re(rhs);
     	set_im(T(0.0));
     	return (*this);
     }
-
-    CUDA_MEMBER void dump();
+ 
     friend std::ostream& operator<<(std::ostream& os, CuCmplx<T> rhs)
     {
-        os << "(" << std::setw(7) << std::setprecision(4) << rhs.re() << ", ";
-        os << std::setw(7) << std::setprecision(4) << rhs.im() << ")";
+        os << std::setw(io_width) << std::setprecision(io_prec) << "(" << rhs.re() << ", " << rhs.im() << ")";
         return (os);
     }
 
     //CUDA_MEMBER inline void set(T re, T im) {real = re; imag = im;};
     CUDA_MEMBER inline T re() const {return(data[0]);}
     CUDA_MEMBER inline T& re() {return(data[0]);}
-    CUDA_MEMBER inline void set_re(const T& re) {data[0] = re;}
+    CUDA_MEMBER inline void set_re(const T re) {data[0] = re;}
 
     CUDA_MEMBER inline T im() const {return(data[1]);}
     CUDA_MEMBER inline T& im() {return(data[1]);}
-    CUDA_MEMBER inline void set_im(const T& im) {data[1] = im;}
+    CUDA_MEMBER inline void set_im(const T im) {data[1] = im;}
 
 private:
     T data[2];
