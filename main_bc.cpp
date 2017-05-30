@@ -79,7 +79,7 @@ int main(void)
         
 
 /////////////////////////////////////////////////////////////////////////
-        for(; tstep < num_tsteps; tstep++)
+        for(; tstep < num_tsteps + 1; tstep++)
         {
         	std::cout << tstep << "/" << num_tsteps << std::endl;
             my_slab.integrate(twodads::dyn_field_t::f_theta, 3);

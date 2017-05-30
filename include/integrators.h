@@ -165,23 +165,22 @@ class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
 
 
 template <typename T, template<typename> class allocator>
-void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tlev,
-                                                                const twodads::bc_t bcond_left,
-                                                                const twodads::bc_t bcond_right)
+void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t order,
+                                                                const twodads::bc_t bc_left,
+                                                                const twodads::bc_t bc_right)
 {
     // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
-    const T alpha{twodads::alpha[tlev - 1][0]};
+    const T alpha{twodads::alpha[order - 1][0]};
     
     // Initialize the main diagonal to alpha_0 + 2 * rx + ky^2 * diff * dt
-    // The first and last element on the main diagonal depend on the left and 
-    // right boundary condition respectively:
+    // The first and last element on the main diagonal depend on boundary condition
     // 3 * rx for bc_dirichlet
     // 1 * rx for bc_neumann
     T val_left{0.0};
     T val_right{0.0};
 
-    switch(bcond_left)
+    switch(bc_left)
     {
         case twodads::bc_t::bc_dirichlet:
             val_left = 3.0;
@@ -195,7 +194,7 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tle
             throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");
     }
 
-    switch(bcond_right)
+    switch(bc_right)
     {
         case twodads::bc_t::bc_dirichlet:
             val_right = 3.0;
@@ -222,7 +221,7 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t tle
             return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
     }, 0);
 
-    set_diag_order(tlev);
+    set_diag_order(order);
 }
 
 
@@ -325,20 +324,13 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         const T beta1_dt{twodads::beta[1][0] * get_tint_params().get_deltat()};
 
         // u^{0} = alpha_2 * u^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, 
-                          t_dst, t_src2);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
         // u^{0} += alpha_1 * u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, 
-                          t_dst, t_src1);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
         // u^{0} += dt * beta_2 * N^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta2_dt);}, 
-                          explicit_part, t_dst, t_src2 - 1);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta2_dt);}, explicit_part, t_dst, t_src2 - 1);
         // u^{0} += dt * beta_1 * N^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, 
-                          explicit_part, t_dst, t_src1 - 1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, explicit_part, t_dst, t_src1 - 1);
     }
 
     else if (order == 3)
@@ -356,32 +348,17 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         const T beta1_dt{twodads::beta[2][0] * get_tint_params().get_deltat()};
 
         // u^{0} = alpha_3 * u^{-3}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);},
-                          t_dst, t_src3);
-        
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);}, t_dst, t_src3);
         // u^{0} += alpha_2 * u^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, 
-                          t_dst, t_src2);
-        //std::cout << "======= Integrating level 3:  add t_src2" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
-        
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha2);}, t_dst, t_src2);        
         // u^{0} += alpha_1 * u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, 
-                          t_dst, t_src1);
-        //std::cout << "======= Integrating level 3:  add t_src1" << std::endl;
-        //utility :: print(field, t_dst, std::cout);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(lhs + rhs * alpha1);}, t_dst, t_src1);
         // u^{0} += dt * beta_3 * N^{-3}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta3_dt);}, 
-                          explicit_part, t_dst, t_src3 - 1);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta3_dt);}, explicit_part, t_dst, t_src3 - 1);
         // u^{0} += dt * beta_2 * N^{-2}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta2_dt);}, 
-                           explicit_part, t_dst, t_src2 - 1);
-
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta2_dt);}, explicit_part, t_dst, t_src2 - 1);
         // u^{0} += dt * beta_1 * N^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta1_dt);}, 
-                          explicit_part, t_dst, t_src1 - 1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{ return(lhs + rhs * beta1_dt);}, explicit_part, t_dst, t_src1 - 1);
     }
 
     (*myfft).dft_r2c(field.get_tlev_ptr(t_dst), reinterpret_cast<CuCmplx<T>*>(field.get_tlev_ptr(t_dst)));
@@ -434,7 +411,6 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         else
             return(input);
     }, t_dst);
-
 
     detail :: impl_solve_tridiagonal(field, get_diag_u(), get_diag(), get_diag_l(), t_dst, get_ell_solver(), allocator<T>{});
 }

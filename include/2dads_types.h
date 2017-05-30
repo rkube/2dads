@@ -175,6 +175,10 @@ namespace twodads {
             CUDAMEMBER bvals_t(bc_t _bc_left, bc_t _bc_right, T _bv_l, T _bv_r)
                                : bc_left(_bc_left), bc_right(_bc_right), 
                                  bval_left(_bv_l), bval_right(_bv_r) {}
+
+            CUDAMEMBER bvals_t() : bc_left(twodads::bc_t::bc_null), 
+                                   bc_right(twodads::bc_t::bc_null),
+                                   bval_left(T(0.0)), bval_right(T(0.0)) {}
                                  
             CUDAMEMBER inline bc_t get_bc_left() const {return(bc_left);};
             CUDAMEMBER inline bc_t get_bc_right() const {return(bc_right);};

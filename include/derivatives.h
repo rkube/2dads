@@ -11,6 +11,7 @@
 #include "error.h"
 #include "dft_type.h"
 #include "solvers.h"
+#include "utility.h"
 
 #include <cassert>
 #include <sstream>
@@ -601,103 +602,6 @@ namespace host
 
 namespace detail
 {
-/***** moved to utility.h
-#ifdef __CUDACC__
-    template <typename T>
-    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
-                          cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
-                          const twodads::slab_layout_t geom_my21,
-                          allocator_device<T>)
-    {
-        const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
-        const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
-                             (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
-
-        device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
-        gpuErrchk(cudaPeekAtLastError());    
-    }
-#endif //__CUDACC__
-
-    template <typename T>
-    void impl_init_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
-                          cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
-                          const twodads::slab_layout_t& geom_my21,
-                          allocator_host<T>)
-    {
-        const T two_pi_Lx{twodads::TWOPI / geom_my21.get_Lx()};
-        const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom_my21.get_my() - 1) * 2) * geom_my21.get_deltay())};
-
-        size_t n{0};
-        size_t m{0};
-        // Access data in coeffs_dy via T get_elem function below.
-        address_t<CuCmplx<T>>* arr_dy1{coeffs_dy1.get_address_ptr()};
-        address_t<CuCmplx<T>>* arr_dy2{coeffs_dy2.get_address_ptr()};
-  
-        CuCmplx<T>* dy1_data = coeffs_dy1.get_tlev_ptr(0);
-        CuCmplx<T>* dy2_data = coeffs_dy2.get_tlev_ptr(0);
-        
-        /////////////////////////////////////////////////////////////////////////////////////////////
-        // n = 0..nx/2-1
-        for(n = 0; n < geom_my21.get_nx() / 2; n++)
-        {
-            for(m = 0; m < geom_my21.get_my() - 1; m++)
-            {
-                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n)); 
-                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
-
-                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-            }
-            m = geom_my21.get_my() - 1;
-            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * T(n));
-            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
-
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-        }
-        
-        /////////////////////////////////////////////////////////////////////////////////////////////
-        // n = nx/2
-        n = geom_my21.get_nx() / 2;
-        for(m = 0; m < geom_my21.get_my() - 1; m++)
-        {
-            (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0)); 
-            (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
-
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-        }
-        m = geom_my21.get_my() - 1;
-
-        (*arr_dy1).get_elem(dy1_data, n, m).set_re(T(0.0));
-        (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
-
-        (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * T(n * n));
-        (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-
-        /////////////////////////////////////////////////////////////////////////////////////////////
-        // n = nx/2+1 .. Nx-2
-        for(n = geom_my21.get_nx() / 2 + 1; n < geom_my21.get_nx(); n++)
-        {
-            for(m = 0; m < geom_my21.get_my() - 1; m++)
-            {
-                (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
-                (*arr_dy1).get_elem(dy1_data, n, m).set_im(two_pi_Ly * T(m));
-
-                (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
-                (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-            }
-            
-            m = geom_my21.get_my() - 1;
-            (*arr_dy1).get_elem(dy1_data, n, m).set_re(two_pi_Lx * (T(n) - T(geom_my21.get_nx())));
-            (*arr_dy1).get_elem(dy1_data, n, m).set_im(T(0.0));
-
-            (*arr_dy2).get_elem(dy2_data, n, m).set_re(-1.0 * two_pi_Lx * two_pi_Lx * (T(geom_my21.get_nx()) - T(n)) * (T(geom_my21.get_nx()) - T(n)) );
-            (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
-        }
-    }
-    *****/
-
     namespace fd
     {
 #ifdef CUDACC
@@ -1053,9 +957,9 @@ namespace detail
     } // namespace fd
 
 
-    /*
-     ************************* Implementation of bispectral derivation methods ********************
-     */
+    /****************************************************************************
+     *          Implementation of bispectral derivation methods                 *
+     ****************************************************************************/
     namespace bispectral
 
     {
@@ -1230,9 +1134,9 @@ namespace detail
 } // End namespace detail
 
 
-/*
- * Interface to derivation and elliptical solvers
- */
+/*****************************************************************************
+ *           Interface to derivation and elliptical solvers                  *
+ *****************************************************************************/
 
 
 template <typename T, template <typename> class allocator>
@@ -1273,10 +1177,10 @@ class deriv_base_t
 };
 
 
-/*
- * Implmentation of finite difference, spectral derivation and elliptical solvers for
- * 1d semi-periodic boundary geometries
- */
+/***********************************************************************************
+ * Implmentation of finite difference, spectral derivation and elliptical solvers 
+ * for 1d semi-periodic boundary geometries       
+ ***********************************************************************************/
 
 template <typename T, template <typename> class allocator>
 class deriv_fd_t : public deriv_base_t<T, allocator>
@@ -1296,7 +1200,7 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         #endif //DEVICE
 
         deriv_fd_t(const twodads::slab_layout_t&);    
-        ~deriv_fd_t() {}
+        ~deriv_fd_t() {delete my_solver;}
 
         virtual void dx(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
@@ -1473,34 +1377,34 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t& _geom) :
               get_geom().get_ylo(), 
               get_geom().get_deltay(), 
               get_geom().get_nx(), get_geom().get_pad_x(),
-              (get_geom().get_my() + 2) / 2, 0, 
+              (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0, 
               get_geom().get_grid()},
     geom_transpose{get_geom().get_ylo(),
                    get_geom().get_deltay(),
                    get_geom().get_xleft(),
                    get_geom().get_deltax(),
-                   (get_geom().get_my() + 2) / 2, 0,
+                   (get_geom().get_my() + get_geom().get_pad_y()) / 2, 0,
                    get_geom().get_nx(), 0,
                    get_geom().get_grid()},
     my_solver{new elliptic_t(get_geom())},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    coeffs_dy1{get_geom_my21(), 
-               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}),
-               1},
+    coeffs_dy1{get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(), 1},
+               //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}),
+               //1},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    coeffs_dy2{get_geom_my21(),
-               twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 
-               1},
+    coeffs_dy2{get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(), 1},
+               //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 
+               //1},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag(get_geom_transpose(), 
-         twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 
-         1),
+    diag{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1},
+         //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 
+         //1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag_l(get_geom_transpose(), 
-           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 1),
+    diag_l{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1},
+           //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 1),
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
-    diag_u(get_geom_transpose(), 
-           twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, cmplx_t{0.0}, cmplx_t{0.0}), 1)
+    diag_u{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1}
+           //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 1)
 {
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.
@@ -1655,6 +1559,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
         }
 
 
+        // Compute f_x g_y - f_y g_x, store result in dst
         virtual void pbracket(const cuda_array_bc_nogp<T, allocator>& f_x,
                       const cuda_array_bc_nogp<T, allocator>& f_y,
                       const cuda_array_bc_nogp<T, allocator>& g_x,
@@ -1674,7 +1579,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
             // omega_rhs <- f_x
             dst.copy(0, f_x, t_src_f);
-            // omega_rhs *= g_x
+            // omega_rhs *= g_y
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                             {
                                 return(lhs * rhs);

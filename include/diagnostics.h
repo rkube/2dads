@@ -29,7 +29,7 @@ class diagnostic_t {
         /// Default constructor, pass a slab_config_js object.
 		diagnostic_t(const slab_config_js&);
         /// does nothing
-		~diagnostic_t() {};
+		~diagnostic_t();
 
         /// Update the diag_array members from GPU memory. They are used to
         /// compute diagnostic quantities    

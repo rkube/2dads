@@ -25,16 +25,11 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
     //n_probes(config.get_nprobe()),
     //use_log_theta(config.get_log_theta()), 
     //theta_bg(config.get_initc(0)),
-    //init_flag_blobs(false)
-    //init_flag_energy(false),
-    //init_flag_particles(false),
-    //init_flag_tprobe(false),
-    //init_flag_oprobe(false)
 {
     stringstream filename;
     string header;
 	
-    for(auto it: config.get_diagnostics())
+    for(auto it : config.get_diagnostics())
     {
         filename.str(string());
         switch(it)
@@ -198,17 +193,14 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
         switch(d_name)
         {
             case twodads::diagnostic_t::diag_blobs:
-                std::cout << "Diagnosing blobs" << std::endl;
                 diag_blobs(time);
                 break;
 
             case twodads::diagnostic_t::diag_energy:
-                std::cout << "Diagnosing energy" << std::endl;
                 //diag_energy(time);
                 break;
 
             case twodads::diagnostic_t::diag_probes:
-                std::cout << "Diagnosing probes" << std::endl;
                 //diag_probes(time);
                 break;
         }
@@ -218,7 +210,6 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
 
 void diagnostic_t::diag_blobs(const twodads::real_t time)
 {  
-    std::cout << "diagnostics_t::diag_blobs" << std::endl;
 	double theta_max_val{-1.0};
 	double theta_max_x{-1.0};
 	double theta_max_y{-1.0};
@@ -237,22 +228,26 @@ void diagnostic_t::diag_blobs(const twodads::real_t time)
     const arr_real** theta_ptr2{get_dptr_by_name(twodads::field_t::f_theta)};
     const arr_real** strmf_ptr2{get_dptr_by_name(twodads::field_t::f_strmf)};
 
+    // Compute COM of density field
     std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_com = utility :: com(**theta_ptr2, 1);
     theta_int_val = std::get<0>(res_com);
     theta_com_x = std::get<1>(res_com);
     theta_com_y = std::get<2>(res_com);
 
     // Update radial blob velocity
+    std :: cout << "diagnostics_t :: blobs: time_old = " << time_old << ", time = " << time << std::endl;
     com_vx = (theta_com_x - theta_com_x_old) / (time - time_old);
     time_old = time;
     theta_com_x_old = theta_com_x;
     theta_com_y_old = theta_com_y;
 
+    // Compute max diagnostics of density field
     std::tuple<twodads::real_t, size_t, size_t> res_max = utility :: max_idx(**theta_ptr2, 1);
     theta_max_val = std::get<0>(res_max);
     theta_max_x = slab_layout.x_left + (twodads::real_t(std::get<1>(res_max)) - slab_layout.cellshift) * slab_layout.delta_x;
     theta_max_y = slab_layout.y_lo + (twodads::real_t(std::get<2>(res_max)) - slab_layout.cellshift) * slab_layout.delta_y;
 
+    // Compute max diagnostics of potential field
     res_max = utility :: max_idx(**strmf_ptr2, 0);
     strmf_max_val = std::get<0>(res_max);
     strmf_max_x = slab_layout.x_left + (twodads::real_t(std::get<1>(res_max)) - slab_layout.cellshift) * slab_layout.delta_x;
@@ -434,5 +429,21 @@ void diagnostic_t::diag_blobs(const twodads::real_t time)
 //         }	
 //     }
 // }
+
+diagnostic_t :: ~diagnostic_t() 
+{
+    theta_ptr = nullptr;
+    theta_x_ptr = nullptr;
+    theta_y_ptr = nullptr;
+    omega_ptr = nullptr;
+    omega_x_ptr = nullptr;
+    omega_y_ptr = nullptr;
+    tau_ptr = nullptr;
+    tau_x_ptr = nullptr;
+    tau_y_ptr = nullptr;
+    strmf_ptr = nullptr;
+    strmf_x_ptr = nullptr;
+    strmf_y_ptr = nullptr;
+}
 
 // End of file diagnostics.cpp

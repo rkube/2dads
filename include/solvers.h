@@ -268,7 +268,11 @@ namespace solvers
                                                         dst + m, 
                                                         get_my21_int())) != 0)
                                 {
-                                    std::cerr << "Error from MKL LAPACK_zgtsv: " << res << std::endl;
+                                    std :: stringstream err_msg;
+                                    std :: cerr << dst << "\t";
+                                    std :: cerr << m << std :: endl;
+                                    err_msg << "MKL LAPACK_zgtsv: Parameter " << res << " had an illegal value";
+                                    throw(mkl_zgtsv_exception(err_msg.str()));
                                 }
                             } 
                             delete [] diag_copy;

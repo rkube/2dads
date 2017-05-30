@@ -119,19 +119,6 @@ namespace cufft
                     ostride = 1;
 
                     // Plan 2d r2c transformation
-                    //if((err = cufftPlanMany(&plan_r2c,
-                    //                        2,              //int rank
-                    //                        dft_size,       //int* n
-                    //                        dft_inembed,    //int* inembed
-                    //                        istride,        //int istride
-                    //                        (Nx + geom.pad_y) * (My + geom.pad_y), //int idist
-                    //                        dft_onembed,    //int* onembed
-                    //                        ostride,        //int ostride
-                    //                        Nx * (My / 2 + 1), //int odist
-                    //                        CUFFT_D2Z,      //cufftType typ
-                    //                        1)              //int batch
-                    //   ) != CUFFT_SUCCESS)
-                    //if((err = cufftPlan2d(&plan_r2c, Nx, My, CUFFT_D2Z) )!= CUFFT_SUCCESS)
                     if((err = cufftPlan2d(&plan_r2c, geom.get_nx(), geom.get_my(), CUFFT_D2Z) )!= CUFFT_SUCCESS)
                     {
                         std::stringstream err_str;
@@ -140,19 +127,6 @@ namespace cufft
                     }
 
                     // Plan 2d c2r transformation
-                    //if((err = cufftPlanMany(&plan_c2r,
-                    //                        2,
-                    //                        dft_size,
-                    //                        dft_onembed,
-                    //                        ostride,
-                    //                        Nx * (My / 2 + 1),
-                    //                        dft_inembed,
-                    //                        istride,
-                    //                        Nx * (My + geom.pad_y),
-                    //                        CUFFT_Z2D,
-                    //                        1)
-                    //  ) != CUFFT_SUCCESS)
-                    //if((err = cufftPlan2d(&plan_c2r, Nx, My, CUFFT_Z2D) )!= CUFFT_SUCCESS)
                     if((err = cufftPlan2d(&plan_c2r, geom.get_nx(), geom.get_my(), CUFFT_Z2D) )!= CUFFT_SUCCESS)
                     {
                         std::stringstream err_str;

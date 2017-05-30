@@ -191,8 +191,21 @@ class not_implemented_error : public std::exception
         ~not_implemented_error() throw() {};
         virtual const char* what() const throw() {return error.data();};
 
-        private:
+    private:
             const std::string error;
+};
+
+
+/// Print error from zgtsv solver
+class mkl_zgtsv_exception : public std::exception
+{
+    public:
+        mkl_zgtsv_exception(const std::string& err) : error(err) {};
+        ~mkl_zgtsv_exception() throw() {};
+        virtual const char* what() const throw() {return(error.data());};
+    
+    private:
+        const std::string error;
 };
 
 
