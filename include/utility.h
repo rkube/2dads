@@ -6,7 +6,7 @@
 
 namespace device{
 #ifdef __CUDACC__
-/// Reduction kernel, taken from cuda_darray.h
+/// Reduction kernel
 // Perform reduction of in_data, stored in column-major order
 // Use stride_size = 1, offset_size = Nx for row-wise reduction (threads in one block reduce one row, i.e. consecutive elements of in_data)
 // row-wise reduction:

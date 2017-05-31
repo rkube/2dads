@@ -59,8 +59,8 @@ class slab_bc
 
         // typedef calls to functions that compute the implicit part for time integration.
         // These functions have 2 time indices as the argument.
-        // t_dst gives the index where the result is written to
-        // t_src gives the index where the input is if the array has more than one time index (i.e. the fields that are integrated)
+        // 1: t_dst gives the index where the result is written to
+        // 2: t_src gives the index where the input is if the array has more than one time index (i.e. the fields that are integrated)
         // for all other fields, theta_[xy], strmf, strmf_[xy] this defaults to 0.
         typedef void(slab_bc ::*rhs_func_ptr) (const size_t, const size_t); 
 

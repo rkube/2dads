@@ -14,10 +14,10 @@
  * cols: 0...Nx-1 ... Nx-1 + pad_x
  *
  *     0                        My-1 ... My - 1 + pad_y
- * Nx - 1 |--------- ... ------|    |
- *        |--------- ... ------|    |
+ * Nx - 1 |--------- ... ------|          |
+ *        |--------- ... ------|          |
  * ...
- *  0     |--------- ... ------|    |
+ *  0     |--------- ... ------|          |
  *
  * idx = n * (My + pad_y) + m
  *
@@ -61,11 +61,6 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-
-//#endif // __CUDA__ && __CUDA_ARCH
-
-//#ifdef __CUDACC__
-//#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define LAMBDACALLER __device__
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -94,10 +89,8 @@ inline void gpuVerifyLaunch(const char* file, int line)
      }
 }
 
-#else
+#else //defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #warning cuda_array_bc_nogp: compiling for host
-//#ifndef __CUDACC__
-//#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
 struct dim3{
     int x;
     int y;
@@ -105,15 +98,11 @@ struct dim3{
 };
 
 #define LAMBDACALLER
-//#endif //ifndef __CUDACC
-
-
 #endif //__CUDACC__
 
 
 namespace device
 {
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     /// Return true if row and column are within geom(include padded columns if is_transformed is true)
     /// Return false if row or column is outside the geometry
@@ -235,71 +224,74 @@ namespace device
 template <typename T, template <typename> class allocator> class cuda_array_bc_nogp;
 
 // Host functions
-namespace host
-{
-    template <typename T, typename O>
-    void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom, const bool is_transformed)
-    {
-        size_t index{0};
-        size_t m{0};
-
-        // Loop over the padded elements if the array is transformed
-        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
-        
-        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
-#pragma omp parallel for private(index, m)
-        for(size_t n = 0; n < geom.get_nx(); n++)
-        {
-        // nelem_m is determined at runtime. To vectorize the loop
-        // determine the number of total iterations when handling 4 elements
-        // per iteration. The remaining elements are done sequentially
-            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
-            {
-                index = n * my_plus_pad + m;
-                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
-                data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
-                data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
-                data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
-            }
-            for(; m < nelem_m; m++)
-            {
-                index = n * (my_plus_pad) + m;
-                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
-            }
-
-        }
-    }
-
-    template <typename T, typename O>
-    void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom, bool is_transformed)
-    {
-        size_t index{0};
-        size_t m{0};
-
-        // Loop over the padded elements if the array is transformed
-        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
-        
-        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
-#pragma omp parallel for private(index, m)
-        for(size_t n = 0; n < geom.get_nx(); n++)
-        {   
-            // Loop vectorization scheme follows host_apply (above)
-            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
-            {
-                index = n * my_plus_pad + m;
-                lhs[index] = host_func(lhs[index], rhs[index]);
-                lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
-                lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
-                lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
-            }
-            for(; m < nelem_m; m++)
-            {
-                index = n * my_plus_pad + m;
-                lhs[index] = host_func(lhs[index], rhs[index]);
-            }
-        }
-    }
-}
+//namespace host
+//{
+//     template <typename T, typename O>
+//     void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom, const bool is_transformed)
+//     {
+//         size_t index{0};
+//         size_t m{0};
+//
+//         // Loop over the padded elements if the array is transformed
+//         const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
+//        
+//         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
+// #pragma omp parallel for private(index, m)
+//         for(size_t n = 0; n < geom.get_nx(); n++)
+//         {
+//         // nelem_m is determined at runtime. To vectorize the loop
+//         // determine the number of total iterations when handling 4 elements
+//         // per iteration. The remaining elements are done sequentially
+//             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
+//             {
+//                 index = n * my_plus_pad + m;
+//                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+//                 data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
+//                 data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
+//                 data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
+//             }
+//             for(; m < nelem_m; m++)
+//             {
+//                 index = n * (my_plus_pad) + m;
+//                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+//             }
+//
+//         }
+//     }
+//
+//     template <typename T, typename O>
+//     void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom, bool is_transformed)
+//     {
+//         size_t index{0};
+//         size_t m{0};
+//         size_t n{0};
+//
+//         // Iterate over the padding elements the array is transformed
+//         // Skip the padding elements if the array is not transformed
+//         const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
+//        
+//         // Use the padded array size to compute indices, whether array is transformed or not.
+//         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
+// #pragma omp parallel for private(index, m)
+//         for(n = 0; n < geom.get_nx(); n++)
+//         {   
+//             // Loop vectorization scheme follows host_apply (above)
+//             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
+//             {
+//                 index = n * my_plus_pad + m;
+//                 lhs[index] = host_func(lhs[index], rhs[index]);
+//                 lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
+//                 lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
+//                 lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
+//             }
+//             for(; m < nelem_m; m++)
+//             {
+//                 index = n * my_plus_pad + m;
+//                 lhs[index] = host_func(lhs[index], rhs[index]);
+//             }
+//         }
+//     }
+//}
 
 
 namespace detail 
@@ -390,15 +382,12 @@ namespace detail
     inline void impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t& geom, const twodads::bvals_t<T>& bvals, allocator_host<T>)
     {
         address_ptr = new address_t<T>(geom, bvals);
-        //std::cerr << "impl_init_address(host): address_ptr -> " << address_ptr << std::endl;
-        //std::cerr << "impl_init_address(host): address_2ptr -> " << address_2ptr << std::endl;
     }
+
 
     template <typename T>
     inline void impl_delete_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, allocator_host<T>)
     {
-        //std::cerr << "impl_delete_address(host): address_ptr -> " << address_ptr << std::endl;
-        //std::cerr << "impl_delete_address(host): address_2ptr -> " << address_2ptr << std::endl;
         if(address_ptr != nullptr)
             delete address_ptr;        
         address_ptr = nullptr;
@@ -413,16 +402,72 @@ namespace detail
 
 
     template <typename T, typename F>
-    inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid, const dim3& block, allocator_host<T>)
+    void impl_apply(T* data_ptr, F host_func, const twodads::slab_layout_t& geom, const bool is_transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        host :: host_apply(data_ptr, myfunc, geom, transformed);
+        //host :: host_apply(data_ptr, myfunc, geom, transformed);
+        size_t index{0};
+        size_t m{0};
+
+        // Loop over the padded elements if the array is transformed
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
+        
+        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
+#pragma omp parallel for private(index, m)
+        for(size_t n = 0; n < geom.get_nx(); n++)
+        {
+        // nelem_m is determined at runtime. To vectorize the loop
+        // determine the number of total iterations when handling 4 elements
+        // per iteration. The remaining elements are done sequentially
+            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
+            {
+                index = n * my_plus_pad + m;
+                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+                data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
+                data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
+                data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
+            }
+            for(; m < nelem_m; m++)
+            {
+                index = n * (my_plus_pad) + m;
+                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+            }
+
+        }
     }
 
 
     template <typename T, typename F>
-    inline void impl_elementwise(T* lhs, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid, const dim3& block, allocator_host<T>)
+    void impl_elementwise(T* lhs, T* rhs, F host_func, const twodads::slab_layout_t& geom, const bool is_transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        host :: host_elementwise(lhs, rhs, myfunc, geom, transformed);
+        //host :: host_elementwise(lhs, rhs, myfunc, geom, transformed);
+        size_t index{0};
+        size_t m{0};
+        size_t n{0};
+
+        // Iterate over the padding elements the array is transformed
+        // Skip the padding elements if the array is not transformed
+        const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
+        
+        // Use the padded array size to compute indices, whether array is transformed or not.
+        const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
+#pragma omp parallel for private(index, m)
+        for(n = 0; n < geom.get_nx(); n++)
+        {   
+            // Loop vectorization scheme follows host_apply (above)
+            for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
+            {
+                index = n * my_plus_pad + m;
+                lhs[index] = host_func(lhs[index], rhs[index]);
+                lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
+                lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
+                lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
+            }
+            for(; m < nelem_m; m++)
+            {
+                index = n * my_plus_pad + m;
+                lhs[index] = host_func(lhs[index], rhs[index]);
+            }
+        }
     }
 
     template <typename T>
@@ -434,6 +479,7 @@ namespace detail
             tlev_ptr[t] = tlev_ptr[t - 1];
         }
         tlev_ptr[0] = tmp;
+        tmp = nullptr;
     }
 }
 
@@ -523,7 +569,6 @@ public:
         detail :: impl_advance(get_tlev_ptr(), get_tlevs(), allocator_type{});
         apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, 0);
         
-        //initialize(0);
         for(size_t tidx = get_tlevs() - 1; tidx > 0; tidx--)
             set_transformed(tidx, is_transformed(tidx - 1));
         set_transformed(0, false);
@@ -606,17 +651,12 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         transformed{std::vector<bool>(get_tlevs(), 0)},
         address_2ptr{nullptr},
         address_ptr{nullptr},
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + get_geom().get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((get_nx() + get_geom().get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
         grid_unroll(grid.x / cuda :: elem_per_thread, grid.y),
 # else
-//#endif //__CUDACC__
-//
-//#ifndef __CUDACC__
-//#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
         block{0, 0, 0},
         grid{0, 0, 0},
         grid_unroll{0, 0, 0},
@@ -632,8 +672,6 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
     for(size_t tidx = 0; tidx < tlevs; tidx++)
             apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, tidx);
-
-    //initialize();
 }
 
 

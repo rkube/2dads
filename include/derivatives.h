@@ -312,82 +312,8 @@ void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
         ) * inv_dx_dy;
     }
 }
-
-/****** moved to utility.h ******
-// Compute wavenumbers for derivation in Fourier-space
-// kmap_d1 holds (kx, ky) wavenumbers
-// kmap_d2 holds (kx^2, ky^2) wavenumbers 
-//
-// To compute derivatives in Fourier space do:
-//      u_x_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].re())
-//      u_y_hat[index] = u_hat[index] * complex(0.0, kmap_d1[index].im())
-//
-//      u_xx_hat[index] = u_hat[index] * kmap_d2.re()
-//      u_yy_hat[index] = u_hat[index] * kmap_d2.im()
-//
-// for the entire array 
-//
-
-template <typename T>
-__global__
-void kernel_gen_coeffs(CuCmplx<T>* kmap_d1, CuCmplx<T>* kmap_d2, twodads::slab_layout_t geom)
-{
-    const size_t col{cuda :: thread_idx :: get_col()};
-    const size_t row{cuda :: thread_idx :: get_row()};
-    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-    const T two_pi_Lx{twodads::TWOPI / geom.get_Lx()};
-    const T two_pi_Ly{twodads::TWOPI / (static_cast<T>((geom.get_my() - 1) * 2) * geom.get_deltay())}; 
-
-    CuCmplx<T> tmp1(0.0, 0.0);
-    CuCmplx<T> tmp2(0.0, 0.0);
-
-    if(row < geom.get_nx() / 2)
-        tmp1.set_re(two_pi_Lx * T(row));
-
-    else if (row == geom.get_nx() / 2)
-        tmp1.set_re(0.0);
-    else
-        tmp1.set_re(two_pi_Lx * (T(row) - T(geom.get_nx())));
-
-    if(col < geom.get_my() - 1)
-    {
-        tmp1.set_im(two_pi_Ly * T(col));
-        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
-    }
-    else
-    {
-        tmp2.set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(col * col));
-        tmp1.set_im(0.0);
-    }
-
-    if(col < geom.get_my() && row < geom.get_nx())
-    {
-        kmap_d1[index] = tmp1;
-        kmap_d2[index] = tmp2;
-    }
-}
-
-
-
-// Multiply the input array with the real/imaginary part of the map. Store result in output
-template <typename T, typename O>
-__global__
-void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func,
-                            twodads::slab_layout_t geom)
-{
-    const size_t col{cuda :: thread_idx :: get_col()};
-    const size_t row{cuda :: thread_idx :: get_row()};
-    const size_t index{row * (geom.get_my() + geom.get_pad_y()) + col}; 
-
-    if(col < geom.get_my() && row < geom.get_nx())
-    {
-        out[index] = op_func(in[index], map[index]);
-    }
-} 
-**** end section that was moved to utility.h */
 #endif //__CUDACC__
 } // namespace device
-
 
 
 namespace host
@@ -430,7 +356,7 @@ namespace host
         }
     }
 
-
+    // TODO: Check if this function can be replaced by elementwise...
     template <typename T, typename O>
     void multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_func, twodads::slab_layout_t geom)
     {
@@ -784,29 +710,31 @@ namespace detail
             for(size_t m = 0; m < in.get_geom().get_my(); m++)
                 col_vals[m] = m;
 
-            // Apply threepoint stencil in interior domain, no interpolation here
             if(order == 1)
+            // Calculate the first derivative
             {
+                // Apply threepoint stencil in interior domain, no interpolation here
                 host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
                                                 [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
                                                 {return(0.5 * (u_right - u_left) * inv_dx);}, 
                                                 out.get_geom());
 
                 // Call expensive interpolation routine only for 2 rows
-                // row n=0, m = 0...my-1
+                // 1) row n=0, m = 0...my-1
                 host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
-                                            [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
-                                            {return(0.5 * (u_right - u_left) * inv_dx);},
-                                            out.get_geom(), row_vals, col_vals);
+                                         [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                         {return(0.5 * (u_right - u_left) * inv_dx);},
+                                         out.get_geom(), row_vals, col_vals);
 
-                // row n=Nx - 1, m = 0..My-1
+                // 2) row n=Nx - 1, m = 0..My-1
                 row_vals[0] = in.get_geom().get_nx() - 1;
                 host :: apply_threepoint(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
-                                            [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
-                                            {return(0.5 * (u_right - u_left) * inv_dx);},
-                                        out.get_geom(), row_vals, col_vals);
+                                         [] (T u_left, T u_middle, T u_right, T inv_dx, T inv_dx2) -> T
+                                         {return(0.5 * (u_right - u_left) * inv_dx);},
+                                         out.get_geom(), row_vals, col_vals);
             }
             else if (order == 2)
+            // Calculate the second derivative
             {
                 // Apply threepoint stencil in interior domain, no interpolation here
                 host :: apply_threepoint_center(in.get_tlev_ptr(t_src), in.get_address_ptr(), out.get_tlev_ptr(t_dst), 
@@ -884,13 +812,14 @@ namespace detail
             std::vector<size_t> col_vals(0);
             std::vector<size_t> row_vals(0);
 
-            // Uses address with direct element access avoiding ifs etc.
+            // Uses address with direct element access, no interpolation
             host :: arakawa_center(u.get_tlev_ptr(t_srcu), u.get_address_ptr(),
                                 v.get_tlev_ptr(t_srcv), v.get_address_ptr(),
                                 res.get_tlev_ptr(t_dst),
                                 u.get_geom());
 
-            // Arakawa kernel for col 0, n = 0..Nx-1
+            // Arakawa kernel for col 0, n = 0..Nx-1. Call arakawa method that calls interpolator
+            // for element access
             col_vals.resize(1);
             col_vals[0] = 0;
             row_vals.resize(u.get_geom().get_nx());
@@ -945,13 +874,15 @@ namespace detail
             // Copy input data for solver into dst.
             dst.copy(t_dst, src, t_src);
 
-    #ifndef __CUDACC__
+
+#ifndef __CUDACC__
+// Mask call to ell_solver since we do not link to mkl when compiling in device mode
             ell_solver -> solve(nullptr,
                                 reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                                 diag_l.get_tlev_ptr(0) + 1, 
                                 diag.get_tlev_ptr(0), 
                                 diag_u.get_tlev_ptr(0));
-    #endif //__CUDACC__
+#endif //__CUDACC__
             dst.set_transformed(t_dst, true);
         } 
     } // namespace fd
@@ -1168,6 +1099,7 @@ class deriv_base_t
                           cuda_array_bc_nogp<T, allocator>&,
                           const size_t, const size_t, const size_t) = 0;
 
+    // Computes poisson brackets from other scheme
     virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
@@ -1178,8 +1110,8 @@ class deriv_base_t
 
 
 /***********************************************************************************
- * Implmentation of finite difference, spectral derivation and elliptical solvers 
- * for 1d semi-periodic boundary geometries       
+ *  Implmentation of finite difference, spectral derivation and elliptical solvers 
+ *  for semi-periodic boundary geometries       
  ***********************************************************************************/
 
 template <typename T, template <typename> class allocator>
@@ -1577,26 +1509,19 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             assert(g_x.is_transformed(t_src_g) == false);
             assert(g_y.is_transformed(t_src_f) == false);
 
-            // omega_rhs <- f_x
+            // dst <- f_x
             dst.copy(0, f_x, t_src_f);
-            // omega_rhs *= g_y
+            // dst *= g_y
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                            {
-                                return(lhs * rhs);
-                            },
-                            g_y, 0, t_dst);
+                            {return(lhs * rhs); }, g_y, 0, t_dst);
             // tmp <- f_y
             tmp_arr.copy(0, f_y, t_src_f);
             // tmp * g_x
             tmp_arr.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                                {
-                                    return(lhs * rhs);
-                                }, g_x, 0, t_src_g);
-            // omega_rhs -= tmp
+                                { return(lhs * rhs); }, g_x, 0, t_src_g);
+            // dst <- dst - tmp = f_x g_y - f_y g_x
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                            {
-                                return(lhs - rhs);
-                            }, tmp_arr, 0, t_dst);
+                            { return(lhs - rhs); }, tmp_arr, 0, t_dst);
         };   
 
 

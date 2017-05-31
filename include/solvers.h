@@ -67,7 +67,6 @@ namespace solvers
                 static cublas_handle_t h;
                 return (h.cublas_handle);
             }
-
     };
 
     // Wrapper data type for cusparseHandle_t
@@ -269,8 +268,6 @@ namespace solvers
                                                         get_my21_int())) != 0)
                                 {
                                     std :: stringstream err_msg;
-                                    std :: cerr << dst << "\t";
-                                    std :: cerr << m << std :: endl;
                                     err_msg << "MKL LAPACK_zgtsv: Parameter " << res << " had an illegal value";
                                     throw(mkl_zgtsv_exception(err_msg.str()));
                                 }

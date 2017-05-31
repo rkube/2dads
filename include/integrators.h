@@ -171,7 +171,7 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t ord
 {
     // Get values from members not passed to the lambda so we can pass them by value into the lambda function, [=] capture
     const T rx{get_rx()};
-    const T alpha{twodads::alpha[order - 1][0]};
+    const T alpha0{twodads::alpha[order - 1][0]};
     
     // Initialize the main diagonal to alpha_0 + 2 * rx + ky^2 * diff * dt
     // The first and last element on the main diagonal depend on boundary condition
@@ -183,28 +183,28 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t ord
     switch(bc_left)
     {
         case twodads::bc_t::bc_dirichlet:
-            val_left = 3.0;
+            val_left = T(3.0);
             break;
         case twodads::bc_t::bc_neumann:
-            val_right = 1.0;
+            val_right = T(1.0);
             break;
         case twodads::bc_t::bc_periodic:
             // Fall through
-        default:
+        case twodads::bc_t::bc_null:
             throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");
     }
 
     switch(bc_right)
     {
         case twodads::bc_t::bc_dirichlet:
-            val_right = 3.0;
+            val_right = T(3.0);
             break;
         case twodads::bc_t::bc_neumann:
-            val_right = 1.0;
+            val_right = T(1.0);
             break;
         case twodads::bc_t::bc_periodic:
             // Fall through
-        default:
+        case twodads::bc_t::bc_null:
             throw not_implemented_error("integrator_karniadakis_fd_t does not handle periodic boundary conditions");        
     }
 
@@ -214,11 +214,11 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t ord
         const T ky2{twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx)};
         
         if (m == 0)
-            return(CuCmplx<T>(val_left * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+            return(CuCmplx<T>(alpha0 + val_left * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax(), 0.0));
         else if (m == geom.get_my() - 1)
-            return(CuCmplx<T>(val_right * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+            return(CuCmplx<T>(alpha0 + val_right * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax(), 0.0));
         else
-            return(CuCmplx<T>(2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax() + alpha, 0.0));
+            return(CuCmplx<T>(alpha0 + 2.0 * rx + ky2 * rx * geom.get_deltax() * geom.get_deltax(), 0.0));
     }, 0);
 
     set_diag_order(order);
@@ -285,6 +285,9 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
     // Call tridiagonal solver
     // Return result in Fourier space
 
+    //std::cout << "integrate, order = " << order << "\tt_src1 = " << t_src1 << "\tt_src2 = " << t_src2;
+    //std::cout << "\tt_src3 = " << t_src3 << "\tt_dst = " << t_dst << std::endl;
+
 
     // In the following we define local constants for the coefficients such that the
     // __device__ lambdas can capture them by value, [=] capture.
@@ -298,16 +301,14 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         if(get_diag_order() != 1) 
             init_diagonal(1, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
-        const T alpha1{twodads::alpha[0][1]};
-        const T beta1_dt{twodads::beta[0][0] * get_tint_params().get_deltat()};
+        const T alpha1{twodads::alpha[0][1]}; // 1.0
+        const T beta1_dt{twodads::beta[0][0] * get_tint_params().get_deltat()}; // 1.0 dt
 
         // u^{0} = alpha_1 u^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, 
-                          t_dst, t_src1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * alpha1);}, t_dst, t_src1);
 
         // u^{0} += beta_1 N^{-1}
-        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, 
-                          explicit_part, t_dst, t_src1 - 1);
+        field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T{return(lhs + rhs * beta1_dt);}, explicit_part, t_dst, t_src1 - 1);
 
     }
     else if(order == 2)
@@ -317,11 +318,11 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             init_diagonal(2, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
         // Sum up previous time steps in t_dst:
-        const T alpha2{twodads::alpha[1][2]};
-        const T alpha1{twodads::alpha[1][1]};
-
-        const T beta2_dt{twodads::beta[1][1] * get_tint_params().get_deltat()};
-        const T beta1_dt{twodads::beta[1][0] * get_tint_params().get_deltat()};
+        const T alpha1{twodads::alpha[1][1]}; // 2
+        const T alpha2{twodads::alpha[1][2]}; // -1/2
+        
+        const T beta1_dt{twodads::beta[1][0] * get_tint_params().get_deltat()}; // 2 dt
+        const T beta2_dt{twodads::beta[1][1] * get_tint_params().get_deltat()}; // -1 dt
 
         // u^{0} = alpha_2 * u^{-2}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha2);}, t_dst, t_src2);
@@ -339,19 +340,14 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             init_diagonal(3, field.get_bvals().get_bc_left(), field.get_bvals().get_bc_right());
 
         // Sum up previous time steps in t_dst:
-        const T alpha3{twodads::alpha[2][3]};
-        const T alpha2{twodads::alpha[2][2]};
-        const T alpha1{twodads::alpha[2][1]};
-
-        const T beta3_dt{twodads::beta[2][2] * get_tint_params().get_deltat()};
-        const T beta2_dt{twodads::beta[2][1] * get_tint_params().get_deltat()};
-        const T beta1_dt{twodads::beta[2][0] * get_tint_params().get_deltat()};
-
-        //const T beta3_dt{twodads::beta[2][2]};
-        //const T beta2_dt{twodads::beta[2][1]};
-        //const T beta1_dt{twodads::beta[2][0]};
-
-
+        const T alpha1{twodads::alpha[2][1]}; // 3
+        const T alpha2{twodads::alpha[2][2]}; // -3/2
+        const T alpha3{twodads::alpha[2][3]}; // 1/3
+        
+        const T beta1_dt{twodads::beta[2][0] * get_tint_params().get_deltat()}; // 3
+        const T beta2_dt{twodads::beta[2][1] * get_tint_params().get_deltat()}; // -3
+        const T beta3_dt{twodads::beta[2][2] * get_tint_params().get_deltat()}; // 1
+        
         // u^{0} = alpha_3 * u^{-3}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);}, t_dst, t_src3);
         // u^{0} += alpha_2 * u^{-2}
@@ -371,9 +367,9 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
     // Treat the boundary conditions
     // Real part of the Fourier transform of the left boundary value
-    T bval_left_hat{field.get_bvals().get_bv_left() * static_cast<T>(field.get_my())};
+    const T bval_left_hat{field.get_bvals().get_bv_left() * static_cast<T>(field.get_my())};
     // Real part of the Fourier transform of the right boundary value
-    T bval_right_hat{field.get_bvals().get_bv_right() * static_cast<T>(field.get_my())};
+    const T bval_right_hat{field.get_bvals().get_bv_right() * static_cast<T>(field.get_my())};
 
     // This is the value we later add to the ky=0 mode in the n=0 row
     T add_to_boundary_left{0.0};
@@ -406,7 +402,7 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             throw not_implemented_error(std::string("Periodic boundary conditions not supported by this integrator"));
             //break;         
     }
-    // Add boundary terms, i.e. the real part of the fourier transform. (field is defined as T->twodads::real_T)
+    // Add boundary terms, i.e. the real part of the fourier transform. (field is defined as T->twodads::real_t)
     field.apply([=] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
     {
         if(n == 0  && m == 0)
@@ -467,8 +463,6 @@ void integrator_karniadakis_bs_t<T, allocator> :: init_k2_map()
                     const T ky{twodads::TWOPI * 0.5 * T(m - (m % 2)) / geom.get_Ly()};
                     return(kx * kx + ky * ky);
                   }, 0);
-
-    //utility :: print(get_k2_map(), 0, std::cout);
 }
 
 

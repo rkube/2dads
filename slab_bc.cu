@@ -639,7 +639,7 @@ inline void slab_bc :: rhs_theta_null(const size_t t_dst, const size_t t_src)
 
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
-    // Compute poisson bracket, {phi, theta}
+    // Compute poisson bracket, {theta, phi}
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
@@ -656,6 +656,9 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
             my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, 0, t_dst);
             break;
     }
+    
+    //theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+    //                    {return (-rhs);}, theta_y, 0, t_dst);
 }
 
 
@@ -669,7 +672,6 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
     const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
     const twodads::real_t ic{model_params[1]};
-    std::cout << "rhs_omega_ic: ic = " << ic << std::endl;
 
     // Compute poisson bracket
     // omega_rhs <- {omega, phi}
