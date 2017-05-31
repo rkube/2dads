@@ -347,6 +347,11 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
         const T beta2_dt{twodads::beta[2][1] * get_tint_params().get_deltat()};
         const T beta1_dt{twodads::beta[2][0] * get_tint_params().get_deltat()};
 
+        //const T beta3_dt{twodads::beta[2][2]};
+        //const T beta2_dt{twodads::beta[2][1]};
+        //const T beta1_dt{twodads::beta[2][0]};
+
+
         // u^{0} = alpha_3 * u^{-3}
         field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T { return(rhs * alpha3);}, t_dst, t_src3);
         // u^{0} += alpha_2 * u^{-2}

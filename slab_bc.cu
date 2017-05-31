@@ -113,7 +113,8 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
         std::cerr << "Error in slab configuration: " << e.what() << std::endl;
     }
 
-    // Set correct data pointers in diagnostic
+    // Set data pointers of diagnostic data member
+    // This routine should be constant as to forbid overwriting of the simulation data
     diagnostic.init_field_ptr(twodads::field_t::f_theta, &theta);
     diagnostic.init_field_ptr(twodads::field_t::f_theta_x, &theta_x);
     diagnostic.init_field_ptr(twodads::field_t::f_theta_y, &theta_y);

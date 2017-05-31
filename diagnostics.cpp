@@ -14,108 +14,78 @@
 
 using namespace std;
 
+// Maps header strings to each diagnostic type defined in 2dads_types.h
+const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: header_str_map {
+    {twodads::diagnostic_t::diag_com_theta, std::string("# 1: time \t2: theta_int\t3: theta_int_x\t4: theta_int_y\t# 5: COMvx\t6: COMvy\n")},
+    {twodads::diagnostic_t::diag_com_tau, std::string("# 1: time \t2: tau_int\t3: tau_int_x\t4: tau_int_y\t# 5: COMvx\t6: COMvy\n")},
+    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t2: theta_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")},
+    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t2: tau_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")}
+};
+
+// Maps filename to each diagnostic type defined in 2dads_types.h
+const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: filename_str_map{
+    {twodads::diagnostic_t::diag_com_theta, std::string("com_theta.dat")},
+    {twodads::diagnostic_t::diag_com_tau, std::string("com_tau.dat")},
+    {twodads::diagnostic_t::diag_max_theta, std::string("max_theta.dat")},
+    {twodads::diagnostic_t::diag_max_tau, std::string("max_tau.dat")}
+};
+
 
 diagnostic_t :: diagnostic_t(const slab_config_js& config) :
     slab_layout(config.get_geom()),
+    // Map member functions to each diagnostic type defined in 2dads_types.h
+    diag_func_map{
+        std::map<twodads::diagnostic_t, dfun_ptr_t>
+        {
+            {twodads::diagnostic_t::diag_com_theta, &diagnostic_t::diag_com_theta},
+            {twodads::diagnostic_t::diag_max_theta, &diagnostic_t::diag_max_theta},
+            {twodads::diagnostic_t::diag_com_tau, &diagnostic_t::diag_com_tau},
+            {twodads::diagnostic_t::diag_max_tau, &diagnostic_t::diag_max_tau}
+        }
+    },
     theta_ptr{nullptr}, theta_x_ptr{nullptr}, theta_y_ptr{nullptr},
     omega_ptr{nullptr}, omega_x_ptr{nullptr}, omega_y_ptr{nullptr},
     tau_ptr{nullptr}, tau_x_ptr{nullptr}, tau_y_ptr{nullptr},
-    strmf_ptr{nullptr}, strmf_x_ptr{nullptr}, strmf_y_ptr{nullptr}
+    strmf_ptr{nullptr}, strmf_x_ptr{nullptr}, strmf_y_ptr{nullptr},
+    // Map field names to data pointers to simulation data
+    data_ptr_map{
+        std::map<twodads::field_t, const arr_real**>
+        {
+            {twodads::field_t::f_theta, &theta_ptr},
+            {twodads::field_t::f_theta_x, &theta_x_ptr},
+            {twodads::field_t::f_theta_y, &theta_y_ptr},
+            {twodads::field_t::f_omega, &omega_ptr},
+            {twodads::field_t::f_omega_x, &omega_x_ptr},
+            {twodads::field_t::f_omega_y, &omega_y_ptr},
+            {twodads::field_t::f_tau, &tau_ptr},
+            {twodads::field_t::f_tau_x, &tau_x_ptr},
+            {twodads::field_t::f_tau_y, &tau_y_ptr},
+            {twodads::field_t::f_strmf, &strmf_ptr},
+            {twodads::field_t::f_strmf_x, &strmf_x_ptr},
+            {twodads::field_t::f_strmf_y, &strmf_y_ptr},
+        }
+    }
     //t_probe(config.get_tdiag()),
     //n_probes(config.get_nprobe()),
     //use_log_theta(config.get_log_theta()), 
     //theta_bg(config.get_initc(0)),
 {
-    stringstream filename;
-    string header;
+    stringstream err_msg;
+    ofstream out_file;
 	
+    // Initialize datafiles for each diagnostic routine in the config file
     for(auto it : config.get_diagnostics())
     {
-        filename.str(string());
-        switch(it)
+        out_file.exceptions(ofstream::badbit);
+        out_file.open(filename_str_map.at(it), ios::trunc);
+        if(!out_file)
         {
-            case twodads::diagnostic_t::diag_blobs:
-                std::cout << "Initializing blobs" << std::endl;
-                header = string("# 1: time \t2: theta_max\t3: theta_max_x\t4: theta_max_y\t# 5: strmf_max\t6: strmf_max_x\t7: strmf_max_y\t# 8: theta_int\t9: theta_int_x\t10: theta_int_y\t# 11: COMvx\t12: COMvy\n");
-                init_diagnostic_output(std::string("blobs.dat"), header);
-                break;
-		
-            //case twodads::diagnostic_t::diag_probes:
-            //
-            //    header = string("#1: time\t#2: n_tilde\t#3: n\t#4: phi\t#5: phi_tilde\t#6: Omega\t#7: Omega_tilde\t#8: v_x\t#9: v_y\t#10: v_y_tilde\t#11: Gamma_r\n");
-            //    for (unsigned int n = 0; n < n_probes * n_probes; n++ ){
-            //        filename << "probe" << setw(3) << setfill('0') << n << ".dat";
-            //        init_diagnostic_output(filename.str(), header, init_flag_tprobe);
-            //        init_flag_tprobe = false;
-            //        filename.str(string());
-            //    }
-            //    init_flag_tprobe = true;
-            //    break;
-            //case twodads::diagnostic_t::diag_energy:
-            //    cout << "diag_energy\n";
-            //    header = string("#01: time\t#02: E\t#03: K\t#04: T\t#05: U\t#06: W\t#07: D1\t#08: D2\t#09: D3\t:#10: D4\t#11: D5\t#12:D6\t#13: D7\t#14: D8\t#15: D9\t#16: D10\t#17: D11\t#18: D12\t#19: D13\n");
-            //    init_diagnostic_output(string("energy.dat"), header, init_flag_energy);
-            //    break;
-            //
-            //case twodads::diagnostic_t::diag_mem:
-            //	cout << "diag_memory\n";
-            //	break;
-        default:
-                string err_msg("diagnostic_t::diagnostic_t: unknown diagnostic function requested.");
-                throw name_error(err_msg);
-                break;
-		}
+            err_msg << "Diagnostics: Could not open file" << filename_str_map.at(it) << "." << std::endl;
+            throw new diagnostics_error(err_msg.str());
+        }
+        out_file << header_str_map.at(it);
+        out_file.close();
 	}
-}
-
-
-const diagnostic_t::arr_real** diagnostic_t :: get_dptr_by_name(const twodads::field_t fname)
-{
-    const arr_real** res{nullptr};
-    switch(fname)
-    {
-        case twodads::field_t::f_theta:
-            res = &theta_ptr;
-            break;
-        case twodads::field_t::f_theta_x:
-            res = &theta_x_ptr;
-            break;
-        case twodads::field_t::f_theta_y:
-            res = &theta_y_ptr;
-            break;
-        case twodads::field_t::f_omega:
-            res = &omega_ptr;
-            break;
-        case twodads::field_t::f_omega_x:
-            res = &omega_x_ptr;
-            break;
-        case twodads::field_t::f_omega_y:
-            res = &omega_y_ptr;
-            break;
-        case twodads::field_t::f_tau:
-            res = &tau_ptr;
-            break;
-        case twodads::field_t::f_tau_x:
-            res = &tau_x_ptr;
-            break;
-        case twodads::field_t::f_tau_y:
-            res = &tau_y_ptr;
-            break;
-        case twodads::field_t::f_strmf:
-            res = &strmf_ptr;
-            break;
-        case twodads::field_t::f_strmf_x:
-            res = &strmf_x_ptr;
-            break;
-        case twodads::field_t::f_strmf_y:
-            res = &strmf_y_ptr;
-            break;
-        default:
-            std::cerr << "Requested pointer does not exist";
-            break;
-    }
-
-    return(res);
 }
 
 
@@ -149,126 +119,107 @@ void diagnostic_t :: write_logfile()
 	logfile.close();
 }
 
-/*
- *************************** Initialization for diagnostic routines ************
- */ 
-
-
-void diagnostic_t :: init_diagnostic_output(string filename, string header)
-{
-    cout << "Initializing output file " << filename << "\n";
-    stringstream err_msg;
-    ofstream output;
-    output.exceptions(ofstream::badbit);
-    output.open(filename.data(), ios::trunc);
-    if ( !output ) 
-    {
-        err_msg << "Error: " << filename << " already initialized." << std::endl;
-        throw new diagnostics_error(err_msg.str());
-    }
-    output << header;
-    output.close();
-}
 
 
 void diagnostic_t :: init_field_ptr(twodads::field_t fname, arr_real* src_ptr)
 {
-    //std :: cout << "init_field_ptr: before: " << get_dptr_by_name(fname) << ", src_ptr at " << src_ptr << std::endl;
-    const arr_real** dptr{get_dptr_by_name(fname)};
+    // Not really sure what is going on with the const_casting but it all works out.
+    const arr_real** dptr{const_cast<const arr_real**>(data_ptr_map.at(fname))};
     *dptr = src_ptr;
-    //std :: cout << "init_field_ptr: after: " << get_dptr_by_name(fname) << std::endl;
-    //std :: cout << "theta_ptr = " << theta_ptr << std::endl;
 }
 
 
-/*
- *************************** Diagnostic routines *******************************
- */ 
+//**********************************************************************************
+//*                                 Diagnostic routines                            *
+//**********************************************************************************
 
 
+// Dispatch function
+// Iterates over requested diagnostics from the config object
+// and calls the associated member functions
 void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_config_js& config)
 {
-    for(auto d_name : config.get_diagnostics())
+    diagnostic_t::dfun_ptr_t dfun_ptr{nullptr};
+
+    for(auto dname : config.get_diagnostics())
     {
-        switch(d_name)
-        {
-            case twodads::diagnostic_t::diag_blobs:
-                diag_blobs(time);
-                break;
-
-            case twodads::diagnostic_t::diag_energy:
-                //diag_energy(time);
-                break;
-
-            case twodads::diagnostic_t::diag_probes:
-                //diag_probes(time);
-                break;
-        }
+        // Map-lookup of the diagnostic routine
+        dfun_ptr = diag_func_map.at(dname);
+        // Call diagnostics for current time
+        (this->*dfun_ptr)(time);
     }
 }
 
 
-void diagnostic_t::diag_blobs(const twodads::real_t time)
+void diagnostic_t::diag_com(const twodads::field_t fieldname, const std::string filename, const twodads::real_t time) const
 {  
-	double theta_max_val{-1.0};
-	double theta_max_x{-1.0};
-	double theta_max_y{-1.0};
-	double theta_int_val{-1.0};
-	double theta_com_x{-1.0};
-	double theta_com_y{-1.0};
-	double strmf_max_val{-1.0};
-	double strmf_max_x{0.0};
-	double strmf_max_y{0.0};
-	double com_vx{0.0}, com_vy{0.0};
+    std::ofstream out_file;
 
-    static double time_old{0.0};
-    static double theta_com_x_old{0.0};
-    static double theta_com_y_old{0.0};
+    static twodads::real_t time_old{0.0};
+    static twodads::real_t com_x_old{0.0};
+    static twodads::real_t com_y_old{0.0};
 
-    const arr_real** theta_ptr2{get_dptr_by_name(twodads::field_t::f_theta)};
-    const arr_real** strmf_ptr2{get_dptr_by_name(twodads::field_t::f_strmf)};
-
+    const arr_real* const* arr_ptr2{data_ptr_map.at(fieldname)};
+    
     // Compute COM of density field
-    std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_com = utility :: com(**theta_ptr2, 1);
-    theta_int_val = std::get<0>(res_com);
-    theta_com_x = std::get<1>(res_com);
-    theta_com_y = std::get<2>(res_com);
+    std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_com = utility :: com(**arr_ptr2, 1);
+    const twodads::real_t int_val{std::get<0>(res_com)};
+    const twodads::real_t com_x{std::get<1>(res_com)};
+    const twodads::real_t com_y{std::get<2>(res_com)};
 
-    // Update radial blob velocity
-    std :: cout << "diagnostics_t :: blobs: time_old = " << time_old << ", time = " << time << std::endl;
-    com_vx = (theta_com_x - theta_com_x_old) / (time - time_old);
+    // Update com velocities
+    const twodads::real_t com_vx{(com_x - com_x_old) / (time - time_old)};
+    const twodads::real_t com_vy{(com_y - com_y_old) / (time - time_old)};
     time_old = time;
-    theta_com_x_old = theta_com_x;
-    theta_com_y_old = theta_com_y;
+    com_x_old = com_x;
+    com_y_old = com_y;
 
-    // Compute max diagnostics of density field
-    std::tuple<twodads::real_t, size_t, size_t> res_max = utility :: max_idx(**theta_ptr2, 1);
-    theta_max_val = std::get<0>(res_max);
-    theta_max_x = slab_layout.x_left + (twodads::real_t(std::get<1>(res_max)) - slab_layout.cellshift) * slab_layout.delta_x;
-    theta_max_y = slab_layout.y_lo + (twodads::real_t(std::get<2>(res_max)) - slab_layout.cellshift) * slab_layout.delta_y;
-
-    // Compute max diagnostics of potential field
-    res_max = utility :: max_idx(**strmf_ptr2, 0);
-    strmf_max_val = std::get<0>(res_max);
-    strmf_max_x = slab_layout.x_left + (twodads::real_t(std::get<1>(res_max)) - slab_layout.cellshift) * slab_layout.delta_x;
-    strmf_max_y = slab_layout.y_lo + (twodads::real_t(std::get<2>(res_max)) - slab_layout.cellshift) * slab_layout.delta_y;
-
-	std::ofstream output;
-	
 	// Write to output file
-	output.open("blobs.dat", std::ios::app);	
-	if ( output.is_open() )
+	out_file.open(filename, std::ios::app);	
+	if ( out_file.is_open() )
     {
-		output << time << "\t";
-		output << setw(12) << theta_max_val << "\t" << setw(12) << theta_max_x << "\t" << setw(12) << theta_max_y << "\t";
-		output << setw(12) << strmf_max_val << "\t" << setw(12) << strmf_max_x << "\t" << setw(12) << strmf_max_y << "\t";
-		output << setw(12) << theta_int_val << "\t" << setw(12) << theta_com_x << "\t" << setw(12) << theta_com_y << "\t";
-		output << setw(12) << com_vx << "\t" << setw(12) << com_vy << "\n" << std::endl;
-		output.close();
+		out_file << time << "\t";
+		out_file << setw(12) << int_val << "\t" << setw(12) << com_x << "\t" << setw(12) << com_y << "\t";
+		out_file << setw(12) << com_vx << "\t" << setw(12) << com_vy << "\n" << std::endl;
+		out_file.close();
 	}
 }
 
 
+void diagnostic_t::diag_max(const twodads::field_t fname, const std::string filename, const twodads::real_t time) const
+{  
+    std::ofstream out_file;
+
+    static twodads::real_t time_old{0.0};
+    static twodads::real_t max_x_old{0.0};
+    static twodads::real_t max_y_old{0.0};
+
+    const arr_real* const * arr_ptr2{data_ptr_map.at(fname)};
+    
+    // Compute COM of density field
+    std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_max = utility :: com(**arr_ptr2, 1);
+    const twodads::real_t max_val{std::get<0>(res_max)};
+    const twodads::real_t max_x{slab_layout.x_left + (std::get<1>(res_max) - slab_layout.cellshift) * slab_layout.delta_x};
+    const twodads::real_t max_y{slab_layout.y_lo + (std::get<2>(res_max) - slab_layout.cellshift) * slab_layout.delta_y};
+    // Update com velocities
+    const twodads::real_t max_vx{(max_x - max_x_old) / (time - time_old)};
+    const twodads::real_t max_vy{(max_y - max_y_old) / (time - time_old)};
+    
+    // Store for next call
+    time_old = time;
+    max_x_old = max_x;
+    max_y_old = max_y;
+
+	// Write to output file
+	out_file.open(filename, std::ios::app);	
+	if ( out_file.is_open() )
+    {
+		out_file << time << "\t";
+		out_file << setw(12) << max_val << "\t" << setw(12) << max_x << "\t" << setw(12) << max_y << "\t";
+		out_file << setw(12) << max_vx << "\t" << setw(12) << max_vy << "\n" << std::endl;
+		out_file.close();
+	}
+}
 // void diagnostics::diag_energy(const twodads::real_t time)
 // {
 //     ofstream output;

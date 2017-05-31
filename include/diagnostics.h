@@ -17,6 +17,9 @@ using namespace std;
 class diagnostic_t {
 	public:
         using value_t = twodads::real_t;
+        // Pointer type to diagnostic member functions
+        // All diagnostic functions are required to have the same signature
+        using dfun_ptr_t = void (diagnostic_t::*)(const twodads::real_t) const;
 
 #ifdef DEVICE
         using arr_real = cuda_array_bc_nogp<value_t, allocator_device>;
@@ -31,27 +34,43 @@ class diagnostic_t {
         /// does nothing
 		~diagnostic_t();
 
-        /// Update the diag_array members from GPU memory. They are used to
-        /// compute diagnostic quantities    
-        //void update_arrays(slab_cuda&);
-
         void init_field_ptr(twodads::field_t, arr_real*);
         /// Call all diagnostic routines, as specified in the slab_config object
         void write_diagnostics(const twodads::real_t, const slab_config_js&);
 
-
     private:
-        twodads::slab_layout_t slab_layout;
+        const twodads::slab_layout_t slab_layout;
 		/// Initialize diagnostic routines: Write file headers
-		void init_diagnostic_output(const std::string, const string);
+		void init_diagnostic_output(const std::string, const string) const;
 
         /// For data pointer lookup
         /// TODO: Explore how to do this properly with a map.
-        const arr_real** get_dptr_by_name(const twodads::field_t);
+        const arr_real* const * get_dptr_by_name(const twodads::field_t) const;
 
-		/// @brief Write blob diagnostics:
-        /// @detailed blobs.dat: t theta_max theta_max_x theta_max_y strmf_max strmf_max_x strmf_max_y int(theta) int(theta *x) int(theta_y) V_(X,COM) V(Y,COM) WXX WYY DXX DYY
-        void diag_blobs(const twodads::real_t);
+        inline void diag_com_theta(const twodads::real_t time) const
+        { diag_com(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_com_theta), time); }
+        inline void diag_com_tau(const twodads::real_t time) const
+        { diag_com(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
+        inline void diag_max_theta(const twodads::real_t time) const
+        { diag_max(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_max_theta), time); }
+        inline void diag_max_tau(const twodads::real_t time) const
+        {diag_max(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_max_tau), time); }
+
+        // Define the header strings of all diagnostic routines
+        // Initialized in diagnostics.cpp
+        static const std::map<twodads::diagnostic_t, std::string> header_str_map;
+        static const std::map<twodads::diagnostic_t, std::string> filename_str_map;
+
+        std::map<twodads::diagnostic_t, dfun_ptr_t> diag_func_map;
+
+        // We really want the diagnostics to be read only. So mark everything as const.
+        // This leads to some weird const-casting, as in init_field_ptr. But it seems
+        // to work out. The data pointers are read-only and the diagnostic output is usable.
+		///@brief Write out com diagnostics
+        void diag_com(const twodads::field_t, const std::string, const twodads::real_t) const;
+        ///@brief Write out max diagnostics
+        void diag_max(const twodads::field_t, const std::string, const twodads::real_t) const;
+
         ///@brief Compute energy integrals for various turbulence models
         ///@param time Time of output
         ///@detailed energy.dat: t E K T U W D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 <br>
@@ -86,16 +105,12 @@ class diagnostic_t {
         const arr_real *omega_ptr, *omega_x_ptr, *omega_y_ptr;
         const arr_real *tau_ptr, *tau_x_ptr, *tau_y_ptr;
         const arr_real *strmf_ptr, *strmf_x_ptr, *strmf_y_ptr;
-	
+        // assign data pointers to names of the fields for internal use.
+        const std::map<twodads::field_t, const arr_real**> data_ptr_map;
+
         //unsigned int n_probes; /// Number of probes
 		//bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
         //twodads::real_t theta_bg; /// Subtract uniform background on theta
-		// Flags which output files have been initialized
-		//bool init_flag_blobs; /// True if blobs.dat has been initialized
-        //bool init_flag_energy; /// True if energy.dat has been initialized
-        //bool init_flag_particles; /// Not implemented yet
-        //bool init_flag_tprobe; /// Not implemented yet
-        //bool init_flag_oprobe; /// Not implemented yet
 };
 
 #endif //DIAGNOSTICS_H	

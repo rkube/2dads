@@ -357,11 +357,11 @@ namespace twodads {
      */
     enum class diagnostic_t 
     {
-        diag_blobs,         ///< Information on blob dynamics
-        //diag_com_theta,     ///< COM dynamics on theta field
-        //diag_com_tau,       ///< COM dynamics of tau field
-        //diag_max_theta,     ///< max dynamics on theta
-        //diag_max_tau,       ///< max dynamics on tau
+        //diag_blobs,         ///< Information on blob dynamics
+        diag_com_theta,     ///< COM dynamics on theta field
+        diag_com_tau,       ///< COM dynamics of tau field
+        diag_max_theta,     ///< max dynamics on theta
+        diag_max_tau,       ///< max dynamics on tau
         //diag_max_omega,     ///< max dynamics on omega
         //diag_max_strmf,     ///< max dynamics on strmf
         diag_energy,        ///< Energetics for turbulence simulations
