@@ -13,6 +13,7 @@
 #include "solvers.h"
 #include "utility.h"
 
+#include <iostream>
 #include <cassert>
 #include <sstream>
 #include <fstream>
@@ -1038,7 +1039,7 @@ namespace detail
                         throw not_implemented_error(std::string("Derivatives order > 2 are not implemented"));
                     }
                     break;
-            } // switch
+            } // switch(dir)
         } // impl_deriv
 
 
@@ -1078,7 +1079,7 @@ class deriv_base_t
     deriv_base_t() {}
     virtual ~deriv_base_t() {}
 
-    // Computes x derivative.
+    // Computes x derivative.      
     virtual void dx(cuda_array_bc_nogp<T, allocator>&,
                     cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t) = 0;
@@ -1093,7 +1094,8 @@ class deriv_base_t
                                 cuda_array_bc_nogp<T, allocator>&,
                                 const size_t, const size_t) = 0;
 
-    // Computes poisson brackets using arakawa scheme
+    // Computes poisson bracket for the two input fields
+    // result = {f, g} = dx(f dy(g)) - dy(f dx(g))
     virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           cuda_array_bc_nogp<T, allocator>&,
@@ -1110,8 +1112,8 @@ class deriv_base_t
 
 
 /***********************************************************************************
- *  Implmentation of finite difference, spectral derivation and elliptical solvers 
- *  for semi-periodic boundary geometries       
+ *  Implmentation of finite difference, spectral derivation and elliptical solvers *
+ *  for semi-periodic boundary geometries                                          *
  ***********************************************************************************/
 
 template <typename T, template <typename> class allocator>
@@ -1253,8 +1255,10 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                               const size_t t_srcu, const size_t t_srcv, const size_t t_dst)
         {
             assert(u.is_transformed(t_srcu) == false);
-            assert(u.is_transformed(t_srcv) == false);
-            detail :: fd :: impl_arakawa(u, v, dst, t_srcu, t_srcv, t_dst, allocator<T>{});
+            assert(v.is_transformed(t_srcv) == false);
+            // The Arakawa scheme computes -{f,g} = {g,f}.
+            // Swap the position of the input parameters here.
+            detail :: fd :: impl_arakawa(v, u, dst, t_srcv, t_srcu, t_dst, allocator<T>{});
         }
 
 
@@ -1445,23 +1449,23 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             std::cout << "deriv_spectral_t :: deriv_spectral_t: constructed" << std::endl;
         }
 
-        // Wrapper for private method deriv which fetches the right map corresponding to
-        // x/y derivation
+        // Delegate by tag-based dispatching
         virtual void dx(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
+            std :: cout << "deriv_spectral_t :: dx" << std::endl;
             assert(src.is_transformed(t_src));
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::x, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         }
 
-        // Wrapper for private method deriv which fetches the right map corresponding to
-        // x/y derivation
+        // Delegate by tag-based dispatching
         virtual void dy(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
+            std :: cout << "deriv_spectral_t :: dy" << std::endl;
             assert(src.is_transformed(t_src));
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::y, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);

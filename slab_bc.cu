@@ -653,12 +653,10 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
             // Input to Arakawa scheme is from in-place DFTs of dynamic fields.
             // Get data from t_src.
             // Store in t_dst time index of RHS
-            my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, 0, t_dst);
+            //my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, 0, t_dst);
+            my_derivs -> pbracket(strmf, theta, theta_rhs, 0, t_src, t_dst);
             break;
     }
-    
-    //theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-    //                    {return (-rhs);}, theta_y, 0, t_dst);
 }
 
 
@@ -685,9 +683,8 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 
         case twodads::grid_t::cell_centered:
             // Store in t_dst time index of RHS
-            assert(omega.is_transformed(t_src) == false && "rhs_omega_ic:: omega(t_src) must be in configuration space");
-            assert(strmf.is_transformed(0) == false && "rhs_omega_ic :: strmf(0) must be in configuration space");
-            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
+            //my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
+            my_derivs -> pbracket(strmf, omega, omega_rhs, 0, t_src, t_dst);
             break;
     }
     

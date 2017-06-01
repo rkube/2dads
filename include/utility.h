@@ -132,7 +132,7 @@ namespace utility
     void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tidx, std::ostream& os)
     {
         address_t<T>* address = vec.get_address_ptr();
-        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my()  + vec.get_geom().get_pad_y(): vec.get_geom().get_my()};
+        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my() + vec.get_geom().get_pad_y() : vec.get_geom().get_my()};
 
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
@@ -150,7 +150,7 @@ namespace utility
     {
         std::ofstream os(fname, std::ofstream::trunc);
         address_t<T>* address = vec.get_address_ptr();
-        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my() : vec.get_geom().get_my() + vec.get_geom().get_pad_y()};
+        const size_t nelem_m{vec.is_transformed(tidx) ? vec.get_geom().get_my()  + vec.get_geom().get_pad_y(): vec.get_geom().get_my()};
 
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
