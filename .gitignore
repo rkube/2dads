@@ -5,3 +5,4 @@
 *.o
 *.h5
 .vscode/
+doc/doc_html

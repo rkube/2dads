@@ -1,5 +1,5 @@
 #
-include Makefile_linux.inc
+include Makefile_osx.inc
 # Subdirectories
 TEST_DIR = tests
 
@@ -25,9 +25,6 @@ slab_bc_device.o: slab_bc.cu
 
 diagnostics_host.o: diagnostics.cpp include/diagnostics.h
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES)-c -o $(OBJ_DIR)/diagnostics_host.o diagnostics.cpp 
-
-#diagnostics_cu.o: diagnostics_cu.cu include/diagnostics_cu.h include/cuda_darray.h include/cuda_array4.h
-#	$(CUDACC) $(CUDACFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/diagnostics_cu.o diagnostics_cu.cu $(INCLUDES)
 
 2dads_host: 
 	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_host main_bc.cpp $(OBJECTS_HOST) $(LFLAGS)

@@ -4,7 +4,6 @@
  * Does addressing of array types and defines interpolators for boundary conditions
  */
 
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define CUDA_MEMBER __host__ __device__
 #else
@@ -18,11 +17,23 @@
 
 // Base class for ghost point interpolation.
 // The derived classes implement ghost point interpolation via operator()
+
+/**
+ .. cpp:class:: template <typename T> bval_interpolator
+
+    Base class for ghost point interpolation.
+    Derived classes implement interpolation via operator()
+*/
+
 template <typename T>
 class bval_interpolator
 {
     protected: 
         // Do not instantiate bval_interpolators directly, but only via derived classes
+        /** 
+          .. cpp:function:: CUDA_MEMBER bval_interpolator :: bval_interpolator(const T _bval)
+
+        */
         CUDA_MEMBER bval_interpolator(const T _bval) : bval(_bval) {};
     public:
         /// Interpolate the value outside the domain given last value inside and deltax
