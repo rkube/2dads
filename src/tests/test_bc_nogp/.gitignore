@@ -1,0 +1,7 @@
+test_derivs_host
+test_derivs_device
+test_derivs_spectral_host
+test_derivs_spectral_device
+*.dSYM
+output.h5
+*.dat

@@ -1,0 +1,5 @@
+test_arakawa_host
+test_arakawa_device
+*.dSYM
+output.h5
+*.dat

@@ -1,0 +1,4 @@
+test_derivs_spectral_host
+test_derivs_spectral_device
+*.dSYM
+*.dat

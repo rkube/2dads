@@ -1,0 +1,7 @@
+test_diff_host
+test_diff_device
+test_stiff_host
+test_stiff_device
+*.dSYM
+output.h5
+*.dat
