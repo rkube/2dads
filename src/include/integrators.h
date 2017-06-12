@@ -61,15 +61,35 @@ namespace detail
 
 /*
  * Interface to time integrator routines
- *
  */
 template <typename T, template<typename> class allocator>
 class integrator_base_t
 {
+    /**
+     .. cpp:class:: template<typename T, template<typename> class allocator> integrator_base_t
+
+      Methods for time integration of dynamical fields.
+    */
     public:
         integrator_base_t(){}
         virtual ~integrator_base_t() {}
         
+        /**
+         .. cpp:function:: virtual void integrate(cuda_array_bc_nogp<T, allocator>& field, const cuda_array_bc_nogp<T, allocator>& explicit_part, const size_t t_src1, const size_t t_src2, const size_t t_src3, const size_t t_dst, const size_t order) = 0
+
+         :param cuda_array_bc_nogp<T, allocator>& field: Field to be integrated.
+         :param const cuda_array_bc_nogp<T, allocator>& explicit_part: Explicit part (non-diffusion terms).
+         :param const size_t t_src1: Time index for previous time-step data of field.
+         :param const size_t t_src2: Time index for 2nd previous time-step data of field.
+         :param const size_t t_src3: Time index for 3rd previous time-step data of field.
+         :param const size_t t_dst: Time index where the new time-step data is being written to.
+         :param const size_t order: Order of the time integration.
+
+         Interface to Karniadakis time integration scheme. Data at time indices t_src3...t_src1 is used
+         to integrate the field in time. Data for the corresponding data of the explicit
+         parts is inferred from t_src as t_src-1. 
+
+        */
         virtual void integrate(cuda_array_bc_nogp<T, allocator>&, 
                                const cuda_array_bc_nogp<T, allocator>&, 
                                const size_t, const size_t, const size_t, const size_t, const size_t) = 0;
@@ -80,6 +100,12 @@ class integrator_base_t
 template <typename T, template<typename> class allocator>
 class integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
 {
+    /**
+     .. cpp:class:: template<typename T, template<typename> class allocator> integrator_karniadakis_fd_t : public integrator_base_t<T, allocator>
+
+      Implements Karniadakis time integration using finit-difference / semi-spectral methods.
+
+    */
     public:
 #ifdef DEVICE
     using dft_t = cufft_object_t<T>;
@@ -422,6 +448,12 @@ void integrator_karniadakis_fd_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 template <typename T, template<typename> class allocator>
 class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
 {
+    /**
+     .. cpp:class:: template<typename T, template<typename> class allocator> integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
+
+      Implements Karniadakis time integration using bi-spectral methods.
+      
+    */
     public:
         integrator_karniadakis_bs_t(const twodads::slab_layout_t& _sl,
                                     const twodads::bvals_t<T>& _bv,

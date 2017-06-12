@@ -17,14 +17,14 @@ slab_config.o: slab_config.cpp include/slab_config.h
 output.o: output.cpp include/output.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $(OBJ_DIR)/output.o output.cpp 
 
-slab_bc_host.o: slab_bc.cpp
+slab_bc_host.o: slab_bc.cpp include/slab_bc.h
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_host.o slab_bc.cpp 
 
-slab_bc_device.o: slab_bc.cu
+slab_bc_device.o: slab_bc.cu include/slab_bc.h
 	$(CUDACC) $(NVCCFLAGS) $(DEFINES) -DDEVICE $(INCLUDES) -c -o $(OBJ_DIR)/slab_bc_device.o slab_bc.cu 
 
 diagnostics_host.o: diagnostics.cpp include/diagnostics.h
-	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES)-c -o $(OBJ_DIR)/diagnostics_host.o diagnostics.cpp 
+	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES) -c -o $(OBJ_DIR)/diagnostics_host.o diagnostics.cpp 
 
 2dads_host: 
 	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_host main_bc.cpp $(OBJECTS_HOST) $(LFLAGS)

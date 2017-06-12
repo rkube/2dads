@@ -14,19 +14,21 @@
 #include <exception>
 #include <map>
 
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #include "cublas_v2.h"
 #include "cusparse.h"
 #endif //__CUDACC__
 
 
-
-
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 class cublas_err : public std::exception
 {
+    /**
+     .. cpp:class:: cublas_err : public std::exception
+
+     Errors from cuBLAS calls.
+    
+    */
     public:
         /// Error code encoded as string
         cublas_err(const cublasStatus_t err_code) : error(cublas_status_str.at(err_code)) {}; 
@@ -52,6 +54,12 @@ class cublas_err : public std::exception
 
 class cusparse_err : public std::exception 
 {
+    /**
+     .. cpp:class:: cusparse_err : public std::exception
+
+     Errors from cusparse calls.
+    
+    */
     public:
         /// Error code encoded as string
         cusparse_err(const cusparseStatus_t err_code) : error(cusparse_status_str.at(err_code)) {};
@@ -74,9 +82,14 @@ class cusparse_err : public std::exception
 };
 
 
-/// GPU call errorss
 class gpu_error : public std::exception
 {
+    /**
+     .. cpp:class:: gpu_error : public std::exception
+
+     Error launching a CUDA kernel.
+    
+    */
     public:
         gpu_error(const std::string& err) : error(err) {};
         ~gpu_error() throw() {};
@@ -90,6 +103,13 @@ class gpu_error : public std::exception
 
 class out_of_bounds_err : public std::exception
 {
+    /**
+     .. cpp:class:: cusparse_err : public std::exception
+
+     Element access out of bounds.
+    
+    */
+
     public:
         /// Error code encoded as a string
         out_of_bounds_err(const std::string& err) : error(err) {};
@@ -101,38 +121,13 @@ class out_of_bounds_err : public std::exception
 };
 
 
-/// Memory error in operators
-class operator_err : public std::exception
-{
-    public:
-        operator_err(const std::string& err) : error(err) {};
-        ~operator_err() throw() {};
-        virtual const char* what() const throw() {return error.data();};
-
-    private:
-        const std::string error;
-};
-
-
-/// Invalid size for array construction
-class invalid_size : public std::exception
-{
-    public:
-        /// Write error message 
-        invalid_size(const std::string& err) : error(err) {};
-        ~invalid_size() throw() {};
-        virtual const char* what() const throw() {return error.data();};
-
-    private:
-        //int min_size;
-        //int max_size;
-        //int selected_size;
-        const std::string error;
-};
-
-
-/// Configuration file errors
 class config_error : public std::exception{
+    /**
+     .. cpp:class:: config_error : public std::exception
+
+     Error in slab configuration.
+    
+    */
     public:
         config_error(const std::string& err) : error(err) {};
         ~config_error() throw() {};
@@ -143,7 +138,6 @@ class config_error : public std::exception{
 };
 
 
-/// Errors from the diagnostic unit
 class diagnostics_error : public std::exception
 {
     public:
@@ -156,23 +150,14 @@ class diagnostics_error : public std::exception
 };
 
 
-/// Invalid field name
-class name_error : public std::exception
-{
-    public:
-        name_error(const std::string& err) : error(err) {};
-        ~name_error() throw() {};
-        virtual const char* what() const throw() {return error.data();};
-
-    private:
-        const std::string error;
-};
-
-
-/// When numerics goes wrong
-
 class numerics_error : public std::exception
 {
+    /**
+     .. cpp:class:: numerics_error : public std::exception
+
+     General error in numerical method.
+    
+    */
     public:
         numerics_error(const std::string& err) : error(err) {};
         ~numerics_error() throw() {};
@@ -183,9 +168,14 @@ class numerics_error : public std::exception
 };
 
 
-/// things not implemented yet
 class not_implemented_error : public std::exception
 {
+    /**
+     .. cpp:class:: not_implemented_error : public std::exception
+
+     Thrown when a feature is not implemented or supported.
+    
+    */
     public:
         not_implemented_error(const std::string& err) : error(err) {};
         ~not_implemented_error() throw() {};
@@ -196,9 +186,14 @@ class not_implemented_error : public std::exception
 };
 
 
-/// Print error from zgtsv solver
 class mkl_zgtsv_exception : public std::exception
 {
+    /**
+     .. cpp:class:: mkl_zgtsv_exception : public std::exception
+
+     Error from MKL ZGTSV solver.
+    
+    */
     public:
         mkl_zgtsv_exception(const std::string& err) : error(err) {};
         ~mkl_zgtsv_exception() throw() {};

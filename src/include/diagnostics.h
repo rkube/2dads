@@ -15,6 +15,15 @@
 using namespace std;
 
 class diagnostic_t {
+    /**
+     .. cpp:namspace-push:: diagnostic_c
+
+    */
+
+    /** 
+     .. cpp:class:: diagnostic_t
+
+    */
 	public:
         using value_t = twodads::real_t;
         // Pointer type to diagnostic member functions
@@ -29,35 +38,85 @@ class diagnostic_t {
         using arr_real = cuda_array_bc_nogp<value_t, allocator_host>;
 #endif
 
-        /// Default constructor, pass a slab_config_js object.
+        /**
+         .. cpp:function diagnostic_t(const slab_config_js& sc)
+
+         :param const slab_config_js& sc: Slab configuration
+
+        */
 		diagnostic_t(const slab_config_js&);
-        /// does nothing
+    
 		~diagnostic_t();
 
+        /**
+         .. cpp:function init_field_ptr(const twodads::field_t fname, cuda_array_bc_nogp<value_t, allocator>* fptr)
+
+         :param const twodads::field_t fname: Name of the field
+         :param cuda_array_bc_nogp<value_t, allocator>*: Pointer to the data field
+   
+        Initializes member pointers to the data fields used to compute the diagnostics.
+
+        */
         void init_field_ptr(twodads::field_t, arr_real*);
-        /// Call all diagnostic routines, as specified in the slab_config object
+
+        /**
+         .. cpp:function write_diagnostics (const twodads::real_t time, const slab_config_js& sc)
+
+         :param const twodads::real_t time: Simulation time
+         :param const slab_config_js& sc: Slab configuration
+
+        Execute the diagnostic routines speicified in the configuration for the specified time.
+
+        */
         void write_diagnostics(const twodads::real_t, const slab_config_js&);
 
     private:
         const twodads::slab_layout_t slab_layout;
-		/// Initialize diagnostic routines: Write file headers
-		void init_diagnostic_output(const std::string, const string) const;
 
-        /// For data pointer lookup
-        /// TODO: Explore how to do this properly with a map.
-        const arr_real* const * get_dptr_by_name(const twodads::field_t) const;
+        /**
+         .. cpp:function inline void diag_com_theta(const twodads::real_t time) const
 
+         :param const twodads::real_t time: Time for simulation output.
+
+         Writes center-of-mass diagnostics of theta field. Forwards to diag_com.
+        
+        */
         inline void diag_com_theta(const twodads::real_t time) const
         { diag_com(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_com_theta), time); }
+
+        /**
+         .. cpp:function inline void diag_com_tau(const twodads::real_t time) const
+
+         :param const twodads::real_t time: Time for simulation output.
+
+         Writes center-of-mass diagnostics of tau field. Forwards to diag_com.
+        
+        */
         inline void diag_com_tau(const twodads::real_t time) const
         { diag_com(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
+
+        /**
+         .. cpp:function inline void diag_max_theta(const twodads::real_t time) const
+
+         :param const twodads::real_t time: Time for simulation output.
+
+         Writes maximum diagnostics of theta field. Forwards to diag_max.
+        
+        */
         inline void diag_max_theta(const twodads::real_t time) const
         { diag_max(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_max_theta), time); }
+
+        /**
+         .. cpp:function inline void diag_max_tau(const twodads::real_t time) const
+
+         :param const twodads::real_t time: Time for simulation output.
+
+         Writes maximum diagnostics of tau field. Forwards to diag_max.
+        
+        */
         inline void diag_max_tau(const twodads::real_t time) const
         {diag_max(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_max_tau), time); }
 
-        // Define the header strings of all diagnostic routines
-        // Initialized in diagnostics.cpp
         static const std::map<twodads::diagnostic_t, std::string> header_str_map;
         static const std::map<twodads::diagnostic_t, std::string> filename_str_map;
 
@@ -66,7 +125,9 @@ class diagnostic_t {
         // We really want the diagnostics to be read only. So mark everything as const.
         // This leads to some weird const-casting, as in init_field_ptr. But it seems
         // to work out. The data pointers are read-only and the diagnostic output is usable.
-		///@brief Write out com diagnostics
+		
+        /**
+         .. cpp:function:
         void diag_com(const twodads::field_t, const std::string, const twodads::real_t) const;
         ///@brief Write out max diagnostics
         void diag_max(const twodads::field_t, const std::string, const twodads::real_t) const;
@@ -111,6 +172,11 @@ class diagnostic_t {
         //unsigned int n_probes; /// Number of probes
 		//bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
         //twodads::real_t theta_bg; /// Subtract uniform background on theta
+
+    /**
+     .. cpp:namespace-pop::
+
+    */
 };
 
 #endif //DIAGNOSTICS_H	

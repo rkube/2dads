@@ -6,8 +6,10 @@
 Welcome to 2dads's documentation!
 =================================
 
+Here is what you get:
+
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    tutorial

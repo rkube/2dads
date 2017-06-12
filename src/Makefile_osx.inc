@@ -6,7 +6,7 @@ CFLAGS = -DDEBUG -DMKL_ILP_64 -O0 -g -std=c++14 -stdlib=libc++ -Wall
 MKLROOT	= /opt/intel/mkl
 IOMPDIR = /opt/intel/compilers_and_libraries_2016.3.170/mac/compiler/lib/
 
-INCLUDES = -I/Users/ralph/source/2dads/src/include -I/usr/local/cuda/include -I${MKLROOT}/include -I/opt/local/include -I/Users/ralph/local/include
+INCLUDES = -I/Users/ralph/source/2dads/src/include -I/opt/local/include -I/usr/local/cuda/include -I${MKLROOT}/include -I/Users/ralph/local/include
 
 #LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5 -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
 #LFLAGS = -L${MKLROOT}/lib -L${IOMPDIR} -L/Users/ralph/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -lpthread -lm -ldl

@@ -1,7 +1,3 @@
-/*
- * Interface to derivation functions
- */
-
 #ifndef DERIVATIVES_H
 #define DERIVATIVES_H
 
@@ -74,9 +70,9 @@ void kernel_threepoint_single_row(const T* u, address_t<T>** address_u,
 }
 
 
-/// T* u is the data pointed to by a cuda_array u, address_u its address object
-/// T* u is the data pointed to by a cuda_array v, address_v its address object
-/// Assume that u and v have the same geometry
+// T* u is the data pointed to by a cuda_array u, address_u its address object
+// T* u is the data pointed to by a cuda_array v, address_v its address object
+// Assume that u and v have the same geometry
 template <typename T>
 __global__
 void kernel_arakawa_center(const T* u, address_t<T>** address_u, 
@@ -889,9 +885,9 @@ namespace detail
     } // namespace fd
 
 
-    /****************************************************************************
-     *          Implementation of bispectral derivation methods                 *
-     ****************************************************************************/
+    ////////////////////////////////////////////////////////////////////////////////
+    //          Implementation of bispectral derivation methods                   //
+    ////////////////////////////////////////////////////////////////////////////////
     namespace bispectral
 
     {
@@ -1066,59 +1062,157 @@ namespace detail
 } // End namespace detail
 
 
-/*****************************************************************************
- *           Interface to derivation and elliptical solvers                  *
- *****************************************************************************/
+///////////////////////////////////////////////////////////////////////////////
+//           Interface to derivation and elliptical solvers                  //
+///////////////////////////////////////////////////////////////////////////////
 
 
 template <typename T, template <typename> class allocator>
 class deriv_base_t
 {
+    /**
+     .. cpp:namespace-push:: deriv_base_t
+
+    */
+
+    /**
+     .. cpp:class:: deriv_base_t
+
+     Defines an interface to derivatives and Laplace solvers.
+
+    */
     public:
 
     deriv_base_t() {}
     virtual ~deriv_base_t() {}
 
-    // Computes x derivative.      
+    /**
+     .. cpp:function::  virtual void deriv_base_t :: dx(cuda_array_bc_nogp<T, allocator>& src, cuda_array_bc_nogp<T, allocator>& dst, const size_t t_src, const size_t t_ds, const size_t order) = 0
+
+      :param cuda_array_bc_nogp<T, allocator>& src: Input array
+      :param cuda_array_bc_nogp<T, allocator>& dst: Output array
+      :param const size_t t_src: Time index for input array
+      :param const size_t t_dst: Time index for output array
+      :param const size_t order: Order of the derivative. Either 1 or 2.
+
+      Calculates d^(order)/ dx^(order) the derivative of src, stores it in dst.
+      Implemented by derived classes.
+      
+    */
+              
     virtual void dx(cuda_array_bc_nogp<T, allocator>&,
                     cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t) = 0;
 
-    // Computes y derivative
+    /**
+     .. cpp:function::  virtual void deriv_base_t :: dy (cuda_array_bc_nogp<T, allocator>& src, cuda_array_bc_nogp<T, allocator>& dst, const size_t t_src, const size_t t_dst, const size_t order) = 0
+     
+      :param cuda_array_bc_nogp<T, allocator>& src: Input array
+      :param cuda_array_bc_nogp<T, allocator>& dst: Output array
+      :param const size_t t_src: Time index for input array
+      :param const size_t t_src: Time index for output array
+      :param const size_t order: Order of the derivative, either 1 or 2.
+
+
+      Calculates d^(order)/ dy^(order) the derivative of src, stores it in dst.
+      Implemented by derived classes.
+
+    */
     virtual void dy(cuda_array_bc_nogp<T, allocator>&,
                     cuda_array_bc_nogp<T, allocator>&,
                     const size_t, const size_t, const size_t) = 0;
                       
     // Inverts laplace equation
+
+    /**
+     .. cpp:function:: virtual void deriv_base_t :: invert_laplace(cuda_array_bc_nogp<T, allocator>& src, cuda_array_bc_nogp<T, allocator>& dst, const size_t t_src, const size_t t_dst) = 0
+
+      :param cuda_array_bc_nogp<T, allocator>& src: Input array
+      :param cuda_array_bc_nogp<T, allocator>& dst: Output array
+      :param const size_t t_src: Time index for input array
+      :param const size_t t_src: Time index for output array
+
+      Inverts the laplace equation, (d^2/dx^2 + d^2/dy^2) f = g.
+
+    */
     virtual void invert_laplace(cuda_array_bc_nogp<T, allocator>&,
                                 cuda_array_bc_nogp<T, allocator>&,
                                 const size_t, const size_t) = 0;
 
+
     // Computes poisson bracket for the two input fields
     // result = {f, g} = dx(f dy(g)) - dy(f dx(g))
+
+    /**
+     .. cpp:function:: virtual void deriv_base_t :: pbracket(const cuda_array_bc_nogp<T, allocator>& f, const cuda_array_bc_nogp<T, allocator>& g, const cuda_array_bc_nogp<T, allocator>& dst, const size_t t_f, const size_t t_g, const_size_t t_dst) = 0 
+    
+     :param const cuda_array_bc_nogp<T, allocator>& f: Array for f
+     :param const cuda_array_bc_nogp<T, allocator>& g: Array for g
+     :param const cuda_array_bc_nogp<T, allocator>& dst: Output array 
+     :param const size_t t_f: Time index for f array
+     :param const size_t t_g: Time index for g array
+     :param const size_t t_dst: Time index for output array
+
+     Compute Poisson brackets of the input fields and stores them in dst.
+     This method uses the Arakawa scheme.
+     dst = {f, g} = d/dx(f d/dy(g)) - d/dy(f d/dx(g))
+
+    */
     virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           cuda_array_bc_nogp<T, allocator>&,
                           const size_t, const size_t, const size_t) = 0;
 
-    // Computes poisson brackets from other scheme
+    /**
+     .. cpp:function:: virtual void deriv_base_t :: pbracket(const cuda_array_bc_nogp<T, allocator>& f, const cuda_array_bc_nogp<T, allocator>& g, const cuda_array_bc_nogp<T, allocator>& dst, const size_t t_f, const size_t t_g, const_size_t t_dst) = 0 
+    
+     :param const cuda_array_bc_nogp<T, allocator>& f: Array for f
+     :param const cuda_array_bc_nogp<T, allocator>& g: Array for g
+     :param const cuda_array_bc_nogp<T, allocator>& dst: Output array 
+     :param const size_t t_f: Time index for f array
+     :param const size_t t_g: Time index for g array
+     :param const size_t t_dst: Time index for output array
+
+     Compute Poisson brackets of the input fields and stores them in dst.
+     This method does not use the Arakawa scheme.
+     dst = {f, g} = d/dx(f d/dy(g)) - d/dy(f d/dx(g))
+
+    */
     virtual void pbracket(const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           const cuda_array_bc_nogp<T, allocator>&,
                           cuda_array_bc_nogp<T, allocator>&,
                           const size_t, const size_t, const size_t) = 0;
+
+    /**
+     .. cpp:namespace-pop::
+
+     */
 };
 
 
-/***********************************************************************************
- *  Implmentation of finite difference, spectral derivation and elliptical solvers *
- *  for semi-periodic boundary geometries                                          *
- ***********************************************************************************/
+/////////////////////////////////////////////////////////////////////////////////////
+//  Implmentation of finite difference, spectral derivation and elliptical solvers //
+//  for semi-periodic boundary geometries                                          //
+/////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T, template <typename> class allocator>
 class deriv_fd_t : public deriv_base_t<T, allocator>
 {
+    /**
+     .. cpp:namespace-push:: deriv_fd_t 
+
+    */
+
+    /**
+     .. cpp:class:: deriv_fd_t : public deriv_base_t
+
+     Implements derivative and Laplace members using finite-difference scheme
+     in x-direction and spectral methods in y-direction. Does not provide
+     an override for pbracket(f_x, f_y, g_x, g_y,...) member.
+
+    */
     public:
         using cmplx_t = CuCmplx<T>;
         using cmplx_arr = cuda_array_bc_nogp<cmplx_t, allocator>;
@@ -1302,6 +1396,11 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         cmplx_arr   diag;
         cmplx_arr   diag_l;
         cmplx_arr   diag_u;
+
+    /**
+     .. cpp:namespace-pop::
+
+     */
 };
 
 
@@ -1325,27 +1424,13 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t& _geom) :
     my_solver{new elliptic_t(get_geom())},
     // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy1{get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(), 1},
-               //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}),
-               //1},
-    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     coeffs_dy2{get_geom_my21(), twodads::bvals_t<CuCmplx<T>>(), 1},
-               //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 
-               //1},
-    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1},
-         //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 
-         //1),
-    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_l{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1},
-           //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 1),
-    // Very fancy way of initializing a complex Nx * My / 2 + 1 array
     diag_u{get_geom_transpose(), twodads::bvals_t<CuCmplx<T>>(), 1}
-           //twodads::bvals_t<CuCmplx<T>>(twodads::bc_t::bc_null, twodads::bc_t::bc_null, cmplx_t{0.0}, cmplx_t{0.0}), 1)
 {
     // Initialize the diagonals in a function as CUDA currently doesn't allow to call
     // Lambdas in the constructor.
-
-    //detail :: impl_init_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
     utility :: bispectral :: init_deriv_coeffs(get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
     init_diagonals();
 }
@@ -1414,7 +1499,19 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
 template <typename T, template <typename> class allocator>
 class deriv_spectral_t : public deriv_base_t<T, allocator>
 {
+    /**
+     .. cpp:namespace-push:: deriv_fd_t 
 
+    */
+
+    /**
+     .. cpp:class:: deriv_bs_t : public deriv_base_t
+
+     Implements derivative and Laplace members using finite-difference scheme
+     in x-direction and spectral methods in y-direction. Does not provide
+     an override for pbracket(f_x, f_y, g_x, g_y,...) member.
+
+    */
     public:
         using cmplx_t = CuCmplx<T>;
         using cmplx_arr = cuda_array_bc_nogp<cmplx_t, allocator>;
@@ -1430,6 +1527,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
    
         deriv_spectral_t(const twodads::slab_layout_t& _geom) :
         geom{_geom},
+        // Transposed geometry. Required for transposed arrays passed to the  Matrix solver.
         geom_my21{get_geom().get_xleft(), 
                 get_geom().get_deltax(), 
                 get_geom().get_ylo(), 
@@ -1449,24 +1547,22 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             std::cout << "deriv_spectral_t :: deriv_spectral_t: constructed" << std::endl;
         }
 
-        // Delegate by tag-based dispatching
         virtual void dx(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
-            std :: cout << "deriv_spectral_t :: dx" << std::endl;
             assert(src.is_transformed(t_src));
+            // Delegate by tag-based dispatching
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::x, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         }
 
-        // Delegate by tag-based dispatching
         virtual void dy(cuda_array_bc_nogp<T, allocator>& src,
                         cuda_array_bc_nogp<T, allocator>& dst,
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
-            std :: cout << "deriv_spectral_t :: dy" << std::endl;
             assert(src.is_transformed(t_src));
+            // Delegate by tag-based dispatching
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::y, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         }
@@ -1481,7 +1577,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             assert(src.get_bvals() == dst.get_bvals());
 
             assert(src.is_transformed(t_src));
-
+            // Delegate by tag-based dispatching
             detail :: bispectral :: impl_invert_laplace(src, dst, get_coeffs_d2(), t_src, t_dst, get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         };   
@@ -1539,6 +1635,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
     private:
         const twodads::slab_layout_t geom;
+        // Transposed geometry. Required for transposed arrays passed to the  Matrix solver.
         const twodads::slab_layout_t geom_my21;
 
         // Coefficients for spectral derivation
@@ -1547,6 +1644,11 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
         // Temporary storage for Poisson brackets
         real_arr tmp_arr;
+
+    /**
+     ..cpp:namespace-pop
+
+    */
 };
 
 #endif //DERIVATIVES_H

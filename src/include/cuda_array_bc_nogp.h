@@ -1,40 +1,34 @@
-/*
- * cuda_array_bc.h
- *
- *  Created on: May 13, 2016
- *      Author: ralph
- *
- * Array type with variable padding in x- and y-direction.
- * Knows about boundary conditions, routines operating on this datatype are to compute
- * them on the fly
- *
- * Memory Layout
- *
- * rows: 0...My-1 ... My-1 + pad_y
- * cols: 0...Nx-1 ... Nx-1 + pad_x
- *
- *     0                        My-1 ... My - 1 + pad_y
- * Nx - 1 |--------- ... ------|          |
- *        |--------- ... ------|          |
- * ...
- *  0     |--------- ... ------|          |
- *
- * idx = n * (My + pad_y) + m
- *
- * columns (m, y-direction) are consecutive in memory
- *
- *
- * Mapping of CUDA threads on the array:
- *
- * Columns: 0..My - 1 + pad_y -> col = blockIdx.x * blockDim.x + threadIdx.x
- * Rows:    0..Nx - 1 + pad_x -> row = blockIdx.y * blockDim.y + threadIdx.y
- *
- * dimBlock = (blocksize_row, blocksize_col)
- * dimGrid = (My + pad_y) / blocksize_row, (My + pad_y) / blocksize_col
- *
- * Ghost points are to be computed on the fly, not stored in memory
- * They can be access by the address object
- */
+//
+//   Array type with variable padding in x- and y-direction.
+//   Knows about boundary conditions, routines operating on this datatype are to compute
+//   them on the fly
+//
+//   Memory Layout
+//  
+//   rows: 0...My-1 ... My-1 + pad_y
+//   cols: 0...Nx-1 ... Nx-1 + pad_x
+//  
+//       0                        My-1 ... My - 1 + pad_y
+//   Nx - 1 |--------- ... ------|          |
+//          |--------- ... ------|          |
+//   ...
+//    0     |--------- ... ------|          |
+//  
+//   idx = n * (My + pad_y) + m
+//  
+//   columns (m, y-direction) are consecutive in memory
+//  
+//  
+//   Mapping of CUDA threads on the array:
+//  
+//   Columns: 0..My - 1 + pad_y -> col = blockIdx.x * blockDim.x + threadIdx.x
+//   Rows:    0..Nx - 1 + pad_x -> row = blockIdx.y * blockDim.y + threadIdx.y
+//  
+//   dimBlock = (blocksize_row, blocksize_col)
+//   dimGrid = (My + pad_y) / blocksize_row, (My + pad_y) / blocksize_col
+//  
+//   Ghost points are to be computed on the fly, not stored in memory
+//   They can be access by the address object
 
 #ifndef cuda_array_bc_H_
 #define cuda_array_bc_H_
@@ -54,7 +48,6 @@
 #include "allocators.h"
 
 
-//#ifdef __CUDACC__
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #warning cuda_array_bc_nogp: compiling for device
 #include "cuda_types.h"
@@ -89,7 +82,7 @@ inline void gpuVerifyLaunch(const char* file, int line)
      }
 }
 
-#else //defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#else 
 #warning cuda_array_bc_nogp: compiling for host
 struct dim3{
     int x;
@@ -104,8 +97,8 @@ struct dim3{
 namespace device
 {
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
-    /// Return true if row and column are within geom(include padded columns if is_transformed is true)
-    /// Return false if row or column is outside the geometry
+    // Return true if row and column are within geom(include padded columns if is_transformed is true)
+    // Return false if row or column is outside the geometry
     __device__ inline bool good_idx(const size_t row, const size_t col, const twodads::slab_layout_t geom, const bool is_transformed)
     {
         return((row < geom.get_nx()) && (col < (is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my())));
@@ -123,8 +116,8 @@ namespace device
     }
 
 
-    /// Apply the lambda op_func (with type given by template parameter O)
-    /// op_func(T, size_t, size_t, slab_layout_t)
+    // Apply the lambda op_func (with type given by template parameter O)
+    // op_func(T, size_t, size_t, slab_layout_t)
     template <typename T, typename O>
     __global__
     void kernel_apply_single(T* array_d_t, O device_func, const twodads::slab_layout_t geom, const bool is_transformed) 
@@ -155,7 +148,7 @@ namespace device
     }
 
 
-    /// Perform element-wise arithmetic operation lhs[idx] = op(lhs[idx], rhs[idx])
+    // Perform element-wise arithmetic operation lhs[idx] = op(lhs[idx], rhs[idx])
     template<typename T, typename O>
     __global__
     void kernel_elementwise(T* lhs, T* rhs, O device_func, const twodads::slab_layout_t geom, const bool is_transformed)
@@ -223,85 +216,14 @@ namespace device
 
 template <typename T, template <typename> class allocator> class cuda_array_bc_nogp;
 
-// Host functions
-//namespace host
-//{
-//     template <typename T, typename O>
-//     void host_apply(T* data_ptr, O host_func, const twodads::slab_layout_t& geom, const bool is_transformed)
-//     {
-//         size_t index{0};
-//         size_t m{0};
-//
-//         // Loop over the padded elements if the array is transformed
-//         const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
-//        
-//         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
-// #pragma omp parallel for private(index, m)
-//         for(size_t n = 0; n < geom.get_nx(); n++)
-//         {
-//         // nelem_m is determined at runtime. To vectorize the loop
-//         // determine the number of total iterations when handling 4 elements
-//         // per iteration. The remaining elements are done sequentially
-//             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
-//             {
-//                 index = n * my_plus_pad + m;
-//                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
-//                 data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
-//                 data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
-//                 data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
-//             }
-//             for(; m < nelem_m; m++)
-//             {
-//                 index = n * (my_plus_pad) + m;
-//                 data_ptr[index] = host_func(data_ptr[index], n, m, geom);
-//             }
-//
-//         }
-//     }
-//
-//     template <typename T, typename O>
-//     void host_elementwise(T* lhs, T* rhs, O host_func, const twodads::slab_layout_t& geom, bool is_transformed)
-//     {
-//         size_t index{0};
-//         size_t m{0};
-//         size_t n{0};
-//
-//         // Iterate over the padding elements the array is transformed
-//         // Skip the padding elements if the array is not transformed
-//         const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
-//        
-//         // Use the padded array size to compute indices, whether array is transformed or not.
-//         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
-// #pragma omp parallel for private(index, m)
-//         for(n = 0; n < geom.get_nx(); n++)
-//         {   
-//             // Loop vectorization scheme follows host_apply (above)
-//             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
-//             {
-//                 index = n * my_plus_pad + m;
-//                 lhs[index] = host_func(lhs[index], rhs[index]);
-//                 lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
-//                 lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
-//                 lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
-//             }
-//             for(; m < nelem_m; m++)
-//             {
-//                 index = n * my_plus_pad + m;
-//                 lhs[index] = host_func(lhs[index], rhs[index]);
-//             }
-//         }
-//     }
-//}
-
-
 namespace detail 
 {
     
-    /// Initialize data_tlev_ptr:
-    /// data_tlev_ptr[0] = data[0]
-    /// data_tlev_ptr[1] = data[0] + nelem 
-    /// ...
-//#ifdef __CUDACC__
+    // Initialize data_tlev_ptr:
+    // data_tlev_ptr[0] = data[0]
+    // data_tlev_ptr[1] = data[0] + nelem 
+    // ...
+
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     template <typename T>
     inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& geom, allocator_device<T>)
@@ -331,7 +253,7 @@ namespace detail
         gpuErrchk(cudaPeekAtLastError());
     }
 
-     // Get data_tlev_ptr for a given time level   
+    // Get data_tlev_ptr for a given time level   
     // Returns a device-pointer 
     template <typename T>
     inline T* impl_get_data_tlev_ptr(T** data_tlev_ptr, const size_t tidx, const size_t tlevs, allocator_device<T>)
@@ -483,13 +405,89 @@ namespace detail
     }
 }
 
+/**
+  .. cpp:class:: template <typename T, template <typename> class allocator> cuda_array_bc_npgp
+
+   Basic 2d vector used in 2dads.
+   
+   It can store the data of fields, at several time steps.
+   It interpolates values of ghost cells by bval_interpolators.
+
+
+   Memory Layout
+
+   The class maps a two-dimensional array to memory space.
+   Data positions are given in rows and columns, where columns are along
+   the x-direction and rows are along the y-direction:
+
+   .. math:: 
+      n = 0\ldots N_x - 1, N_x, \ldots N_x + \mathrm{pad}_x - 1
+   
+
+
+
+
+   Okay, lets  leave math mode
+*/
+
+/*
+
+  Columns are stored consecutively in memory. To traverse the array in memory define
+
+   .. math:: 
+      idx = n * (M_y + pad_y) + m
+
+*/
+
+/*
+       0                        My-1 ... My - 1 + pad_y
+   Nx - 1 |--------- ... ------|          |
+          |--------- ... ------|          |
+   ...
+    0     |--------- ... ------|          |
+  
+   idx = n * (My + pad_y) + m
+  
+   columns (m, y-direction) are consecutive in memory
+  
+  
+   Mapping of CUDA threads on the array:
+  
+   Columns: 0..My - 1 + pad_y -> col = blockIdx.x * blockDim.x + threadIdx.x
+   Rows:    0..Nx - 1 + pad_x -> row = blockIdx.y * blockDim.y + threadIdx.y
+  
+   dimBlock = (blocksize_row, blocksize_col)
+   dimGrid = (My + pad_y) / blocksize_row, (My + pad_y) / blocksize_col
+  
+   Ghost points are to be computed on the fly, not stored in memory
+   They can be access by the address object
+
+ */
+
+
 template <typename T, template <typename> class allocator>
 class cuda_array_bc_nogp{
 public:
 
-    // T* pointers
+    /**
+     .. cpp:type:: allocator_type = my_allocator_traits<T, allocator> :: allocator_type
+
+        Declaration of a type alias for the used memory allocator
+    */
     using allocator_type = typename my_allocator_traits<T, allocator> :: allocator_type;
+
+    /**
+     .. cpp:type:: deleter_type = my_allocator_traits<T, allocator> :: deleter_type
+
+        Declaration of a type alias for the used deleter
+    */
     using deleter_type = typename my_allocator_traits<T, allocator> :: deleter_type;
+
+    /**
+     .. cpp:type:: ptr_type = std::unique_ptr<T, deleter_type>
+
+       Type alias of the internally used pointers
+    */
     using ptr_type = std::unique_ptr<T, deleter_type>;
 
     // T** pointers
@@ -497,23 +495,63 @@ public:
     using p_deleter_type = typename my_allocator_traits<T*, allocator> :: deleter_type;
     using pptr_type = std::unique_ptr<T*, p_deleter_type>;
 
+    /**
+     .. cpp:function:: cuda_array_bc_nogp(const twodads::slab_layout_t, const twodads::bvals_t<T>, size_t _tlevs)
+
+      Default constructor. Takes information on slab layout and boundary conditions. 
+      Stores data for _tlevs time levels
+    */
+
 	cuda_array_bc_nogp(const twodads::slab_layout_t, const twodads::bvals_t<T>, size_t _tlevs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>* rhs);
     cuda_array_bc_nogp(const cuda_array_bc_nogp<T, allocator>& rhs);
 
+    /**
+     .. cpp:function:: cuda_array_bc_nogp::~cuda_array_bc_nogp()
+
+     Free all allocated resources
+     */
 	~cuda_array_bc_nogp()
     {
         detail :: impl_delete_address(address_2ptr, address_ptr, allocator_type{});
     };
 
-    /// Evaluate the function F on the grid
+    /**
+     .. cpp:function:: template <typename F> inline void cuda_array_bc_nogp::apply(F myfunc, const size_t tidx)
+
+      Apply F on all array elements at tidx
+   
+      ======  ====================================================
+      Input   Description
+      ======  ====================================================
+      myfunc  F, functor taking 2 T as input
+      tidx    const size_t - Time index on which myfunc is applied
+      ======  ====================================================
+    */
     template <typename F> inline void apply(F myfunc, const size_t tidx)
     {
         check_bounds(tidx + 1, 0, 0);
         detail :: impl_apply(get_tlev_ptr(tidx), myfunc, get_geom(), is_transformed(tidx), get_grid_unroll(), get_block(), allocator_type{});   
     }
 
+    /**
+     .. cpp:function:: template <typename F> inline void cuda_array_bc_nogp::elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs, const size_t tidx_rhs, const siz_t tidx_lhs)
 
+       Evaluates myfunc(l, r) elementwise on elements l, r of arrays lhs rhs. 
+       Stores result in lhs.
+
+       Input:
+
+       ========  ==================================================
+       Input     Description
+       ========  ==================================================
+       myfunc    callable, takes two T as input, returns T
+       rhs       const cuda_array_bc_nogp<T, allocator>&, RHS array
+       tidx_rhs  const size_t, time index of RHS array
+       tidx_lhs  const size_t, time index of LHS array
+       ========  ==================================================
+
+    */
     template<typename F> inline void elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs,
                                                  const size_t tidx_rhs, const size_t tidx_lhs)
     {
@@ -525,6 +563,21 @@ public:
         detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), rhs.get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | rhs.is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});
     }
 
+    /**
+     .. cpp:function:: template <typename F> inline void cuda_array_bc_nogp::elementwise(F myfunc, const size_t tidx_lhs, const siz_t tidx_rhs)
+
+       Evaluates myfunc(l1, l2) elementwise on elements l1, l2 of arrays lhs on time indices t1 and t2. 
+       Stores result in lhs at tidx t1.
+
+       ========  =========================================
+       Input     Description
+       ========  =========================================
+       myfunc    callable, takes two T as input, returns T
+       tidx_lhs  const size_t, time index t1 for array
+       tidx_rhs  const size_t, time index t2 for array
+       ========  =========================================
+
+    */
     template<typename F> inline void elementwise(F myfunc, const size_t tidx_lhs, const size_t tidx_rhs)
     {
         check_bounds(tidx_rhs + 1, 0, 0);
@@ -533,7 +586,19 @@ public:
     }
        
 
-	///@brief Copy data from t_src to t_dst
+	/**
+     .. cpp:function:: inline void cuda_array_bc_nogp::copy(const size_t tidx_dst, const size_t tidx_src)
+      
+       Copy data from tidx_src to tidx_dst. 
+
+       ========  =======================================
+       Input     Description
+       ========  =======================================
+       tidx_dst  const size_t, time index of destination
+       tidx_src  const size_t, time index of source
+       ========  =======================================
+
+     */
 	inline void copy(const size_t tidx_dst, const size_t tidx_src)
     {
         check_bounds(tidx_dst + 1, 0, 0);
@@ -543,7 +608,20 @@ public:
         set_transformed(tidx_dst, is_transformed(tidx_src));
     }
 
-	///@brief Copy data from src, t_src to t_dst
+	/**
+     .. cpp:function:: inline void cuda_array_bc_nogp::copy(size_t tidx_dst, const cuda_array_bc_nogp<T, allocator>& src, size_t tidx_src)
+
+        Copy data from array rhs at tidx_src to tidx_dst.
+
+        ========  ==========================================================
+        Input     Description
+        ========  ========================================================== 
+        rhs       const cuda_array_bc_nogp<T, allocator>& rhs: source array
+        tidx_dst  const size_t, time index of Destination
+        tidx_src  const size_t, time index of source
+        ========  ========================================================== 
+     
+     */
     inline void copy(size_t tidx_dst, const cuda_array_bc_nogp<T, allocator>& src, size_t tidx_src)
     {
         check_bounds(tidx_dst + 1, 0, 0);
@@ -554,7 +632,24 @@ public:
         set_transformed(tidx_dst, src.is_transformed(tidx_src));
     }
 
-	///@brief Move data from t_src to t_dst, zero out t_src
+	// Move data from t_src to t_dst, zero out t_src
+    /**
+     .. cpp:function: inline void cuda_array_bc_nogp::move(const size_t tidx_dst, const size_t tidx_src)
+
+     Move data from tidx_src to tidx_dst, zero out data at tidx_src
+
+     ======== =======================================
+     Input    Description
+     ======== =======================================
+     tidx_dst const size_t, time index of destination
+     tidx_src const size_t, time index of source
+     ======== =======================================
+
+     - const size_t tidx_dst: Destination time index
+
+     - const size_t tidx_src: Source time index
+
+     */
 	inline void move(const size_t tidx_dst, const size_t tidx_src)
     {
         check_bounds(tidx_dst + 1, 0, 0);
@@ -563,7 +658,12 @@ public:
         apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, 0);
     }
 
-	// Advance time levels
+    /**
+     .. cpp:function:: inline void cuda_array_bc_nogp::advance()
+
+     Advance data from tidx -> tidx + 1. Zero out data at tidx 0, discard data at last
+     
+     */
 	inline void advance()
     {
         detail :: impl_advance(get_tlev_ptr(), get_tlevs(), allocator_type{});
@@ -574,11 +674,44 @@ public:
         set_transformed(0, false);
     }
 
-	// Access to private members
+    /**
+     .. cpp:function:: inline size_t cuda_array_bc_nogp :: get_nx() const
+
+     Returns number of discretization points along x-direction.
+
+    */
 	inline size_t get_nx() const {return(get_geom().get_nx());};
+
+    /**
+     .. cpp:function:: inline size_t cuda_array_bc_nogp::get_my() const
+
+     Returns number of discretization points along y-direction.
+     
+     */
 	inline size_t get_my() const {return(get_geom().get_my());};
+
+
+    /**
+     .. cpp:function:: inline size_t cuda_array_bc_nogp::get_tlevs() const
+
+     Returns the number of time levels
+
+     */
 	inline size_t get_tlevs() const {return(tlevs);};
+
+    /**
+     .. cpp:function:: inline twodads::slab_layout_t cuda_array_bc_nogp::get_geom() const
+
+     Returns the layout of the array
+     
+     */
     inline twodads::slab_layout_t get_geom() const {return(geom);};
+
+    /**
+     .. cpp:function:: template <typename T> inline twodads::bvals_t<T> cuda_array_bc_nogp::get_bvals() const
+
+     Returns the boundary values of the array
+     */
     inline twodads::bvals_t<T> get_bvals() const {return(boundaries);};
     // We are working with 2 pointer levels, since we instantiate an address object 
     // in a cuda kernel in the constructor. That way, we can just pass this
@@ -588,15 +721,59 @@ public:
     inline address_t<T>** get_address_2ptr() const {return(address_2ptr);};
     inline address_t<T>* get_address_ptr() const {return(address_ptr);};
 
+    /**
+     .. cpp:function:: inline dim3 get_grid() const
+
+     Returns grid layout for CUDA kernels.
+
+    */
 	inline dim3 get_grid() const {return grid;};
+
+    /**
+     .. cpp:function:: inline dim3 get_grid_unroll() const
+
+     Return grid layout for CUDA kernels that operate with manual loop-unrolling.
+
+    */
     inline dim3 get_grid_unroll() const {return grid_unroll;};
+
+    /**
+     .. cpp:function:: inline dim3 get_block() const
+
+     Return block size for CUDA kernels.
+
+    */
 	inline dim3 get_block() const {return block;};
 
-	// smart pointer to device data, entire array
+    /**
+     .. cpp:function:: template <typename T> inline T* cuda_array_bc_nogp::get_data() const
+
+     Returns pointer to the data array.
+     */
 	inline T* get_data() const {return data.get();};
-	// Pointer to array of pointers, corresponding to time levels
+
+    /*
+     .. cpp:function:: template <typename T> inline T** cuda_array_bc_nogp::get_tlev_ptr() const
+
+     Retuns pointer to pointer at tlev data.
+     */
 	inline T** get_tlev_ptr() const {return data_tlev_ptr.get();};
+
 	// Pointer to device data at time level t
+
+    /*
+     .. cpp:function:: template <typename T> inline T* cuda_array_bc_nogp::get_tlev_ptr(const size_t tidx) const
+
+     Returns pointer to data at time level tidx.
+
+     =====  =============================
+     Input  Description
+     =====  =============================
+     tidx   const size_t, time level tidx
+     =====  =============================
+
+    */
+
     inline T* get_tlev_ptr(const size_t tidx) const
     {
         check_bounds(tidx + 1, 0, 0);
@@ -604,6 +781,19 @@ public:
     };
 
     // Set true if transformed
+    
+    /*
+     .. cpp:function:: inline bool cuda_array_bc_nogp<T, allocator<T>> :: is_transformed(const size_t tidx)
+
+     Returns true if array is transformed, false if data is in configuation space
+
+     ====== =======================================================
+     Input   Description
+     ======  ======================================================
+     tidx    Time index where to check whether array is transformed
+     ======  ======================================================
+
+    */
     inline bool is_transformed(const size_t tidx) const {check_bounds(tidx + 1, 0, 0); return(transformed[tidx]);};
     inline bool set_transformed(const size_t tidx, const bool val) 
     {
@@ -693,4 +883,4 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp(const cuda_array_bc_nogp<
 };
 
 
-#endif /* cuda_array_bc_H_ */
+#endif // cuda_array_bc_H_ 
