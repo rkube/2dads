@@ -14,13 +14,10 @@
 #include <exception>
 #include <map>
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #include "cublas_v2.h"
 #include "cusparse.h"
-#endif //__CUDACC__
 
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 class cublas_err : public std::exception
 {
     /**
@@ -99,7 +96,6 @@ class gpu_error : public std::exception
         const std::string error;
 };
 
-#endif //__CUDACC__
 
 class out_of_bounds_err : public std::exception
 {

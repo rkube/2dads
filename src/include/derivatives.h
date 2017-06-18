@@ -14,18 +14,16 @@
 #include <sstream>
 #include <fstream>
 
-#ifdef __CUDACC__
 #include "cuda_types.h"
 #include <cusolverSp.h>
 #include <cublas_v2.h>
-#endif //__CUDACC__
+
 
 
 enum class direction {x, y};
 
 namespace device
 {
-#ifdef __CUDACC__
 // Apply three point stencil to points within the domain, rows 1..Nx-2
 template <typename T, typename O>
 __global__
@@ -309,7 +307,6 @@ void kernel_arakawa_single_col(const T* u, address_t<T>** address_u,
         ) * inv_dx_dy;
     }
 }
-#endif //__CUDACC__
 } // namespace device
 
 
@@ -527,7 +524,6 @@ namespace detail
 {
     namespace fd
     {
-#ifdef CUDACC
         template <typename T>
         void impl_dx(const cuda_array_bc_nogp<T, allocator_device>& in,
                     cuda_array_bc_nogp<T, allocator_device>& out,
@@ -692,7 +688,6 @@ namespace detail
 
             dst.set_transformed(t_dst, true);
         }
-#endif //__CUDACC__
 
 
         template <typename T>
@@ -872,7 +867,7 @@ namespace detail
             dst.copy(t_dst, src, t_src);
 
 
-#ifndef __CUDACC__
+#ifndef HOST
 // Mask call to ell_solver since we do not link to mkl when compiling in device mode
             ell_solver -> solve(nullptr,
                                 reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
@@ -891,7 +886,6 @@ namespace detail
     namespace bispectral
 
     {
-#ifdef __CUDACC__
         template <typename T>
         void impl_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_d1,
                          cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_d2,
@@ -975,7 +969,6 @@ namespace detail
             gpuErrchk(cudaPeekAtLastError());
         }
 
-#endif // __CUDACC__
 
         template <typename T>
         void impl_deriv(cuda_array_bc_nogp<T, allocator_host>& src,

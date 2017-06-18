@@ -11,15 +11,10 @@
 #include <iostream>
 #include "error.h"
 
-//#ifdef __CUDACC__
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#endif //__CUDACC__
 
 
-//#ifdef __CUDACC__
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 template <typename T>
 struct deleter_device
 {
@@ -86,7 +81,6 @@ struct allocator_device
         return(p);
     }
 };
-#endif //__CUDACC__
 
 
 template <typename T>
@@ -174,8 +168,6 @@ struct my_allocator_traits<T*, allocator_host>
 };
 
 
-//#ifdef __CUDACC__
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 template <typename T>
 struct my_allocator_traits<T, allocator_device>
 {
@@ -192,7 +184,6 @@ struct my_allocator_traits<T*, allocator_device>
     using value_type = T*;
     using deleter_type = deleter_device<T*>;
 };
-#endif //__CUDACC__
 
 
 #endif //ALLOCATOR_DEVICE_H

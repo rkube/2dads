@@ -1,8 +1,3 @@
-/*!
- * Complex data type for cuda
- * Define all operator arguments and return types as by-value, see Stroustrup(2013), 18.2.4
- * \param T: underlying data type, most probably double
- */
 
 
 #ifndef CUCMPLX_H
@@ -13,15 +8,21 @@
 #include <cmath>
 
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
-#warning CUDA_MEMBER defined
 #define CUDA_MEMBER __host__ __device__
-#else
-#define CUDA_MEMBER
-#endif
 
 constexpr size_t io_width{8};
 constexpr size_t io_prec{4};
+
+
+/*
+ * Complex data type for cuda
+ * Define all operator arguments and return types as by-value, see Stroustrup(2013), 18.2.4
+ *
+ * To be phased out. 
+ *
+ * TODO: Try std::complex with clang.
+ *
+ */
 
 template<typename T>
 class CuCmplx

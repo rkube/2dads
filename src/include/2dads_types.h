@@ -6,20 +6,13 @@
 #include <vector>
 #include <cmath>
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+
 #define CUDAMEMBER __host__ __device__
-#else
-#define CUDAMEMBER
-#endif
 
 #include "cucmplx.h"
-#ifdef DEVICE
 #include "cufft.h"
-#endif //DEVICE
-
-#ifdef HOST
 #include <fftw3.h>
-#endif //HOST
+
 
 
 namespace twodads {

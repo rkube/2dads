@@ -1,6 +1,3 @@
-/*
- * Convenient class to check array bounds
- */
 
 #ifndef CHECK_BOUNDS_H
 #define CHECK_BOUNDS_H
@@ -8,7 +5,9 @@
 #include "error.h"
 #include <sstream>
 
-/// Class that checks if arguments are within initialized bounds
+/*
+ * Convenient class to check array bounds
+ */
 
 class bounds{
     /** 

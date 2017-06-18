@@ -22,18 +22,8 @@
 #include "output.h"
 #include "diagnostics.h"
 
-#ifdef __CUDACC__
 #include "cuda_types.h"
-#endif //__CUDACC__
-
-
-#ifndef __CUDACC__
-#define LAMBDACALLER
-#endif
-
-#ifdef __CUDACC__
-#define LAMBDACALLER __device__
-#endif
+#define LAMBDACALLER __host__ __device__
 
 
 class slab_bc

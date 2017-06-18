@@ -14,16 +14,13 @@
 #include "error.h"
 #include "cucmplx.h"
 
-#ifndef __CUDACC__
 #include "fftw3.h"
-#endif //__CUDACC__
 
-#ifdef __CUDACC__
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 #include "cuda_types.h"
-#endif //__CUDACC__
+
 
 
 namespace cufft
@@ -136,7 +133,6 @@ namespace cufft
                     break;
             }
         }
-
 
 
     // Generic template for c2r functions
@@ -380,7 +376,7 @@ class cufft_object_t : public dft_object_t<T>
         cufftHandle plan_r2c;
         cufftHandle plan_c2r;
 };
-#endif //__CUDACC__
+#endif //DEVICE
 
 
 #ifdef HOST

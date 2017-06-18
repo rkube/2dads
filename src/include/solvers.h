@@ -14,11 +14,10 @@
 #include "mkl.h"
 #endif //HOST
 
-#ifdef __CUDACC__
 #include <cusolverSp.h>
 #include <cublas_v2.h>
 #include "cuda_types.h"
-#endif //__CUDACC__
+
 
 #ifndef SOLVERS_H
 #define SOLVERS_H
@@ -42,8 +41,6 @@
 namespace solvers
 {
     // Wrapper data type for cublasHandle_t
-
-#ifdef __CUDACC__
     class cublas_handle_t
     {
         private: 
@@ -96,8 +93,6 @@ namespace solvers
     };
 
 
-#endif //__CUDAC__
-
     class elliptic_base_t
     {
         public:
@@ -123,7 +118,6 @@ namespace solvers
     };
 
 
-#ifdef __CUDACC__
     class elliptic_cublas_t : public elliptic_base_t
     {
         using elliptic_base_t :: get_my_int;
@@ -218,7 +212,6 @@ namespace solvers
             }
     };
 
-#endif //__CUDACC__
 
 #ifndef __CUDACC__
     class elliptic_mkl_t : public elliptic_base_t

@@ -18,7 +18,6 @@
 
 namespace detail
 {
-#ifdef __CUDACC__
     template <typename T>
     void impl_solve_tridiagonal(cuda_array_bc_nogp<T, allocator_device>& field,
                                 const cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& diag_u,
@@ -35,9 +34,6 @@ namespace detail
                             diag_u.get_tlev_ptr(0));
     }
 
-#endif //__CUDACC__
-
-#ifndef __CUDACC__
 
     template <typename T>
     void impl_solve_tridiagonal(cuda_array_bc_nogp<T, allocator_host>& field,
@@ -54,7 +50,6 @@ namespace detail
                             diag.get_tlev_ptr(0),
                             diag_u.get_tlev_ptr(0));  
     }
-#endif //__CUDACC__
 }
 
 

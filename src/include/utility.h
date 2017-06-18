@@ -5,7 +5,6 @@
 
 
 namespace device{
-#ifdef __CUDACC__
 /// Reduction kernel
 // Perform reduction of in_data, stored in column-major order
 // Use stride_size = 1, offset_size = Nx for row-wise reduction (threads in one block reduce one row, i.e. consecutive elements of in_data)
@@ -122,8 +121,6 @@ void kernel_multiply_map(CuCmplx<T>* in, CuCmplx<T>* map, CuCmplx<T>* out, O op_
     }
 }
 
-
-#endif //__CUDACC__
 }
 
 namespace utility
@@ -287,8 +284,6 @@ namespace utility
         return std::tuple<T, size_t, size_t>(max_val, idx_max_x, idx_max_y);
     }
 
-
-#ifdef __CUDACC__
     template <typename T>
     cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>& src)
     {
@@ -439,12 +434,10 @@ namespace utility
                 break; 
         }
     }
-#endif //CUDACC
 
 
     namespace bispectral
     {
-#ifdef __CUDACC__
     template <typename T>
     void init_deriv_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy1,
                            cuda_array_bc_nogp<CuCmplx<T>, allocator_device>& coeffs_dy2,
@@ -458,9 +451,8 @@ namespace utility
         device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
         gpuErrchk(cudaPeekAtLastError());    
     }
-#endif //__CUDACC__
 
-#ifndef __CUDACC__
+
     template <typename T>
     void init_deriv_coeffs(cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy1,
                            cuda_array_bc_nogp<CuCmplx<T>, allocator_host>& coeffs_dy2,
@@ -539,7 +531,6 @@ namespace utility
             (*arr_dy2).get_elem(dy2_data, n, m).set_im(-1.0 * two_pi_Ly * two_pi_Ly * T(m * m));
         }
     }
-#endif // __CUDACC__
 
     }
 

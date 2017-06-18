@@ -50,11 +50,17 @@
 
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #warning cuda_array_bc_nogp: compiling for device
+#endif // __CUDACC__
+
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
+#warning cuda_array_bc_nogp: compiling for host
+#endif //__CUDACC__
+
 #include "cuda_types.h"
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-#define LAMBDACALLER __device__
+#define LAMBDACALLER __host__ __device__
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line)
@@ -82,23 +88,9 @@ inline void gpuVerifyLaunch(const char* file, int line)
      }
 }
 
-#endif
-
-#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
-#warning cuda_array_bc_nogp: compiling for host
-struct dim3{
-    int x;
-    int y;
-    int z;
-};
-
-#define LAMBDACALLER
-#endif //__CUDACC__
-
 
 namespace device
 {
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     // Return true if row and column are within geom(include padded columns if is_transformed is true)
     // Return false if row or column is outside the geometry
     __device__ inline bool good_idx(const size_t row, const size_t col, const twodads::slab_layout_t geom, const bool is_transformed)
@@ -213,7 +205,6 @@ namespace device
         }
         tlev_ptr[0] = tmp;
     }
-#endif // __CUDACC_
 }
 
 template <typename T, template <typename> class allocator> class cuda_array_bc_nogp;
@@ -226,7 +217,6 @@ namespace detail
     // data_tlev_ptr[1] = data[0] + nelem 
     // ...
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
     template <typename T>
     inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& geom, allocator_device<T>)
     {
@@ -290,8 +280,6 @@ namespace detail
     }
 
 
-#endif //__CUDACC__
-
     template <typename T>
     inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& sl, allocator_host<T>)
     {
@@ -328,7 +316,6 @@ namespace detail
     template <typename T, typename F>
     void impl_apply(T* data_ptr, F host_func, const twodads::slab_layout_t& geom, const bool is_transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        //host :: host_apply(data_ptr, myfunc, geom, transformed);
         size_t index{0};
         size_t m{0};
 
@@ -363,7 +350,6 @@ namespace detail
     template <typename T, typename F>
     void impl_elementwise(T* lhs, T* rhs, F host_func, const twodads::slab_layout_t& geom, const bool is_transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        //host :: host_elementwise(lhs, rhs, myfunc, geom, transformed);
         size_t index{0};
         size_t m{0};
         size_t n{0};
@@ -843,20 +829,18 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         transformed{std::vector<bool>(get_tlevs(), 0)},
         address_2ptr{nullptr},
         address_ptr{nullptr},
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
         block(dim3(cuda::blockdim_row, cuda::blockdim_col)),
 		grid(dim3(((get_my() + get_geom().get_pad_y()) + cuda::blockdim_row - 1) / cuda::blockdim_row, 
                   ((get_nx() + get_geom().get_pad_x()) + cuda::blockdim_col - 1) / cuda::blockdim_col)),
         grid_unroll(grid.x / cuda :: elem_per_thread, grid.y),
-# else
-        block{0, 0, 0},
-        grid{0, 0, 0},
-        grid_unroll{0, 0, 0},
-#endif
         shmem_size_col(get_nx() * sizeof(T)),
         data(my_alloc.allocate(get_tlevs() * get_geom().get_nelem_per_t())),
 		data_tlev_ptr(my_palloc.allocate(get_tlevs()))
 {
+
+    std::cout << "block3: x = " << block.x << ", y = " << block.y << ", z = " << block.z << std::endl;
+    std::cout << "grid3: x = " << grid.x << ", y = " << grid.y << ", z = " << grid.z << std::endl;
+    std::cout << "grid_unrolled: x = " << grid_unroll.x << ", y= " << grid_unroll.y << " y = " << grid_unroll.z << std::endl;
     // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
     detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
     
