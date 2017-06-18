@@ -48,13 +48,13 @@
 #include "allocators.h"
 
 
-#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#if defined(DEVICE)
 #warning cuda_array_bc_nogp: compiling for device
-#endif // __CUDACC__
+#endif // DEVICE
 
-#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
+#if defined(HOST)
 #warning cuda_array_bc_nogp: compiling for host
-#endif //__CUDACC__
+#endif //HOST
 
 #include "cuda_types.h"
 #include <cuda.h>
@@ -220,7 +220,9 @@ namespace detail
     template <typename T>
     inline void impl_set_data_tlev_ptr(T* data, T** data_tlev_ptr, const size_t tlevs, const twodads::slab_layout_t& geom, allocator_device<T>)
     {
+        #if defined(DEVICE)
         device :: kernel_set_tlev_ptr<<<1, 1>>>(data, data_tlev_ptr, tlevs, geom);
+        #endif
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -232,7 +234,9 @@ namespace detail
     inline address_t<T>* impl_init_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, const twodads::slab_layout_t& geom, const twodads::bvals_t<T>& bvals, allocator_device<T>)
     {
         gpuErrchk(cudaMalloc(&address_2ptr, sizeof(address_t<T>**)));
+        #if defined(DEVICE)
         device :: kernel_init_address<<<1, 1>>>(address_2ptr, geom, bvals);
+        #endif
         gpuErrchk(cudaPeekAtLastError());
         return(address_ptr);
     }
@@ -241,7 +245,9 @@ namespace detail
     template <typename T>
     inline void impl_delete_address(address_t<T>** &address_2ptr, address_t<T>* &address_ptr, allocator_device<T>)
     {
+        #if defined(DEVICE)
         device :: kernel_free_address<<<1, 1>>>(address_2ptr);
+        #endif
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -260,14 +266,18 @@ namespace detail
     template <typename T, typename F>
     inline void impl_apply(T* data_ptr, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
+        #if defined(DEVICE)
         device :: kernel_apply_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(data_ptr, myfunc, geom, transformed);   
+        #endif
         gpuErrchk(cudaPeekAtLastError());
     }
 
     template <typename T, typename F>
     inline void impl_elementwise(T* x, T* rhs, F myfunc, const twodads::slab_layout_t& geom, const bool transformed, const dim3& grid_unroll, const dim3& block, allocator_device<T>)
     {
+        #if defined (DEVICE)
         device :: kernel_elementwise_unroll<T, F, cuda::elem_per_thread><<<grid_unroll, block>>>(x, rhs, myfunc, geom, transformed);
+        #endif
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -275,7 +285,9 @@ namespace detail
     template <typename T>
     inline void impl_advance(T** tlev_ptr, const size_t tlevs, allocator_device<T>)
     {
+        #if defined(DEVICE)
         device :: kernel_advance_tptr<<<1, 1>>>(tlev_ptr, tlevs);
+        #endif
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -837,17 +849,21 @@ cuda_array_bc_nogp<T, allocator> :: cuda_array_bc_nogp (const twodads::slab_layo
         data(my_alloc.allocate(get_tlevs() * get_geom().get_nelem_per_t())),
 		data_tlev_ptr(my_palloc.allocate(get_tlevs()))
 {
-
-    std::cout << "block3: x = " << block.x << ", y = " << block.y << ", z = " << block.z << std::endl;
-    std::cout << "grid3: x = " << grid.x << ", y = " << grid.y << ", z = " << grid.z << std::endl;
-    std::cout << "grid_unrolled: x = " << grid_unroll.x << ", y= " << grid_unroll.y << " y = " << grid_unroll.z << std::endl;
+    //std::cout << "block3: x = " << block.x << ", y = " << block.y << ", z = " << block.z << std::endl;
+    //std::cout << "grid3: x = " << grid.x << ", y = " << grid.y << ", z = " << grid.z << std::endl;
+    //std::cout << "grid_unrolled: x = " << grid_unroll.x << ", y= " << grid_unroll.y << " y = " << grid_unroll.z << std::endl;
     // Set the pointer in array_tlev_ptr to data[0], data[0] + get_nelem_per_t(), data[0] + 2 * get_nelem_per_t() ...
     detail :: impl_set_data_tlev_ptr(get_data(), get_tlev_ptr(), get_tlevs(), get_geom(), allocator_type{});
     
     // Initialize the address object
     detail :: impl_init_address(address_2ptr, address_ptr, get_geom(), get_bvals(), allocator_type{});
     for(size_t tidx = 0; tidx < tlevs; tidx++)
-            apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, tidx);
+    {
+        // Also initialize the padded elements
+        set_transformed(tidx, true);
+        apply([] LAMBDACALLER (T dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T {return(0.0);}, tidx);
+        set_transformed(tidx, false);
+    }
 }
 
 

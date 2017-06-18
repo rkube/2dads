@@ -42,14 +42,18 @@ namespace cuda
 
     struct thread_idx
     {
+        #if defined(DEVICE)
         static __device__ size_t get_col() {return(blockIdx.x * blockDim.x + threadIdx.x);}
         static __device__ size_t get_row() {return(blockIdx.y * blockDim.y + threadIdx.y);}
+        #endif
+
+        #if !defined(DEVICE)
+        static __device__ size_t get_col() {return(0);}
+        static __device__ size_t get_row() {return(0);}
+        #endif
 
         __device__ thread_idx(){}
     };
-
-//    __constant__ const real_t ss3_alpha_d[3][3] = {{1., 0., 0.}, {2., -0.5, 0.}, {3., -1.5, 1./3.}};
-//    __constant__ const real_t ss3_beta_d[3][3]  = {{1., 0., 0.}, {2., -1. , 0.}, {3., -3.,  1.  }};
 };
 
 #endif //CUDA_TYPES

@@ -25,6 +25,8 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
                             O op_func, 
                             const size_t stride_size, const size_t offset_size, const size_t Nx, const size_t My)
 {
+
+    #if defined(DEVICE)
     extern __shared__ T sdata[];
 
     const size_t tid = threadIdx.x;
@@ -50,6 +52,7 @@ __global__ void kernel_reduce(const T* __restrict__ in_data,
             out_data[idx_out] = sdata[0];
         }
     }
+    #endif //DEVICE
 }
 
 // Compute wavenumbers for derivation in Fourier-space
@@ -291,9 +294,24 @@ namespace utility
         for(size_t t = 0; t < src.get_tlevs(); t++)
         {
             gpuErrchk(cudaMemcpy(res.get_tlev_ptr(t), src.get_tlev_ptr(t), src.get_geom().get_nelem_per_t() * sizeof(T), cudaMemcpyDeviceToHost));
+            res.set_transformed(t, src.is_transformed(t));
         }
         return(res);
     }
+
+
+    template <typename T>
+    cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>* src)
+    {
+        cuda_array_bc_nogp<T, allocator_host> res (src -> get_geom(), src -> get_bvals(), src -> get_tlevs());
+        for(size_t t = 0; t < src -> get_tlevs(); t++)
+        {
+            gpuErrchk(cudaMemcpy(res.get_tlev_ptr(t), src -> get_tlev_ptr(t), (src -> get_geom()).get_nelem_per_t() * sizeof(T), cudaMemcpyDeviceToHost));
+            res.set_transformed(t, src -> is_transformed(t));
+        }
+        return(res);
+    }
+
 
     template <typename T>
     void update_host_vector(cuda_array_bc_nogp<T, allocator_host>& dst, cuda_array_bc_nogp<T, allocator_device>& src)
@@ -363,6 +381,7 @@ namespace utility
         }
 
         // Take the square of the absolute value
+        #if defined(DEVICE)
         device :: kernel_apply_single<<<vec.get_grid(), vec.get_block()>>>(device_copy,
                                                        [] __device__ (T in, const size_t n, const size_t m, const twodads::slab_layout_t& geom ) -> T 
                                                        {return(abs(in) * abs(in));}, 
@@ -380,6 +399,8 @@ namespace utility
         //}
         //delete [] tmp_arr;
         // Perform 2d -> 1d reduction
+
+
         device :: kernel_reduce<<<gridsize_row, blocksize_row, shmem_size_row>>>(device_copy, d_tmp_profile, 
                                                                        [=] __device__ (T op1, T op2) -> T {return(op1 + op2);},
                                                                        1, tmp_geom.get_nx(), tmp_geom.get_nx(), tmp_geom.get_my());
@@ -393,6 +414,7 @@ namespace utility
         device :: kernel_reduce<<<1, tmp_geom.get_nx(), shmem_size_row>>>(d_tmp_profile, d_rval_ptr, 
                                                        [=] __device__ (T op1, T op2) -> T {return(op1 + op2);},
                                                        1, tmp_geom.get_nx(), tmp_geom.get_nx(), 1);
+        #endif //DEVICE
         gpuErrchk(cudaPeekAtLastError());
         gpuErrchk(cudaMemcpy(&rval, (void*) d_rval_ptr, sizeof(T), cudaMemcpyDeviceToHost));
 
@@ -401,19 +423,6 @@ namespace utility
         cudaFree(d_rval_ptr);
 
         return(sqrt(rval / static_cast<T>(tmp_geom.get_nx() * tmp_geom.get_my())));
-    }
-
-
-    template <typename T>
-    cuda_array_bc_nogp<T, allocator_host> create_host_vector(cuda_array_bc_nogp<T, allocator_device>* src)
-    {
-        cuda_array_bc_nogp<T, allocator_host> res (src -> get_geom(), src -> get_bvals(), src -> get_tlevs());
-        for(size_t t = 0; t < src -> get_tlevs(); t++)
-        {
-            gpuErrchk(cudaMemcpy(res.get_tlev_ptr(t), src -> get_tlev_ptr(t), (src -> get_geom()).get_nelem_per_t() * sizeof(T), cudaMemcpyDeviceToHost));
-        }
-        return(res);
-
     }
 
 
@@ -448,8 +457,10 @@ namespace utility
         const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
                              (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
+        #if defined(DEVICE)
         device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_dy1.get_tlev_ptr(0), coeffs_dy2.get_tlev_ptr(0), geom_my21);
         gpuErrchk(cudaPeekAtLastError());    
+        #endif
     }
 
 

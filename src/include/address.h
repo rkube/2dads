@@ -5,7 +5,14 @@
  */
 
 
+#if defined(DEVICE) && !defined(CUDA_MEMBER)
 #define CUDA_MEMBER __host__ __device__
+#endif
+
+#if defined(HOST) && !defined(CUDA_MEMBER)
+#define CUDA_MEMBER
+#endif
+
 
 #include "2dads_types.h"
 #include "error.h"

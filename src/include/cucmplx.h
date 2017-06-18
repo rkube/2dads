@@ -7,8 +7,13 @@
 #include <iomanip>
 #include <cmath>
 
-
+#if defined(DEVICE) && !defined(CUDA_MEMBER)
 #define CUDA_MEMBER __host__ __device__
+#endif
+
+#if defined(HOST) && !defined(CUDA_MEMBER)
+#define CUDA_MEMBER
+#endif
 
 constexpr size_t io_width{8};
 constexpr size_t io_prec{4};
