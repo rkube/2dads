@@ -17,7 +17,9 @@ NVCC	= /Developer/NVIDIA/CUDA-8.0/bin/nvcc
 NVCCFLAGS	= -DDEBUG -O0 -g -pg -G -lineinfo -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin  --ptxas-options="-v"
 #NVCCFLAGS	= -O3 -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin
 
-CUDALFLAGS	= -L/Developer/NVIDIA/CUDA-8.0/lib -L/Users/ralph/local/lib -lcufft -lcublas -lcusparse -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp 
+CUDACC  = /Users/ralph/local/bin/clang++
+CUDACFLAGS  = -DDEBUG -O0 -std=c++14 --cuda-gpu-arch=sm_30
+CUDALFLAGS	= -L/Developer/NVIDIA/CUDA-8.0/lib -L/Users/ralph/local/lib -lcufft -lcublas -lcusparse -lcudart -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp  -ldl -lrt -pthread
 
 LFLAGS_OGL = -lglfw -lGLEW -lGL
 

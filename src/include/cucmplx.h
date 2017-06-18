@@ -14,7 +14,7 @@
 
 
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
-#warn CUDA_MEMBER defined
+#warning CUDA_MEMBER defined
 #define CUDA_MEMBER __host__ __device__
 #else
 #define CUDA_MEMBER

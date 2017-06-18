@@ -82,7 +82,9 @@ inline void gpuVerifyLaunch(const char* file, int line)
      }
 }
 
-#else 
+#endif
+
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
 #warning cuda_array_bc_nogp: compiling for host
 struct dim3{
     int x;
@@ -189,14 +191,14 @@ namespace device
             const twodads::slab_layout_t geom, 
             const twodads::bvals_t<T> bvals)
     {
-        *my_address = new address_t<T>(geom, bvals);
+        //*my_address = new address_t<T>(geom, bvals);
     }
 
     template <typename T>
     __global__
     void kernel_free_address(address_t<T>** my_address)
     {
-        delete *my_address;
+        //delete *my_address;
     }
 
 
