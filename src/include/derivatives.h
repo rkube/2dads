@@ -606,7 +606,7 @@ namespace detail
                                 (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
             // Multiply with coefficients for ky
-            // Coefficients for first and second order are stored in different maps.abs
+            // Coefficients for first and second order are stored in different arrays.
             // Also, for first order we use 
             //      u_y_hat[index] = u_hat[index] * (0.0, I * ky)
             // while second order is
@@ -618,18 +618,21 @@ namespace detail
                     coeffs_map_d1.get_tlev_ptr(0), 
                     reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                     [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
-                    {return(val_in * CuCmplx<T>(0.0, val_map.im()));},
-                    geom_my21);
+                    {
+                        //return(val_in * CuCmplx<T>(0.0, val_map.im()));
+                        return(CuCmplx<T>(0.0, 0.0));
+                    }, geom_my21);
 
             else if(order == 2)
                 device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                     coeffs_map_d2.get_tlev_ptr(0), reinterpret_cast<CuCmplx<T>*>(dst.get_tlev_ptr(t_dst)),
                     [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
-                    {return(val_in * val_map.im());},
-                    geom_my21);
-            #endif
-
+                    {
+                        //return(val_in * val_map.im());
+                        return(CuCmplx<T>(0.0, 0.0));
+                    },geom_my21);
             gpuErrchk(cudaPeekAtLastError());
+            #endif
         }
 
 
@@ -1256,6 +1259,10 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
         {
             assert(src.is_transformed(t_src) == true && "deriv_fd_t :: void dy: src must be transformed");
 
+            std::cout << "Calling derivative order = " << order << std::endl;
+
+            utility :: print(src, t_src, std::cout);
+
             // Multiply with ky coefficients
             if (order < 3)
                 detail :: fd :: impl_dy(src, dst, t_src, t_dst, order, get_coeffs_dy1(), get_coeffs_dy2(), get_geom_my21(), allocator<T>{});
@@ -1264,7 +1271,10 @@ class deriv_fd_t : public deriv_base_t<T, allocator>
                 std::stringstream err_str;
                 err_str << __PRETTY_FUNCTION__ << ": order = " << order << "not implemented"; 
                 throw(not_implemented_error(err_str.str()));
-            } 
+            }
+
+            std :: cout << "Output:" << std::endl;
+            utility :: print(dst, t_dst, std::cout);
         }
 
 

@@ -12,13 +12,8 @@ INCLUDES = -I/Users/ralph/source/2dads/src/include -I/opt/local/include -I/usr/l
 #LFLAGS = -L${MKLROOT}/lib -L${IOMPDIR} -L/Users/ralph/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -lpthread -lm -ldl
 LFLAGS = -L/Users/ralph/local/lib -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp -lfftw3 -L${MKLROOT}/lib  -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
 
-NVCC	= /Developer/NVIDIA/CUDA-8.0/bin/nvcc
-
-NVCCFLAGS	= -DDEBUG -O0 -g -pg -G -lineinfo -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin  --ptxas-options="-v"
-#NVCCFLAGS	= -O3 -std c++11 --gpu-architecture sm_30 -Xcompiler -Wall --expt-extended-lambda --compiler-bindir=/usr/bin
-
 CUDACC  = /Users/ralph/local/bin/clang++
-CUDACFLAGS  = -DDEBUG -O0 -std=c++14 --cuda-gpu-arch=sm_30
+CUDACFLAGS  = -DDEBUG -O0 -g -std=c++14 --cuda-gpu-arch=sm_30 -Wall
 CUDALFLAGS	= -L/Developer/NVIDIA/CUDA-8.0/lib -L/Users/ralph/local/lib -lcufft -lcublas -lcusparse -lcudart -lhdf5_cpp -lhdf5 -lhdf5_hl -lhdf5_hl_cpp  -ldl -pthread
 
 LFLAGS_OGL = -lglfw -lGLEW -lGL

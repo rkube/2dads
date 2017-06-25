@@ -67,6 +67,7 @@ namespace cufft
                     dist_real = static_cast<int>(geom.get_my() + geom.get_pad_y()); //int(My + geom.pad_y); 
                     dist_cplx = static_cast<int>(geom.get_my() / 2 + 1); //int(My / 2 + 1); 
 
+                    std :: cout << "plan_r2c = " << &plan_r2c << std::endl;
                     // Plan the DFT, D2Z
                     if ((err = cufftPlanMany(&plan_r2c, 
                                     1,             //int rank
@@ -146,13 +147,16 @@ namespace cufft
     template<>
         inline void call_dft_r2c<double>(const cufftHandle plan_r2c, double* arr_in, CuCmplx<double>* arr_out) 
         {
+            std::cout << "call_dft_r2c<double>" << std::endl;
             cufftResult err;
-            if((err = cufftExecD2Z(plan_r2c, arr_in, (cufftDoubleComplex*) arr_out)))
+            err = cufftExecD2Z(plan_r2c, arr_in, (cufftDoubleComplex*) arr_out);
+            if(err)
             {
                 std::stringstream err_str;
                 err_str << "Error executing cufftD2Z DFT: " << cuda::cufftGetErrorString.at(err) << std::endl;
                 throw gpu_error(err_str.str());
             }
+            std :: cout << ": err = " << err << std::endl;
         }
 
 
@@ -160,7 +164,8 @@ namespace cufft
         inline void call_dft_r2c<float>(const cufftHandle plan_r2c, float* arr_in, CuCmplx<float>* arr_out) 
         {
             cufftResult err;
-            if((err = cufftExecR2C(plan_r2c, arr_in, (cufftComplex*) arr_out)))
+            err = cufftExecR2C(plan_r2c, arr_in, (cufftComplex*) arr_out);
+            if(err)
             {
                 std::stringstream err_str;
                 err_str << "Error executing cufftD2Z DFT: " << cuda::cufftGetErrorString.at(err) << std::endl;
@@ -179,12 +184,15 @@ namespace cufft
         inline void call_dft_c2r<double>(const cufftHandle plan_c2r, CuCmplx<double>* arr_in, double* arr_out) 
         {
             cufftResult err;
-            if((err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) arr_in, arr_out)))
+            std::cout << "call_dft_c2r<double>";
+            err = cufftExecZ2D(plan_c2r, (cufftDoubleComplex*) arr_in, arr_out);
+            if(err)
             {
                 std::stringstream err_str;
                 err_str << "Error executing cufftZ2D DFT: " << cuda::cufftGetErrorString.at(err) << std::endl;
                 throw gpu_error(err_str.str());
             }
+            std :: cout << ": err = " << err << std::endl;
         }
 
 
@@ -192,12 +200,15 @@ namespace cufft
         inline void call_dft_c2r<float>(const cufftHandle plan_c2r, CuCmplx<float>* arr_in, float* arr_out) 
         {
             cufftResult err;
-            if((err = cufftExecC2R(plan_c2r, (cufftComplex*) arr_in, arr_out)))
+            std::cout << "call_dft_r2c<double>: ....";
+            err = cufftExecC2R(plan_c2r, (cufftComplex*) arr_in, arr_out);
+            if(err)
             {
                 std::stringstream err_str;
                 err_str << "Error executing cufftC2R DFT: " << cuda::cufftGetErrorString.at(err) << std::endl;
                 throw gpu_error(err_str.str());
             }
+            std::cout << " err = " << err << std::endl;
         }
 #endif //DEVICE
 }
@@ -362,6 +373,7 @@ class cufft_object_t : public dft_object_t<T>
         {
             cufft :: call_dft_r2c(get_plan_r2c(), arr_in, arr_out);
         }
+
         virtual void dft_c2r(CuCmplx<T>* arr_in, T* arr_out)
         {
             cufft :: call_dft_c2r(get_plan_c2r(), arr_in, arr_out);

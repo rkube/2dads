@@ -17,6 +17,11 @@
 #define CUDA_MEMBER
 #endif
 
+#if defined(__clang__) && !defined(__CUDA__)
+#warning compiling for host
+#define CUDA_MEMBER
+#endif
+
 constexpr size_t io_width{8};
 constexpr size_t io_prec{4};
 

@@ -3,17 +3,13 @@
  *
  * Input:
  *      f(x, y) = sin(2 * pi * x)
+ * Derivatives:
  *      f_x = 2 * pi * cos(2 pi x)
  *      f_xx =- -4 * pi * sin(2 pi x)
- *      -> Initializes arr1
  *
  *      g(x, y) = exp(-50 * (y-0.5) * (y-0.5))
  *      g_y = -100 * (y - 0.5) * exp(-50 * (y - 0.5) * (y - 0.5))
  *      g_yy = 10000 * (0.24 - y + y^2) * exp(-50 * (y - 0.5) * (y - 0.5))
- *      -> Initializes arr2
- *
- *
- *
  */
 
 #include <iostream>
@@ -59,14 +55,20 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_ddx1_solan_" << my_config.get_nx() << "_host.dat";
+        fname << "test_derivs_ddx1_solan_" << my_config.get_nx() << ".dat";
         utility :: print(sol_an, t_src, fname.str());
 
         // compute first x-derivative
         der.dx(f, sol_num, t_src, t_src, 1);
 
         fname.str(string(""));
+        #if defined(HOST)
         fname << "test_derivs_ddx1_solnum_" << my_config.get_nx() << "_host.dat";
+        #endif
+        #if defined(DEVICE)
+        fname << "test_derivs_ddx1_solnum_" << my_config.get_nx() << "_device.dat";
+        #endif
+
         utility :: print(sol_num, t_src, fname.str());
 
         //sol_num -= sol_an;
@@ -85,14 +87,19 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_ddx2_solan_" << my_config.get_nx() << "_host.dat";
+        fname << "test_derivs_ddx2_solan_" << my_config.get_nx() << "_device.dat";
         utility :: print(sol_an, t_src, fname.str());
 
         //// compute first x-derivative
         der.dx(f, sol_num, t_src, t_src, 2);
 
         fname.str(string(""));
+        #if defined(HOST)
         fname << "test_derivs_ddx2_solnum_" << my_config.get_nx() << "_host.dat";
+        #endif
+        #if defined(DEVICE)
+        fname << "test_derivs_ddx2_solnum_" << my_config.get_nx() << "_device.dat";
+        #endif
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num.elementwise([] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
@@ -113,8 +120,17 @@ int main(void)
             twodads::real_t y{geom.get_y(m)};
             return(exp(-50.0 * y * y)); 
         }, t_src);
+
+        std::cout << std::endl;
+        utility :: print(f, t_src, std::cout);
+        std::cout << std::endl;
+
         dft.dft_r2c(f.get_tlev_ptr(t_src), reinterpret_cast<twodads::cmplx_t*>(f.get_tlev_ptr(t_src)));
         f.set_transformed(t_src, true);
+
+        std::cout << std::endl;
+        utility :: print(f, t_src, std::cout);
+        std::cout << std::endl;
 
         // Initialize analytic first derivative
         sol_an.apply([] (twodads::real_t dummy, size_t n, size_t m, twodads::slab_layout_t geom) -> twodads::real_t
@@ -125,7 +141,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_ddy1_solan_" << my_config.get_nx() << "_host.dat";
+        fname << "test_derivs_ddy1_solan_" << my_config.get_nx() << ".dat";
         utility :: print(sol_an, 0, fname.str());
 
         //// compute first y-derivative
@@ -136,7 +152,12 @@ int main(void)
 
         // Write numerical solution to file
         fname.str(string(""));
+        #if defined(HOST)
         fname << "test_derivs_ddy1_solnum_" << my_config.get_nx() << "_host.dat";
+        #endif
+        #if defined(DEVICE)
+        fname << "test_derivs_ddy1_solnum_" << my_config.get_nx() << "_device.dat";
+        #endif
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num.elementwise([] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
@@ -156,7 +177,7 @@ int main(void)
 
         // Write analytic solution to file
         fname.str(string(""));
-        fname << "test_derivs_ddy2_solan_" << my_config.get_nx() << "_host.dat";
+        fname << "test_derivs_ddy2_solan_" << my_config.get_nx() << ".dat";
         utility :: print(sol_an, t_src, fname.str());
 
         //// compute first x-derivative
@@ -165,9 +186,13 @@ int main(void)
         utility :: normalize(sol_num, t_src);
         sol_num.set_transformed(t_src, false);
 
-
         fname.str(string(""));
+        #if defined(HOST)
         fname << "test_derivs_ddy2_solnum_" << my_config.get_nx() << "_host.dat";
+        #endif
+        #if defined(DEVICE)
+        fname << "test_derivs_ddy2_solnum_" << my_config.get_nx() << "_device.dat";
+        #endif
         utility :: print(sol_num, t_src, fname.str());
 
         sol_num.elementwise([] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
@@ -175,6 +200,5 @@ int main(void)
                 return(lhs - rhs);
             }, sol_an, 0, 0);
         cout << "Second y-derivative: sol_num - sol_an: Nx = " << my_config.get_nx() << ", My = " << my_config.get_my() << ", L2 = " << utility :: L2(sol_num, t_src) << endl;
-
     }
 }
