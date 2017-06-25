@@ -183,13 +183,19 @@ namespace device
             const twodads::slab_layout_t geom, 
             const twodads::bvals_t<T> bvals)
     {
-        //*my_address = new address_t<T>(geom, bvals);
+        //*my_address = (address_t<T>*) malloc(sizeof(address_t<T>));
+        //*my_address = new(*my_address) address_t<T>(geom, bvals);
+
+        *my_address = new address_t<T>(geom, bvals);
     }
 
     template <typename T>
     __global__
     void kernel_free_address(address_t<T>** my_address)
     {
+        // Call the destructor explicitly. clang doesn't like delete.
+        //(*my_address) -> ~address_t<T>();
+        free(*my_address);
         //delete *my_address;
     }
 

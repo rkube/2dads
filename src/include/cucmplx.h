@@ -7,11 +7,13 @@
 #include <iomanip>
 #include <cmath>
 
-#if defined(DEVICE) && !defined(CUDA_MEMBER)
+#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
+#warning compiling for device
 #define CUDA_MEMBER __host__ __device__
 #endif
 
-#if defined(HOST) && !defined(CUDA_MEMBER)
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#warning compiling for host
 #define CUDA_MEMBER
 #endif
 

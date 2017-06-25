@@ -100,9 +100,12 @@ class address_t
     public:
         CUDA_MEMBER address_t(const twodads::slab_layout_t& _sl, const twodads::bvals_t<T>& _bv) : 
             Nx(_sl.get_nx()), My(_sl.get_my()), pad_My(_sl.get_pad_y()), 
-            deltax(_sl.get_deltax()), deltay(_sl.get_deltay()), bv(_bv),
-            gp_interpolator_left{nullptr}, gp_interpolator_right{nullptr}
+            deltax(_sl.get_deltax()), deltay(_sl.get_deltay()), bv(_bv)
+            // Remove the gp interpolators now as clang does not
+            // properly call operator new on the device.
+            //gp_interpolator_left{nullptr}, gp_interpolator_right{nullptr}
             {
+                /*
                 switch(bv.get_bc_left())
                 {
                     case twodads::bc_t::bc_dirichlet:
@@ -137,49 +140,13 @@ class address_t
                     // do nothing
                         break;
                 }
+                */
             };
-        
-        CUDA_MEMBER address_t(const address_t<T>& src) :
-        Nx(src.get_nx()), My(src.get_my()), pad_My(src.get_pad_my()), 
-        deltax(src.get_deltax()), deltay(src.get_deltay()), 
-        bv(src.get_bval()),
-        gp_interpolator_left{nullptr}, gp_interpolator_right{nullptr}
-        {
-            switch(bv.get_bc_left())
-            {
-                case twodads::bc_t::bc_dirichlet:
-                    gp_interpolator_left = new bval_interpolator_dirichlet_left<T>(bv.get_bv_left());
-                    break;
-
-                case twodads::bc_t::bc_neumann:
-                    gp_interpolator_left = new bval_interpolator_neumann_left<T>(bv.get_bv_left());
-                    break;
-                // Periodic BCs in x are not implemented with FDs. set a nullptr and hope it fails somewhere down the line
-                // with an illegal memory access :)
-                case twodads::bc_t::bc_periodic:
-                case twodads::bc_t::bc_null:
-                    break;
-            }
-       
-            switch(bv.get_bc_right())
-            {
-                case twodads::bc_t::bc_dirichlet:
-                    gp_interpolator_right = new bval_interpolator_dirichlet_right<T>(bv.get_bv_right());
-                    break;
-
-                case twodads::bc_t::bc_neumann:
-                    gp_interpolator_right = new bval_interpolator_neumann_right<T>(bv.get_bv_right());
-                    break;
-                case twodads::bc_t::bc_periodic:
-                case twodads::bc_t::bc_null:
-                    break;
-            }
-        }
 
         CUDA_MEMBER ~address_t() 
         {
-            delete gp_interpolator_left;
-            delete gp_interpolator_right;
+            //delete gp_interpolator_left;
+            //delete gp_interpolator_right;
         }
 
         // Direct element access, no wrapping / ghost points
@@ -218,26 +185,46 @@ class address_t
             }
             else if(n == -1)
             {
-                ret_val = interp_gp_left(this -> get_elem(data, 0, m_wrapped)); 
+                // Ideally, we would call the interpolator member here.
+                // But as clang cannot call new on the device, we are 
+                // doing if here :)
+                //ret_val = interp_gp_left(get_elem(data, 0, m_wrapped)); 
+                switch(bv.get_bc_left())
+                {
+                    case twodads::bc_t::bc_dirichlet:
+                        ret_val =  bv.get_bv_left() * 2.0 - get_elem(data, 0, m_wrapped);
+                        break;
+                    case twodads::bc_t::bc_neumann:
+                        ret_val = get_elem(data, 0, m_wrapped) - get_deltax() * bv.get_bv_left();
+                        break;
+                    case twodads::bc_t::bc_null:
+                        ret_val = get_elem(data, 0, m_wrapped);
+                        break;
+                    default:
+                        break;
+                }
             }
             else if (n == static_cast<int>(get_nx()))
             {
-                ret_val = interp_gp_right(this -> get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped)); 
+                switch(bv.get_bc_right())
+                {
+                    case twodads::bc_t::bc_dirichlet:
+                        ret_val = bv.get_bv_right() * 2.0 - get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped);
+                        break;
+                    case twodads::bc_t::bc_neumann:
+                        ret_val = get_deltax() * bv.get_bv_right() + get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped);
+                        break;
+                    case twodads::bc_t::bc_null:
+                        ret_val = get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped);
+                        break;
+                    default:
+                        break;
+                }   
+                //ret_val = interp_gp_right(this -> get_elem(data, static_cast<int>(get_nx() - 1), m_wrapped)); 
             }
             return(ret_val);
         }   
-
-        // Wrap m and return reference to data if n is within bounds
-        //CUDA_MEMBER T& operator()(T* data, const int n, const int m)
-        //{
-        //    const int m_wrapped = (m + static_cast<int>(get_my())) % static_cast<int>(get_my());
-        //    if(n >= 0 && n < static_cast<int>(get_nx()))
-        //    {
-        //        return(data[n * static_cast<int>(get_my() + get_pad_my()) + m_wrapped]);
-        //    }
-        //    printf("Out of bounds error in T& address operator() n = %d is out of bounds\n", n);
-        //    return(data[0]);
-        //}     
+   
 
         CUDA_MEMBER inline size_t get_nx() const {return(Nx);};
         CUDA_MEMBER inline size_t get_my() const {return(My);};
@@ -246,8 +233,8 @@ class address_t
         CUDA_MEMBER inline T get_deltax() const {return(deltax);};
         CUDA_MEMBER inline T get_deltay() const {return(deltay);};
 
-        CUDA_MEMBER inline T interp_gp_left(const T uval) const {return((*gp_interpolator_left)(uval, get_deltax()));};
-        CUDA_MEMBER inline T interp_gp_right(const T uval) const {return((*gp_interpolator_right)(uval, get_deltax()));};
+        //CUDA_MEMBER inline T interp_gp_left(const T uval) const {return((*gp_interpolator_left)(uval, get_deltax()));};
+        //CUDA_MEMBER inline T interp_gp_right(const T uval) const {return((*gp_interpolator_right)(uval, get_deltax()));};
 
     private:
         // Number of elements in x
@@ -263,9 +250,9 @@ class address_t
         // The boundary values and conditions of the array
         const twodads::bvals_t<T> bv;
         // Interpolator to get ghost points left n=-1
-        bval_interpolator<T>* gp_interpolator_left;
+        //bval_interpolator<T>* gp_interpolator_left;
         // Interpolator to get ghost points right, n=Nx
-        bval_interpolator<T>* gp_interpolator_right;
+        //bval_interpolator<T>* gp_interpolator_right;
 };
 
 // End of file address.h

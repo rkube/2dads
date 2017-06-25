@@ -73,6 +73,8 @@ class diagnostic_t {
     private:
         const twodads::slab_layout_t slab_layout;
 
+        void diag_com(const twodads::field_t fieldname, const std::string filename, const twodads::real_t time) const;
+
         /**
          .. cpp:function inline void diag_com_theta(const twodads::real_t time) const
 
@@ -95,6 +97,8 @@ class diagnostic_t {
         inline void diag_com_tau(const twodads::real_t time) const
         { diag_com(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
 
+
+        void diag_max(const twodads::field_t fieldname, const std::string filename, const twodads::real_t time) const;
         /**
          .. cpp:function inline void diag_max_theta(const twodads::real_t time) const
 
@@ -126,7 +130,7 @@ class diagnostic_t {
         // This leads to some weird const-casting, as in init_field_ptr. But it seems
         // to work out. The data pointers are read-only and the diagnostic output is usable.
 		
-        /**
+        /*
          .. cpp:function:
         void diag_com(const twodads::field_t, const std::string, const twodads::real_t) const;
         ///@brief Write out max diagnostics
@@ -172,6 +176,7 @@ class diagnostic_t {
         //unsigned int n_probes; /// Number of probes
 		//bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
         //twodads::real_t theta_bg; /// Subtract uniform background on theta
+        */
 
     /**
      .. cpp:namespace-pop::

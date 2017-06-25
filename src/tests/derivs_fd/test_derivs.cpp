@@ -23,7 +23,14 @@
 using namespace std;
 using real_arr = cuda_array_bc_nogp<twodads::real_t, allocator_host>;
 using deriv_t = deriv_fd_t<twodads::real_t, allocator_host>;
+
+#if defined(HOST)
 using dft_t = fftw_object_t<twodads::real_t>;
+#endif //HOST
+
+#if defined(DEVICE)
+using dft_t = cufft_object_t<twodads::real_t>;
+#endif //DEVICE
 
 
 int main(void)

@@ -532,6 +532,8 @@ namespace detail
             static dim3 block_single_row(cuda::blockdim_row, 1);
             static dim3 grid_single_row((in.get_geom().get_nx() + cuda::blockdim_row - 1) / cuda::blockdim_row, 1);
 
+            #if defined(DEVICE)
+
             // First and second order derivatives are both implemented as three-point stencils.
             // How the stencils are applied is the same for first and second order. Only the
             // exact stencil scheme is different.
@@ -586,6 +588,8 @@ namespace detail
                         out.get_geom(), out.get_geom().get_nx() - 1);
                 gpuErrchk(cudaPeekAtLastError());
             }
+
+            #endif //DEVICE
         }
 
 
@@ -608,6 +612,7 @@ namespace detail
             // while second order is
             //      u_y_hat[index] = u_hat[index] * (I * ky)^2
 
+            #if defined(DEVICE)
             if(order == 1)
                 device :: kernel_multiply_map<<<grid_my21, block_my21>>>(reinterpret_cast<CuCmplx<T>*>(src.get_tlev_ptr(t_src)),
                     coeffs_map_d1.get_tlev_ptr(0), 
@@ -622,6 +627,7 @@ namespace detail
                     [] __device__ (CuCmplx<T> val_in, CuCmplx<T> val_map) -> CuCmplx<T>
                     {return(val_in * val_map.im());},
                     geom_my21);
+            #endif
 
             gpuErrchk(cudaPeekAtLastError());
         }
@@ -643,6 +649,7 @@ namespace detail
             static dim3 block_single_col(1, cuda::blockdim_col);
             static dim3 grid_single_col(1, (u.get_geom().get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col);
 
+            #if defined(DEVICE)
             device :: kernel_arakawa_center<<<u.get_grid(), u.get_block()>>>(u.get_tlev_ptr(t_srcu), u.get_address_2ptr(),
                     v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                     res.get_tlev_ptr(t_dst), u.get_geom());
@@ -668,6 +675,7 @@ namespace detail
                     v.get_tlev_ptr(t_srcv), v.get_address_2ptr(),
                     res.get_tlev_ptr(t_dst), u.get_geom(), u.get_geom().get_my() - 1);
             gpuErrchk(cudaPeekAtLastError());
+            #endif //DEVICE
         }
 
         template <typename T>
@@ -895,9 +903,10 @@ namespace detail
             const dim3 block_my21(cuda::blockdim_col, cuda::blockdim_row);
             const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
                                  (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
-
+            #if defined(DEVICE)
             device :: kernel_gen_coeffs<<<grid_my21, block_my21>>>(coeffs_d1.get_tlev_ptr(0), coeffs_d2.get_tlev_ptr(0), geom_my21);
             gpuErrchk(cudaPeekAtLastError()); 
+            #endif //DEVICE
         }
 
 
@@ -913,6 +922,7 @@ namespace detail
             const dim3 grid_my21((geom_my21.get_my() + cuda::blockdim_col - 1) / cuda::blockdim_col,
                                  (geom_my21.get_nx() + cuda::blockdim_row - 1) / (cuda::blockdim_row));
 
+            #if defined(DEVICE)
             switch(dir)
             {
                 case direction::x:
@@ -967,6 +977,7 @@ namespace detail
                     break;
             }
             gpuErrchk(cudaPeekAtLastError());
+            #endif //DEVICE
         }
 
 

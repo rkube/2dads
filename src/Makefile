@@ -11,8 +11,12 @@ OBJECTS_DEVICE=$(OBJ_DIR)/slab_config.o $(OBJ_DIR)/output.o $(OBJ_DIR)/diagnosic
 #shader.o: shader.cpp
 #	$(CC) $(CFLAGS) $(DEFINES) -c -o $(OBJ_DIR)/shader.o shader.cpp $(INCLUDES)
 
-slab_config.o: slab_config.cpp include/slab_config.h
-	$(CC) $(CFLAGS) $(INCLUDES) -c -o $(OBJ_DIR)/slab_config.o slab_config.cpp 
+slab_config_host.o: slab_config.cpp include/slab_config.h
+	$(CC) $(CFLAGS) $(INCLUDES) -DHOST -c -o $(OBJ_DIR)/slab_config_host.o slab_config.cpp 
+
+slab_config_device.o: slab_config.cpp include/slab_config.h
+	$(CUDACC) $(CUDACFLAGS) $(INCLUDES) -DDEVICE -x cuda -c -o $(OBJ_DIR)/slab_config_device.o slab_config.cpp 
+
 
 output.o: output.cpp include/output.h
 	$(CC) $(CFLAGS) $(INCLUDES) -c -o $(OBJ_DIR)/output.o output.cpp 
