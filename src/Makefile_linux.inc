@@ -6,12 +6,12 @@ CC	= /home/rku000/local/bin/clang++
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
 # Debug build
-CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
+#CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
 # Release build
-#CFLAGS = -DMKL_ILP64 -O2  -stdlib=libc++ -std=c++14 -Wall -fopenmp 
+CFLAGS = -DMKL_ILP64 -O2  -stdlib=libc++ -std=c++14 -Wall -fopenmp 
 
 # assume cuda is installed as a debian package in /usr/
-INCLUDES = -I/home/rku000/source/2dads/include -I/home/rku000/local/include -I${MKLROOT}/include 
+INCLUDES = -I/home/rku000/source/2dads/src/include -I/home/rku000/local/include -I${MKLROOT}/include 
 
 #LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5 -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
 LFLAGS = -L${MKLROOT}/lib/intel64 -L${IOMPDIR} -L/home/rku000/local/lib -Wl,-rpath,${MKLROOT}/lib -Wl,--no-as-needed -lhdf5 -lhdf5_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl
@@ -32,8 +32,8 @@ CUDALFLAGS	= -L/home/rku000/local/lib -lhdf5 -lhdf5_cpp -lcufft -lcublas -lcuspa
 
 LFLAGS_OGL = -lglfw -lGLEW -lGL
 
-PROJ_INCDIR = /home/rku000/source/2dads/include
-OBJ_DIR = /home/rku000/source/2dads/obj/
+PROJ_INCDIR = /home/rku000/source/2dads/src/include
+OBJ_DIR = /home/rku000/source/2dads/src/obj/
 
 # MKL: file:///home/rku000/local/intel/documentation_2016/en/mkl/common/mkl_link_line_advisor.htm
 # MKLROOT /home/rku000/local/intel

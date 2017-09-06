@@ -1,5 +1,5 @@
 #
-include Makefile_osx.inc
+include Makefile_linux.inc
 # Subdirectories
 TEST_DIR = tests
 
@@ -27,15 +27,15 @@ diagnostics_host.o: diagnostics.cpp include/diagnostics.h
 	$(CC) $(CFLAGS) $(DEFINES) -DHOST $(INCLUDES) -c -o $(OBJ_DIR)/diagnostics_host.o diagnostics.cpp 
 
 2dads_host: 
-	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_host main_bc.cpp $(OBJECTS_HOST) $(LFLAGS)
+	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o ../run/2dads_host main_bc.cpp $(OBJECTS_HOST) $(LFLAGS)
 
 # Profiling using gperftools
 2dads_profile: 
-	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o run/2dads_profile main_bc_profile.cpp $(OBJECTS_HOST) $(LFLAGS)  -ltcmalloc -lprofiler
+	$(CC) $(CFLAGS) -DHOST $(INCLUDES) -o ../run/2dads_profile main_bc_profile.cpp $(OBJECTS_HOST) $(LFLAGS)  -ltcmalloc -lprofiler
 
 2dads_device: 
 #	$(CUDACC) $(CUDACFLAGS) -DDEVICE $(INCLUDES) -o run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
-	$(NVCC) $(NVCCFLAGS) -DDEVICE $(INCLUDES) -o run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
+	$(NVCC) $(NVCCFLAGS) -DDEVICE $(INCLUDES) -o ../run/2dads_device main_bc.cu $(OBJECTS_DEVICE) $(CUDALFLAGS)
 
 dist:
 	rm -i dist/*.cpp

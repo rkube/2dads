@@ -74,8 +74,8 @@ const std::map<std::string, twodads::init_fun_t> slab_config_js::init_func_map
     {"constant", twodads::init_fun_t::init_constant}, 
     {"gaussian", twodads::init_fun_t::init_gaussian},
     {"lamb_dipole", twodads::init_fun_t::init_lamb_dipole},
-    {"mode", twodads::init_fun_t::init_mode},
     {"sine", twodads::init_fun_t::init_sine},
+    {"mode", twodads::init_fun_t::init_mode},
     {"turbulent_bath", twodads::init_fun_t::init_turbulent_bath}    
 };
     

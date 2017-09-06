@@ -128,6 +128,8 @@ class diagnostic_t {
 		
         /**
          .. cpp:function:
+
+        */
         void diag_com(const twodads::field_t, const std::string, const twodads::real_t) const;
         ///@brief Write out max diagnostics
         void diag_max(const twodads::field_t, const std::string, const twodads::real_t) const;

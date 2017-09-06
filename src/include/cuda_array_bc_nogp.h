@@ -84,7 +84,7 @@ inline void gpuVerifyLaunch(const char* file, int line)
 
 #endif
 
-#if defined(__clang__) && defined(__CUDA__) && !defined(__CUDA_ARCH__)
+#if !defined(__CUDA__) && !defined(__CUDA_ARCH__)
 #warning cuda_array_bc_nogp: compiling for host
 struct dim3{
     int x;

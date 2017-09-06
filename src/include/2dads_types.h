@@ -699,7 +699,7 @@ namespace twodads {
         init_gaussian,        ///< Initializes gaussian profile 
         init_constant,        ///< Initialize field with constant value
         init_sine,            ///< Initializes sinusoidal profile for theta
-        //init_mode,            ///< Initializes single modes for theta_hat
+        init_mode,            ///< Initializes single modes for theta_hat
         init_turbulent_bath,  ///< Initialize all modes randomly
         init_lamb_dipole      ///<Lamb Dipole
     };
