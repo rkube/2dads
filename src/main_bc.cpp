@@ -54,37 +54,41 @@ int main(void)
         // FD: field.is_transformed(t_dst) = false
         //     field.is_transformed(t_src) = false
 
-/////////////////////////////////////////////////////////////////////////
-        my_slab.integrate(twodads::dyn_field_t::f_theta, 1);
-        my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
-        my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
-        tstep++;
+        if(order > 2)
+        {
+        /////////////////////////////////////////////////////////////////////////
+            my_slab.integrate(twodads::dyn_field_t::f_theta, 1);
+            my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
+            my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
+            tstep++;
 
-        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
-        my_slab.update_real_fields(order - 2);
-        my_slab.write_output(order - 2, tstep * my_config.get_deltat());
-        my_slab.rhs(order - 3, order - 2);
+            my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
+            my_slab.update_real_fields(order - 2);
+            my_slab.write_output(order - 2, tstep * my_config.get_deltat());
+            my_slab.rhs(order - 3, order - 2);
 
+            if(order > 3)
+            {
+            /////////////////////////////////////////////////////////////////////////
+                my_slab.integrate(twodads::dyn_field_t::f_theta, 2);
+                my_slab.integrate(twodads::dyn_field_t::f_omega, 2);
+                my_slab.integrate(twodads::dyn_field_t::f_tau, 2);
+                tstep++;
+            
+                my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
+                my_slab.update_real_fields(order - 3);
+                my_slab.write_output(order - 3, tstep * my_config.get_deltat());
+                my_slab.rhs(0, order - 3);
+            }
+        }
 
-/////////////////////////////////////////////////////////////////////////
-        my_slab.integrate(twodads::dyn_field_t::f_theta, 2);
-        my_slab.integrate(twodads::dyn_field_t::f_omega, 2);
-        my_slab.integrate(twodads::dyn_field_t::f_tau, 2);
-        tstep++;
-//
-        my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
-        my_slab.update_real_fields(order - 3);
-        my_slab.write_output(order - 3, tstep * my_config.get_deltat());
-        my_slab.rhs(0, order - 3);
-        
-
-/////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////
         for(; tstep < num_tsteps + 1; tstep++)
         {
         	std::cout << tstep << "/" << num_tsteps << std::endl;
-            my_slab.integrate(twodads::dyn_field_t::f_theta, 3);
-            my_slab.integrate(twodads::dyn_field_t::f_omega, 3);
-            my_slab.integrate(twodads::dyn_field_t::f_tau, 3);
+            my_slab.integrate(twodads::dyn_field_t::f_theta, order - 1);
+            my_slab.integrate(twodads::dyn_field_t::f_omega, order - 1);
+            my_slab.integrate(twodads::dyn_field_t::f_tau, order - 1);
             my_slab.advance();
 
             my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, 1, 0);

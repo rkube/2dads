@@ -269,6 +269,18 @@ void slab_bc :: initialize()
                 throw not_implemented_error(std::string("Initialization routine not available"));
             break;
         }
+
+        if(get_config().get_log_theta())
+        {
+            theta.elementwise([=] LAMBDACALLER(twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                              {return(log(lhs));}, tidx, 0);
+        }
+        
+        if(get_config().get_log_tau())
+        {
+            tau.elementwise([=] LAMBDACALLER(twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                            {return(log(lhs));}, tidx, 0);
+        }
         
         // Transform fields to compute the derivatives
         switch(get_config().get_grid_type())
@@ -347,9 +359,8 @@ void slab_bc :: invert_laplace(const twodads::field_t in, const twodads::field_t
 }
 
 // Integrate the field in time
-// t_dst is the time level where the result is stored
-// t_src is the source
-// tlev is the time level of the integration
+// fname names the field to integrate
+// order gives the order of the time integration routine
 void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
 {
     const size_t tlevs{get_config().get_tint_params(fname).get_tlevs()};
@@ -454,7 +465,6 @@ void slab_bc :: integrate(const twodads::dyn_field_t fname, const size_t order)
  */
 void slab_bc :: update_real_fields(const size_t t_src)
 {
-    //dft_r2c(twodads::field_t::f_theta, t_src);
     assert(theta.is_transformed(t_src) == true);
     assert(omega.is_transformed(t_src) == true);
     assert(tau.is_transformed(t_src) == true);
@@ -599,13 +609,37 @@ void slab_bc :: diagnose(const size_t t_src, const twodads::real_t time)
     assert(get_array_ptr(twodads::field_t::f_strmf_x) -> is_transformed(0) == false);
     assert(get_array_ptr(twodads::field_t::f_strmf_y) -> is_transformed(0) == false);
 
+    // Treat logarithmic density and temperature fields
+    if(get_config().get_log_theta())
+    {
+        theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(exp(lhs));}, 0, 0);
+    }
+    if(get_config().get_log_tau())
+        tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                        {return(exp(lhs));}, 0, 0);
+    {
+    }
+
     diagnostic.write_diagnostics(time, get_config());
+    if(get_config().get_log_theta())
+    {
+        theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(log(lhs));}, 0, 0);
+    }
+    if(get_config().get_log_tau())
+    {
+        tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(log(lhs));}, 0, 0);
+    }
+
 }
 
 
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {
+    std::cout << "slab_bc::rhs: t_dst = " << t_dst << ", t_src = " << t_src << std::endl;
     assert(theta.is_transformed(t_src) == false);
     assert(theta_x.is_transformed(0) == false);
     assert(theta_y.is_transformed(0) == false);
@@ -640,6 +674,7 @@ inline void slab_bc :: rhs_theta_null(const size_t t_dst, const size_t t_src)
 void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 {
     // Compute poisson bracket, {theta, phi}
+    // theta_rhs <- {phi, theta}
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
@@ -672,7 +707,7 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
     const twodads::real_t ic{model_params[1]};
 
     // Compute poisson bracket
-    // omega_rhs <- {omega, phi}
+    // omega_rhs <- {phi, omega}
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:

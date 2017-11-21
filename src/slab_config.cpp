@@ -114,9 +114,9 @@ const std::map<std::string, twodads::grid_t> slab_config_js :: grid_map
     {"cell", twodads::grid_t::cell_centered}
 };
 
-slab_config_js :: slab_config_js(std::string fname) :
-	    log_theta{false},
-        log_tau{false}
+slab_config_js :: slab_config_js(std::string fname) 
+	    //log_theta{false}, 
+        //log_tau{false}
 	    //do_dealiasing{false},
         //do_randomize_modes{false},
         //particle_tracking{false},
@@ -130,6 +130,7 @@ slab_config_js :: slab_config_js(std::string fname) :
     {
         std::cerr << "Could not initialize configuration: " << e.what() << std::endl;
     }
+    std :: cout << "log_theta = " << get_log_theta() << std::endl;
 }
 
 twodads::rhs_t slab_config_js :: get_rhs_t(const twodads::dyn_field_t fname) const

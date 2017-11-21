@@ -328,7 +328,6 @@ namespace detail
     template <typename T, typename F>
     void impl_apply(T* data_ptr, F host_func, const twodads::slab_layout_t& geom, const bool is_transformed, const dim3& grid, const dim3& block, allocator_host<T>)
     {
-        //host :: host_apply(data_ptr, myfunc, geom, transformed);
         size_t index{0};
         size_t m{0};
 
@@ -371,7 +370,7 @@ namespace detail
         // Iterate over the padding elements the array is transformed
         // Skip the padding elements if the array is not transformed
         const size_t nelem_m{is_transformed ? geom.get_my() + geom.get_pad_y() : geom.get_my()};
-        
+
         // Use the padded array size to compute indices, whether array is transformed or not.
         const size_t my_plus_pad{geom.get_my() + geom.get_pad_y()};
 #pragma omp parallel for private(index, m)

@@ -533,9 +533,8 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             
             // u^{0} /= (1.0 + dt * (diff * k^2 ))
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T 
-                              {
-                                  return(lhs / (twodads::alpha[order - 1][0] + dt * k2 * diff));
-                              }, get_k2_map(), 0, t_dst);                       
+                              { return(lhs / (twodads::alpha[order - 1][0] + dt * k2 * diff));},
+                              get_k2_map(), 0, t_dst);                       
             field.set_transformed(t_dst, true);
             break;
 
@@ -565,9 +564,8 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
             // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T
-                            {
-                                return(lhs / (twodads::alpha[order - 1][0] + k2 * dt * diff));
-                            }, get_k2_map(), 0, t_dst);
+                            { return(lhs / (twodads::alpha[order - 1][0] + k2 * dt * diff));},
+                            get_k2_map(), 0, t_dst);
             field.set_transformed(t_dst, true);
             break;
 
@@ -580,6 +578,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             assert(explicit_part.is_transformed(t_src2 - 1));
             assert(explicit_part.is_transformed(t_src3 - 1));
 
+            assert(get_k2_map().is_transformed(0));
             // u^{0} = alpha_3 * u^{-3}
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(rhs * twodads::alpha[order - 1][3]);},
                             t_dst, t_src3);
@@ -602,9 +601,8 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
 
             // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T
-                            {
-                                return(lhs / (twodads::alpha[2][0] + k2 * dt * diff));
-                            }, get_k2_map(), 0, t_dst);
+                            { return(lhs / (twodads::alpha[order - 1][0] + k2 * dt * diff)); },
+                            get_k2_map(), 0, t_dst);
             field.set_transformed(t_dst, true);
             break;
         

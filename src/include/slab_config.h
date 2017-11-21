@@ -288,7 +288,8 @@ class slab_config_js
          Otherwise returns false.
 
         */
-        bool get_log_theta() const {return(log_theta);};
+        //bool get_log_theta() const {return(log_theta);};
+        bool get_log_theta() const {return(pt.get<bool>("2dads.model.log_theta"));};
 
         /**
          .. cpp:function:: bool get_log_tau() const
@@ -297,7 +298,8 @@ class slab_config_js
          Otherwise returns false.
 
         */
-        bool get_log_tau() const {return(log_tau);};
+        //bool get_log_tau() const {return(log_tau);};
+        bool get_log_tau() const {return(pt.get<bool>("2dads.model.log_tau"));};
 
         /**
          .. cpp:function:: twodads::rhs_t get_rhs_t(const twodads::dyn_field_t fname) const
@@ -363,8 +365,8 @@ class slab_config_js
 
     private:
         boost::property_tree::ptree pt;
-	    bool log_theta;
-        bool log_tau;
+	    //bool log_theta;
+        //bool log_tau;
     
         // Mappings from values in input.ini to enums in twodads.h
         static const std::map<std::string, twodads::field_t> fname_map;

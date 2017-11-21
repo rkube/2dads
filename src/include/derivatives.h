@@ -1527,7 +1527,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
    
         deriv_spectral_t(const twodads::slab_layout_t& _geom) :
         geom{_geom},
-        // Transposed geometry. Required for transposed arrays passed to the  Matrix solver.
+        // Transposed geometry. Required for transposed arrays passed to the Matrix solver.
         geom_my21{get_geom().get_xleft(), 
                 get_geom().get_deltax(), 
                 get_geom().get_ylo(), 
@@ -1544,7 +1544,6 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                 tmp_arr(get_geom(), twodads::bvals_t<T>(twodads::bc_t::bc_dirichlet, twodads::bc_t::bc_dirichlet, 0.0, 0.0), 1)                   
         {
             utility :: bispectral :: init_deriv_coeffs(get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
-            std::cout << "deriv_spectral_t :: deriv_spectral_t: constructed" << std::endl;
         }
 
         virtual void dx(cuda_array_bc_nogp<T, allocator>& src,
@@ -1552,7 +1551,6 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
             assert(src.is_transformed(t_src));
-            // Delegate by tag-based dispatching
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::x, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         }
@@ -1562,7 +1560,6 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                         const size_t t_src, const size_t t_dst, const size_t order)
         {
             assert(src.is_transformed(t_src));
-            // Delegate by tag-based dispatching
             detail :: bispectral :: impl_deriv(src, dst, t_src, t_dst, direction::y, order, get_coeffs_d1(), get_coeffs_d2(), get_geom_my21(), allocator<T>{});
             dst.set_transformed(t_dst, true);
         }
@@ -1607,16 +1604,16 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             assert(f_x.is_transformed(t_src_f) == false);
             assert(f_y.is_transformed(t_src_f) == false);
             assert(g_x.is_transformed(t_src_g) == false);
-            assert(g_y.is_transformed(t_src_f) == false);
+            assert(g_y.is_transformed(t_src_g) == false);
 
             // dst <- f_x
             dst.copy(0, f_x, t_src_f);
-            // dst *= g_y
+            // dst <- dst * g_y
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                             {return(lhs * rhs); }, g_y, 0, t_dst);
             // tmp <- f_y
             tmp_arr.copy(0, f_y, t_src_f);
-            // tmp * g_x
+            // tmp <- tmp * g_x
             tmp_arr.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                                 { return(lhs * rhs); }, g_x, 0, t_src_g);
             // dst <- dst - tmp = f_x g_y - f_y g_x
@@ -1635,7 +1632,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
 
     private:
         const twodads::slab_layout_t geom;
-        // Transposed geometry. Required for transposed arrays passed to the  Matrix solver.
+        // Transposed geometry. Required for transposed arrays passed to the Matrix solver.
         const twodads::slab_layout_t geom_my21;
 
         // Coefficients for spectral derivation
