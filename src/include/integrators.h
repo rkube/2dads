@@ -463,6 +463,9 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
         {
             k2_map.set_transformed(0, true);
             init_k2_map();
+
+            std::cout << "constructing integrator_karniadakis_bs_t" << std::endl;
+            utility :: print(k2_map, 0, std::cout);
         }
 
         void integrate(cuda_array_bc_nogp<T, allocator>&,
@@ -488,11 +491,13 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
 template<typename T, template<typename> class allocator>
 void integrator_karniadakis_bs_t<T, allocator> :: init_k2_map()
 {
-    // Construct Ly (cut in half) outside of the function
+    std::cout << "Lx = " << geom.get_Lx() << ", Ly = " << geom.get_Ly() << std::endl;
+    // Set both real and imaginary value to k^2. 
+    // slab_bc instantiates the integrator as T = twodads::real_t
     k2_map.apply([] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                   {
                     const T kx{twodads::TWOPI * ( (n < geom.get_nx() / 2 + 1) ? T(n) : (T(n) - T(geom.get_nx())) ) / geom.get_Lx()};
-                    const T ky{twodads::TWOPI * 0.5 * T(m - (m % 2)) / geom.get_Ly()};
+                    const T ky{twodads::TWOPI * T(m - (m % 2)) / geom.get_Ly()};
                     return(kx * kx + ky * ky);
                   }, 0);
 }
@@ -531,7 +536,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[order - 1][0] * dt);},
                               explicit_part, t_dst, t_src1 - 1);
             
-            // u^{0} /= (1.0 + dt * (diff * k^2 ))
+            // u^{0} /= (1.0 + dt * diff * k^2 )
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T 
                               { return(lhs / (twodads::alpha[order - 1][0] + dt * k2 * diff));},
                               get_k2_map(), 0, t_dst);                       
@@ -562,7 +567,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[order - 1][0] * dt);},
                               explicit_part, t_dst, t_src1 - 1);
 
-            // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
+            // u^{0} /= (1.5 + dt * diff * k^2)
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T
                             { return(lhs / (twodads::alpha[order - 1][0] + k2 * dt * diff));},
                             get_k2_map(), 0, t_dst);
@@ -599,7 +604,7 @@ void integrator_karniadakis_bs_t<T, allocator> :: integrate(cuda_array_bc_nogp<T
             field.elementwise([=] LAMBDACALLER(T lhs, T rhs) -> T {return(lhs + rhs * twodads::beta[order - 1][0] * dt);},
                             explicit_part, t_dst, t_src1 - 1);
 
-            // u^{0} /= (1.0 + dt * (diff * k^2 + hv * k^6))
+            // u^{0} /= (11/6 + dt * (diff * k^2 + hv * k^6))
             field.elementwise([=] LAMBDACALLER (T lhs, T k2) -> T
                             { return(lhs / (twodads::alpha[order - 1][0] + k2 * dt * diff)); },
                             get_k2_map(), 0, t_dst);

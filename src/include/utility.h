@@ -144,6 +144,23 @@ namespace utility
         }
     }
 
+    template <typename T>
+    void print(const cuda_array_bc_nogp<T, allocator_host>* vec, const size_t tidx, std::ostream& os)
+    {
+        address_t<T>* address = vec -> get_address_ptr();
+        const size_t nelem_m{vec -> is_transformed(tidx) ? vec -> get_geom().get_my() + vec -> get_geom().get_pad_y() : vec -> get_geom().get_my()};
+
+        for(size_t n = 0; n < vec -> get_geom().get_nx(); n++)
+        {
+            for(size_t m = 0; m < nelem_m; m++)
+            {
+                os << std::setw(twodads::io_w) << std::setprecision(twodads::io_p) << std::fixed << (*address).get_elem(vec -> get_tlev_ptr(tidx), n, m) << "\t";
+            }
+            os << std::endl;
+        }
+    }
+
+
 
     template <typename T>
     void print(const cuda_array_bc_nogp<T, allocator_host>& vec, const size_t tidx, std::string fname)

@@ -25,6 +25,16 @@ int main(void)
         my_slab.initialize();
         // output:
         // FD: all fields are complex
+        //std::cout << "theta, t=0" << std::endl;
+        //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 0, std::cout);
+        //std::cout << "theta, t=1" << std::endl;
+        //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 1, std::cout);
+        //std::cout << "theta, t=2" << std::endl;
+        //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 2, std::cout);
+        //std::cout << "theta, t=3" << std::endl;
+        //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 3, std::cout);
+        //std::cout << "============================================================================" << std::endl;
+
 
         std::cout << "Inverting laplace" << std::endl;
         // input:
@@ -54,6 +64,7 @@ int main(void)
         // FD: field.is_transformed(t_dst) = false
         //     field.is_transformed(t_src) = false
 
+
         if(order > 2)
         {
         /////////////////////////////////////////////////////////////////////////
@@ -61,6 +72,16 @@ int main(void)
             my_slab.integrate(twodads::dyn_field_t::f_omega, 1);
             my_slab.integrate(twodads::dyn_field_t::f_tau, 1);
             tstep++;
+
+            //std::cout << "theta, t=0" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 0, std::cout);
+            //std::cout << "theta, t=1" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 1, std::cout);
+            //std::cout << "theta, t=2" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 2, std::cout);
+            //std::cout << "theta, t=3" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 3, std::cout);
+            //std::cout << "============================================================================" << std::endl;
 
             my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 2, 0);
             my_slab.update_real_fields(order - 2);
@@ -75,6 +96,16 @@ int main(void)
                 my_slab.integrate(twodads::dyn_field_t::f_tau, 2);
                 tstep++;
             
+                //std::cout << "theta, t=0" << std::endl;
+                //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 0, std::cout);
+                //std::cout << "theta, t=1" << std::endl;
+                //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 1, std::cout);
+                //std::cout << "theta, t=2" << std::endl;
+                //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 2, std::cout);
+                //std::cout << "theta, t=3" << std::endl;
+                //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 3, std::cout);
+                //std::cout << "============================================================================" << std::endl;
+
                 my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, order - 3, 0);
                 my_slab.update_real_fields(order - 3);
                 my_slab.write_output(order - 3, tstep * my_config.get_deltat());
@@ -90,6 +121,15 @@ int main(void)
             my_slab.integrate(twodads::dyn_field_t::f_omega, order - 1);
             my_slab.integrate(twodads::dyn_field_t::f_tau, order - 1);
             my_slab.advance();
+            //std::cout << "theta, t=0" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 0, std::cout);
+            //std::cout << "theta, t=1" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 1, std::cout);
+            //std::cout << "theta, t=2" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 2, std::cout);
+            //std::cout << "theta, t=3" << std::endl;
+            //utility :: print(my_slab.get_array_ptr(twodads::field_t::f_theta), 3, std::cout);
+            //std::cout << "============================================================================" << std::endl;
 
             my_slab.invert_laplace(twodads::field_t::f_omega, twodads::field_t::f_strmf, 1, 0);
 
