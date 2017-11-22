@@ -491,13 +491,14 @@ class integrator_karniadakis_bs_t : public integrator_base_t<T, allocator>
 template<typename T, template<typename> class allocator>
 void integrator_karniadakis_bs_t<T, allocator> :: init_k2_map()
 {
-    std::cout << "Lx = " << geom.get_Lx() << ", Ly = " << geom.get_Ly() << std::endl;
     // Set both real and imaginary value to k^2. 
     // slab_bc instantiates the integrator as T = twodads::real_t
+    // ky modes are aligned in memory, ky(m=0), ky(m=0), ky(m=1), ky(m=2), ...
+    // count ky modes by (m - (m%2))/2, m = 0...My/2+1
     k2_map.apply([] LAMBDACALLER (T input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
                   {
                     const T kx{twodads::TWOPI * ( (n < geom.get_nx() / 2 + 1) ? T(n) : (T(n) - T(geom.get_nx())) ) / geom.get_Lx()};
-                    const T ky{twodads::TWOPI * T(m - (m % 2)) / geom.get_Ly()};
+                    const T ky{twodads::TWOPI * T(m - (m % 2)) * 0.5 / geom.get_Ly()};
                     return(kx * kx + ky * ky);
                   }, 0);
 }
