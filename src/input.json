@@ -8,9 +8,9 @@
                 "xright" : 10.0,
                 "ylow"   : -10.0,
                 "yup"    : 10.0,
-                "Nx"     : 384,
+                "Nx"     : 512,
                 "padx"   : 0,
-                "My"     : 384,
+                "My"     : 512,
                 "pady"   : 2,
                 "grid_type" : "cell",
 

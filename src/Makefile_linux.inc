@@ -6,9 +6,9 @@ CC	= /home/rku000/local/bin/clang++
 # Do not flag -pg when linking against gperftools as it messes stuff up
 # https://github.com/gperftools/gperftools/issues/396
 # Debug build
-CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
+#CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -pg -stdlib=libc++ -std=c++14 -Wall -fopenmp -fno-limit-debug-info
 # Release build
-#CFLAGS = -DMKL_ILP64 -O2  -stdlib=libc++ -std=c++14 -Wall -fopenmp 
+CFLAGS = -DMKL_ILP64 -O2  -stdlib=libc++ -std=c++14 -Wall -fopenmp 
 
 # assume cuda is installed as a debian package in /usr/
 INCLUDES = -I/home/rku000/source/2dads/src/include -I/home/rku000/local/include -I${MKLROOT}/include 

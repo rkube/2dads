@@ -1610,7 +1610,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
             dst.copy(0, f_x, t_src_f);
             // dst <- dst * g_y
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                            {return(lhs * rhs); }, g_y, 0, t_dst);
+                            {return(lhs * rhs); }, g_y, t_dst, 0);
             // tmp <- f_y
             tmp_arr.copy(0, f_y, t_src_f);
             // tmp <- tmp * g_x
@@ -1618,7 +1618,7 @@ class deriv_spectral_t : public deriv_base_t<T, allocator>
                                 { return(lhs * rhs); }, g_x, 0, t_src_g);
             // dst <- dst - tmp = f_x g_y - f_y g_x
             dst.elementwise([] LAMBDACALLER(twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                            { return(lhs - rhs); }, tmp_arr, 0, t_dst);
+                            { return(lhs - rhs); }, tmp_arr, t_dst, 0);
         };   
 
 

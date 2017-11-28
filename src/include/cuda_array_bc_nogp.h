@@ -554,8 +554,10 @@ public:
 
     */
     template<typename F> inline void elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs,
-                                                 const size_t tidx_rhs, const size_t tidx_lhs)
+                                                 const size_t tidx_lhs, const size_t tidx_rhs)
     {
+
+        //std::cout << "elementwise w/ rhs, tidx_rhs = " << tidx_rhs << ", tidx_lhs = " << tidx_lhs << std::endl;
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
@@ -581,6 +583,8 @@ public:
     */
     template<typename F> inline void elementwise(F myfunc, const size_t tidx_lhs, const size_t tidx_rhs)
     {
+        //std::cout << "elementwise w/o rhs, tidx_rhs = " << tidx_rhs << ", tidx_lhs = " << tidx_lhs << std::endl;
+
         check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         detail :: impl_elementwise(get_tlev_ptr(tidx_lhs), get_tlev_ptr(tidx_rhs), myfunc, get_geom(), is_transformed(tidx_lhs) | is_transformed(tidx_rhs), get_grid(), get_block(), allocator_type{});   

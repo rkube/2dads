@@ -8,9 +8,9 @@
                 "xright" : 1.0,
                 "ylow"   : -1.0,
                 "yup"    : 1.0,
-                "Nx"     : 64,
+                "Nx"     : 32,
                 "padx"   : 0,
-                "My"     : 64,
+                "My"     : 32,
                 "pady"   : 2,
                 "grid_type" : "vertex",
 
@@ -46,10 +46,12 @@
             {
                 "rhs_theta" : "rhs_theta_lin",
                 "parameters_theta": [1e-3, 0.0],
+                "log_theta" : 0,
                 "rhs_omega" : "rhs_omega_ic",
                 "parameters_omega": [1e-3, 0.0],
                 "rhs_tau"  : "rhs_tau_null",
-                "parameters_tau"  : [1e-3, 0.0]
+                "parameters_tau"  : [1e-3, 0.0],
+                "log_tau" : 0
             },
             "initial":
             {

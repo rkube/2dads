@@ -639,7 +639,6 @@ void slab_bc :: diagnose(const size_t t_src, const twodads::real_t time)
 
 void slab_bc :: rhs(const size_t t_dst, const size_t t_src)
 {
-    std::cout << "slab_bc::rhs: t_dst = " << t_dst << ", t_src = " << t_src << std::endl;
     assert(theta.is_transformed(t_src) == false);
     assert(theta_x.is_transformed(0) == false);
     assert(theta_y.is_transformed(0) == false);
@@ -705,7 +704,7 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
     const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
     const twodads::real_t ic{model_params[1]};
-
+    
     // Compute poisson bracket
     // omega_rhs <- {phi, omega}
     switch(get_config().get_grid_type())
@@ -723,10 +722,9 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
             break;
     }
     
-
     // omega_rhs <- {omega, phi} - ic * theta_y
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, theta_y, 0, t_dst);           
+                          {return (lhs - ic * rhs);}, theta_y, t_dst, 0);           
 }
 
 
