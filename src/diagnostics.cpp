@@ -148,6 +148,7 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
         // Call diagnostics for current time
         (this->*dfun_ptr)(time);
     }
+
 }
 
 

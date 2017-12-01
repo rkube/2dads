@@ -288,7 +288,6 @@ class slab_config_js
          Otherwise returns false.
 
         */
-        //bool get_log_theta() const {return(log_theta);};
         bool get_log_theta() const {return(pt.get<bool>("2dads.model.log_theta"));};
 
         /**

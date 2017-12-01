@@ -195,8 +195,6 @@ void slab_bc :: initialize()
         switch(get_config().get_init_func_t(it.first)) 
         {
         case twodads::init_fun_t::init_constant:
-            std::cout << "Initializing constant" << initvals[0] << std::endl;
-
             assert(initvals.size() == 1 && "Initializing a constant requires at least one initvals");
             iv0 = initvals[0];
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
@@ -207,11 +205,6 @@ void slab_bc :: initialize()
            break;
 
         case twodads::init_fun_t::init_gaussian:
-            std::cout << "Initializing gaussian: ";
-            for(auto it : initvals)
-                std::cout << it << "\t";
-            std::cout << std::endl;
-
             // We need 4 initial values
             assert(initvals.size() > 4 && "Initializing a Gaussian requires at least 5 initvals");
             iv0 = initvals[0];
@@ -235,8 +228,6 @@ void slab_bc :: initialize()
             break;
 
         case twodads::init_fun_t::init_mode:
-            std::cout << "Initializing mode" << std::endl;
-
             (*field).apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
             {
                 const twodads::real_t x{geom.get_x(n)};
@@ -247,7 +238,6 @@ void slab_bc :: initialize()
             break;
 
         case twodads::init_fun_t::init_sine:
-            std::cout << "Initializing sine" << std::endl;
             assert(initvals.size() == 2 && "Initializing a sine requires at least two initial values");
             iv0 = initvals[0];
             iv1 = initvals[1];
@@ -270,13 +260,14 @@ void slab_bc :: initialize()
             break;
         }
 
-        if(get_config().get_log_theta())
+
+        if(it.first == twodads::dyn_field_t::f_theta  && get_config().get_log_theta())
         {
             theta.elementwise([=] LAMBDACALLER(twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
                               {return(log(lhs));}, tidx, 0);
         }
         
-        if(get_config().get_log_tau())
+        if(it.first == twodads::dyn_field_t::f_tau && get_config().get_log_tau())
         {
             tau.elementwise([=] LAMBDACALLER(twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
                             {return(log(lhs));}, tidx, 0);
@@ -694,6 +685,40 @@ void slab_bc :: rhs_theta_lin(const size_t t_dst, const size_t t_src)
 }
 
 
+void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
+{
+    // Compute poisson bracket, {theta, phi}
+    // theta_rhs <- {phi, theta}
+    
+    const twodads::stiff_params_t tmp{conf.get_tint_params(twodads::dyn_field_t::f_theta)};
+    const twodads::real_t diff{tmp.get_diff()};
+
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            // Derivative fields have only 1 time index. Do not use t_src here.
+            // Store in t_dst time index of RHS
+            // Store theta_x strmf_y - theta_y strmf_x in theta_rhs
+            my_derivs -> pbracket(theta_x, theta_y, strmf_x, strmf_y, theta_rhs, 0, 0, t_dst);
+            break;
+
+        case twodads::grid_t::cell_centered:
+            // Input to Arakawa scheme is from in-place DFTs of dynamic fields.
+            // Get data from t_src.
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(theta, strmf, theta_rhs, t_src, 0, t_dst);
+            //my_derivs -> pbracket(strmf, theta, theta_rhs, 0, t_src, t_dst);
+            break;
+    }
+
+    // theta_rhs <- theta_rhs - nu * (nabla_perp theta) 
+    theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                          {return (lhs - diff * rhs * rhs);}, theta_x, t_dst, 0);
+    theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                          {return (lhs - diff * rhs * rhs);}, theta_y, t_dst, 0);
+}
+
+
 inline void slab_bc :: rhs_omega_null(const size_t t_dst, const size_t t_src)
 {
     // Do nothing
@@ -717,8 +742,8 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 
         case twodads::grid_t::cell_centered:
             // Store in t_dst time index of RHS
-            //my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
-            my_derivs -> pbracket(strmf, omega, omega_rhs, 0, t_src, t_dst);
+            my_derivs -> pbracket(omega, strmf, omega_rhs, t_src, 0, t_dst);
+            //my_derivs -> pbracket(strmf, omega, omega_rhs, 0, t_src, t_dst);
             break;
     }
     

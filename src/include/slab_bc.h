@@ -266,6 +266,15 @@ class slab_bc
         void rhs_theta_lin(const size_t, const size_t);
 
         /**
+         .. cpp:function void rhs_theta_log(const size_t, const size_t)
+
+         RHS for logarithmic interchange model. Should not be called directly but from void rhs(const size_t, const size_t).
+
+        */
+        void rhs_theta_log(const size_t, const size_t);
+
+
+        /**
          .. cpp:function void rhs_omega_null(const size_t, const size_t)
 
          RHS for diffusion equation. No explicit part. Should not be called directly but from void rhs(const size_t, const size_t).
@@ -340,6 +349,7 @@ class slab_bc
             std::map<twodads::rhs_t, rhs_func_ptr> my_map;
             my_map[twodads::rhs_t::rhs_theta_null] = &slab_bc::rhs_theta_null;
             my_map[twodads::rhs_t::rhs_theta_lin]  = &slab_bc::rhs_theta_lin;
+            my_map[twodads::rhs_t::rhs_theta_log]  = &slab_bc::rhs_theta_log;
             my_map[twodads::rhs_t::rhs_omega_null] = &slab_bc::rhs_omega_null;
             my_map[twodads::rhs_t::rhs_omega_ic]   = &slab_bc::rhs_omega_ic;
             my_map[twodads::rhs_t::rhs_tau_null]   = &slab_bc::rhs_tau_null;
