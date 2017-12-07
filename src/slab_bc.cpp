@@ -30,27 +30,29 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
     tau(get_config().get_geom(),       get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tlevs()),   
     tau_x(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),   
     tau_y(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_tau), 1),
+    tmp(get_config().get_geom(),       get_config().get_bvals(twodads::field_t::f_tau), 1),
     strmf(get_config().get_geom(),     get_config().get_bvals(twodads::field_t::f_strmf), 1), 
     strmf_x(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1), 
     strmf_y(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_strmf), 1),
     theta_rhs(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_theta), get_config().get_tlevs() - 1),
     omega_rhs(get_config().get_geom(), get_config().get_bvals(twodads::field_t::f_omega), get_config().get_tlevs() - 1),
     tau_rhs(get_config().get_geom(),   get_config().get_bvals(twodads::field_t::f_tau), get_config().get_tlevs() - 1),
-    get_field_by_name{ {twodads::field_t::f_theta,     &theta},
-                       {twodads::field_t::f_theta_x,   &theta_x},
-                       {twodads::field_t::f_theta_y,   &theta_y},
-                       {twodads::field_t::f_omega,     &omega},
-                       {twodads::field_t::f_omega_x,   &omega_x},
-                       {twodads::field_t::f_omega_y,   &omega_y},
-                       {twodads::field_t::f_tau,       &tau},
-                       {twodads::field_t::f_tau_x,     &tau_x},
-                       {twodads::field_t::f_tau_y,     &tau_y},
-                       {twodads::field_t::f_strmf,     &strmf},
-                       {twodads::field_t::f_strmf_x,   &strmf_x},
-                       {twodads::field_t::f_strmf_y,   &strmf_y},
-                       {twodads::field_t::f_theta_rhs, &theta_rhs},
-                       {twodads::field_t::f_omega_rhs, &omega_rhs},
-                       {twodads::field_t::f_tau_rhs, &tau_rhs}},
+    get_field_by_name{ {twodads::field_t::f_theta,      &theta},
+                       {twodads::field_t::f_theta_x,    &theta_x},
+                       {twodads::field_t::f_theta_y,    &theta_y},
+                       {twodads::field_t::f_omega,      &omega},
+                       {twodads::field_t::f_omega_x,    &omega_x},
+                       {twodads::field_t::f_omega_y,    &omega_y},
+                       {twodads::field_t::f_tau,        &tau},
+                       {twodads::field_t::f_tau_x,      &tau_x},
+                       {twodads::field_t::f_tau_y,      &tau_y},
+                       {twodads::field_t::f_strmf,      &strmf},
+                       {twodads::field_t::f_strmf_x,    &strmf_x},
+                       {twodads::field_t::f_strmf_y,    &strmf_y},
+                       {twodads::field_t::f_tmp,        &tmp},
+                       {twodads::field_t::f_theta_rhs,  &theta_rhs},
+                       {twodads::field_t::f_omega_rhs,  &omega_rhs},
+                       {twodads::field_t::f_tau_rhs,    &tau_rhs}},
     get_dfield_by_name{ {twodads::dyn_field_t::f_theta, &theta},
                         {twodads::dyn_field_t::f_omega, &omega},
                         {twodads::dyn_field_t::f_tau,   &tau}},
@@ -172,7 +174,7 @@ void slab_bc :: initialize()
     auto map_fields = std::map<twodads::dyn_field_t, decltype(tuple_theta)>
         {{twodads::dyn_field_t::f_theta, tuple_theta},
          {twodads::dyn_field_t::f_omega, tuple_omega}, 
-         {twodads::dyn_field_t::f_tau, tuple_tau}};
+         {twodads::dyn_field_t::f_tau,   tuple_tau}};
 
     // Iterate over the dynamic fields and initialize them
     for(auto it : map_fields)
@@ -607,9 +609,9 @@ void slab_bc :: diagnose(const size_t t_src, const twodads::real_t time)
                           {return(exp(lhs));}, 0, 0);
     }
     if(get_config().get_log_tau())
+    {
         tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
                         {return(exp(lhs));}, 0, 0);
-    {
     }
 
     diagnostic.write_diagnostics(time, get_config());
@@ -690,8 +692,7 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
     // Compute poisson bracket, {theta, phi}
     // theta_rhs <- {phi, theta}
     
-    const twodads::stiff_params_t tmp{conf.get_tint_params(twodads::dyn_field_t::f_theta)};
-    const twodads::real_t diff{tmp.get_diff()};
+    const twodads::real_t diff{conf.get_tint_params(twodads::dyn_field_t::f_theta).get_diff()};
 
     switch(get_config().get_grid_type())
     {
@@ -746,16 +747,57 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
             //my_derivs -> pbracket(strmf, omega, omega_rhs, 0, t_src, t_dst);
             break;
     }
+
+    // tmp <- T 
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {return(exp(rhs));}, tau, 0, 0);
+    // tmp <- T * theta_y
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {return(lhs * rhs);}, theta_y, 0, 0);
     
-    // omega_rhs <- {omega, phi} - ic * theta_y
+    // omega_rhs <- {omega, phi} - ic * T * theta_y
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, theta_y, t_dst, 0);           
+                          {return (lhs - ic * rhs);}, tmp, t_dst, 0);           
+    // omega_rhs <- {omega, phi} - ic * T * theta_y - ic * tau_y
+    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
+                          {return (lhs - ic * rhs);}, tau_y, t_dst, 0);           
 }
 
 
 inline void slab_bc :: rhs_tau_null(const size_t t_dst, const size_t t_src)
 {
     // Do nothing
+}
+
+void slab_bc :: rhs_tau_log(const size_t t_dst, const size_t t_src)
+{
+    // Compute poisson bracket, {tta, phi}
+    // tau_rhs <- {phi, tau}
+    
+    const twodads::real_t diff{conf.get_tint_params(twodads::dyn_field_t::f_tau).get_diff()};
+
+    switch(get_config().get_grid_type())
+    {
+        case twodads::grid_t::vertex_centered:
+            // Derivative fields have only 1 time index. Do not use t_src here.
+            // Store in t_dst time index of RHS
+            // Store tau_x strmf_y - tau_y strmf_x in tau_rhs
+            my_derivs -> pbracket(tau_x, tau_y, strmf_x, strmf_y, tau_rhs, 0, 0, t_dst);
+            break;
+
+        case twodads::grid_t::cell_centered:
+            // Input to Arakawa scheme is from in-place DFTs of dynamic fields.
+            // Get data from t_src.
+            // Store in t_dst time index of RHS
+            my_derivs -> pbracket(tau, strmf, tau_rhs, t_src, 0, t_dst);
+            break;
+    }
+
+    // tau_rhs <- tau_rhs - nu * (nabla_perp tau) 
+    tau_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                        {return (lhs - diff * rhs * rhs);}, tau_x, t_dst, 0);
+    tau_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                        {return (lhs - diff * rhs * rhs);}, tau_y, t_dst, 0);
 }
 
 

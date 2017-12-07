@@ -711,42 +711,25 @@ namespace twodads {
       Value                  Description
       =====================  =========================================================
       rhs_theta_null         No explicit terms. Defaults to diffusion / hyperviscosity
-      rhs_theta_ns           Navier-Stokes model
-      rhs_theta_lin          Linear interchange model, no logarithmic density
-      rhs_theta_log          Linear interchange model, logarithmic density formulation
-      rhs_theta_hw           Hasegawa-Wakatani model
-      rhs_theta_hwmod        Modified Hasegawa-Wakatani model
-      rhs_theta_sheath_nlin  Interchange model with non-linear sheath dissipation term
+      rhs_theta_lin          Advection with electric drift, no logarithmic density
+      rhs_theta_log          Advection with electric drift, logarithmic density formulation
       rhs_omega_null         No explicit terms. Defaults to diffusion / hyperviscosity
-      rhs_omega_ns           Navier-Stokes model
-      rhs_omega_hw           Hasegawa-Wakatani modl
-      rhs_omega_hwmod        Modified Hasgawa-Wakatani model
       rhs_omega_ic           Interchange model
-      rhs_omega_sheath_nlin  Interchange model with non-linear sheath dissipation term
       rhs_tau_null           No explicit terms. Defaults to diffusion / hyperviscosity
+      rhs_tau_log            Advection with electric drift, logarithmic temperature
       =====================  =========================================================
 
       Available right-hand side models.
      */
     enum class rhs_t 
     {
-        rhs_theta_ns,          ///< Navier-Stokes equation
-        rhs_theta_lin,         ///< interchange model, linear
-        rhs_theta_log,         ///< Logarithmic interchange model
-        rhs_theta_hw,          ///< Hasegawa-Wakatani model
-        rhs_theta_full,        ///< Density continuity equation with compression of ExB and diamagnetic drift
-        rhs_theta_hwmod,       ///< Modified Hasegawa-Wakatani model
-        rhs_theta_null,        ///< No explicit terms
-        rhs_theta_sheath_nlin, ///< Non-linear sheath losses
-        rhs_omega_ns,          ///< Navier-Stokes equation
-        rhs_omega_hw,          ///< Hasegawa-Wakatani model
-        rhs_omega_hwmod,       ///< Modified Hasegawa-Wakatani model
-        rhs_omega_hwzf,        ///< Modified Hasegawa-Wakatani model, supressed zonal flow
-        rhs_omega_ic,          ///< Interchange turbulence
-        rhs_omega_sheath_nlin, ///< Non-linear sheath losses
-        rhs_omega_null,        ///< No explicit terms (passive advection)
-        rhs_tau_sheath_nlin,   ///< Non-linear sheath losses
-        rhs_tau_null           ///< No explicit terms
+        rhs_theta_lin, 
+        rhs_theta_log,
+        rhs_theta_null, 
+        rhs_omega_ic,
+        rhs_omega_null, 
+        rhs_tau_null,
+        rhs_tau_log
     };
 
     /**

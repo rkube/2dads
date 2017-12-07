@@ -260,7 +260,7 @@ class slab_bc
         /**
          .. cpp:function void rhs_theta_lin(const size_t, const size_t)
 
-         RHS for linear interchange model. Should not be called directly but from void rhs(const size_t, const size_t).
+         RHS for linear interchange model, advection with electric drift. Should not be called directly but from void rhs(const size_t, const size_t).
 
         */
         void rhs_theta_lin(const size_t, const size_t);
@@ -268,7 +268,7 @@ class slab_bc
         /**
          .. cpp:function void rhs_theta_log(const size_t, const size_t)
 
-         RHS for logarithmic interchange model. Should not be called directly but from void rhs(const size_t, const size_t).
+         RHS for logarithmic interchange model, advection with electric drift. Should not be called directly but from void rhs(const size_t, const size_t).
 
         */
         void rhs_theta_log(const size_t, const size_t);
@@ -298,6 +298,13 @@ class slab_bc
         */
         void rhs_tau_null(const size_t, const size_t);
 
+        /**
+         .. cpp:function void rhs_tau_log(const size_t, const size_t)
+
+         RHS for logarithmic interchange model, advection with electric drift. Should not be called directly but from void rhs(const size_t, const size_t).
+
+        */
+        void rhs_tau_log(const size_t, const size_t);
     private:
 
         const slab_config_js conf;
@@ -327,6 +334,7 @@ class slab_bc
         arr_real tau;
         arr_real tau_x;
         arr_real tau_y;
+        arr_real tmp;
         arr_real strmf;
         arr_real strmf_x;
         arr_real strmf_y;
@@ -353,6 +361,7 @@ class slab_bc
             my_map[twodads::rhs_t::rhs_omega_null] = &slab_bc::rhs_omega_null;
             my_map[twodads::rhs_t::rhs_omega_ic]   = &slab_bc::rhs_omega_ic;
             my_map[twodads::rhs_t::rhs_tau_null]   = &slab_bc::rhs_tau_null;
+            my_map[twodads::rhs_t::rhs_tau_log]    = &slab_bc::rhs_tau_log;
             return(my_map);
         }
 

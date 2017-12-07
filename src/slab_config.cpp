@@ -81,23 +81,13 @@ const std::map<std::string, twodads::init_fun_t> slab_config_js::init_func_map
     
 const std::map<std::string, twodads::rhs_t> slab_config_js::rhs_func_map 
 {
-    {"rhs_theta_ns", twodads::rhs_t::rhs_theta_ns},
+    {"rhs_theta_null", twodads::rhs_t::rhs_theta_null},
     {"rhs_theta_lin", twodads::rhs_t::rhs_theta_lin},
     {"rhs_theta_log", twodads::rhs_t::rhs_theta_log},
-    {"rhs_theta_hw", twodads::rhs_t::rhs_theta_hw},
-    {"rhs_theta_full", twodads::rhs_t::rhs_theta_full}, 
-    {"rhs_theta_hwmod", twodads::rhs_t::rhs_theta_hwmod},
-    {"rhs_theta_sheath_nlin", twodads::rhs_t::rhs_theta_sheath_nlin},
-    {"rhs_theta_null", twodads::rhs_t::rhs_theta_null},
-    {"rhs_tas_sheath_nlin", twodads::rhs_t::rhs_tau_sheath_nlin},
     {"rhs_tau_null", twodads::rhs_t::rhs_tau_null},
-    {"rhs_omega_ns", twodads::rhs_t::rhs_omega_ns},
-    {"rhs_omega_hw", twodads::rhs_t::rhs_omega_hw},
-    {"rhs_omega_hwmod", twodads::rhs_t::rhs_omega_hwmod},
-    {"rhs_omega_hwzf", twodads::rhs_t::rhs_omega_hwzf},
-    {"rhs_omega_ic", twodads::rhs_t::rhs_omega_ic},
-    {"rhs_omega_sheath_nlin", twodads::rhs_t::rhs_omega_sheath_nlin}, 
-    {"rhs_omega_null", twodads::rhs_t::rhs_omega_null}
+    {"rhs_tau_log", twodads::rhs_t::rhs_tau_log},
+    {"rhs_omega_null", twodads::rhs_t::rhs_omega_null},
+    {"rhs_omega_ic", twodads::rhs_t::rhs_omega_ic}
 };
 
 
@@ -165,45 +155,11 @@ std::vector<twodads::real_t> slab_config_js :: get_initc(const twodads::dyn_fiel
 
 std::vector<twodads::diagnostic_t> slab_config_js :: get_diagnostics() const
 {
-// Merge conflic with master branch, 2017-05-28
-//<<<<<<< HEAD
-//	// Test for empty output line
-//	//if (get_output().size() == 0) 
-//	//	throw config_error("No output variables specified. If no full output is desired, write output = None\n");
-//	// Test x domain boundary
-//	if (xleft >= xright) 
-//		throw config_error("Left domain boundary must be smaller than right domain boundary\n");
-//	// Test y domain boundary
-//	if (ylow >= yup)
-//		throw config_error("Lower domain boundary must be smaller than upper domain boundary\n");
-//	// Test initialization routine
-//	if (get_init_function_theta() == twodads::init_fun_t::init_NA) 
-//		throw config_error("Invalid initialization routine specified for theta in init file\n");
-//	if (get_init_function_omega() == twodads::init_fun_t::init_NA) 
-//		throw config_error("Invalid initialization routine specified for omega in init file\n");
-//	if (get_init_function_tau() == twodads::init_fun_t::init_NA) 
-//		throw config_error("Invalid initialization routine specified for tau in init file\n");
-//	// Test if logarithmic theta has correct RHS
-//	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_log && log_theta == false) 
-//		throw config_error("Selecting rhs_theta_log as the RHS function must have log_theta = true\n");
-//	//if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_full && log_theta == false) 
-//	//	throw config_error("Selecting rhs_theta_full as the RHS function must have log_theta = true\n");
-//	if (get_theta_rhs_type() == twodads::rhs_t::theta_rhs_lin && log_theta == true) 
-//		throw config_error("Selecting rhs_theta as the RHS function must have log_theta = false\n");
-//    if (get_omega_rhs_type() == twodads::rhs_t::omega_rhs_sheath_nlin && (!get_log_theta() || !get_log_tau()))
-//        throw config_error("Selecting omega_rhs_sheath_nlin requires logarithmic density and temperature\n");
-//	// If radial probe diagnostics is specified we need the number of radial probes
-//	if (nprobes == 0 ) 
-//		throw config_error("Radial probe diagnostics requested but no number of radial probes specified\n");
-//            
-//	return (0);
-//=======
     std::vector<twodads::diagnostic_t> res;
     for(auto it : pt.get_child("2dads.diagnostics.routines"))
         res.push_back(map_safe_select(it.second.data(), diagnostic_map));
 
     return(res); 
-//>>>>>>> bc
 }
 
 

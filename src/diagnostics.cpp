@@ -19,7 +19,7 @@ const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: header_str_ma
     {twodads::diagnostic_t::diag_com_theta, std::string("# 1: time \t2: theta_int\t3: theta_int_x\t4: theta_int_y\t# 5: COMvx\t6: COMvy\n")},
     {twodads::diagnostic_t::diag_com_tau, std::string("# 1: time \t2: tau_int\t3: tau_int_x\t4: tau_int_y\t# 5: COMvx\t6: COMvy\n")},
     {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t2: theta_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")},
-    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t2: tau_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")}
+    {twodads::diagnostic_t::diag_max_tau, std::string("# 1: time \t2: tau_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")}
 };
 
 // Maps filename to each diagnostic type defined in 2dads_types.h
@@ -67,8 +67,6 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
     }
     //t_probe(config.get_tdiag()),
     //n_probes(config.get_nprobe()),
-    //use_log_theta(config.get_log_theta()), 
-    //theta_bg(config.get_initc(0)),
 {
     stringstream err_msg;
     ofstream out_file;
@@ -77,15 +75,23 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
     for(auto it : config.get_diagnostics())
     {
         out_file.exceptions(ofstream::badbit);
-        out_file.open(filename_str_map.at(it), ios::trunc);
-        if(!out_file)
+        try
         {
-            err_msg << "Diagnostics: Could not open file" << filename_str_map.at(it) << "." << std::endl;
-            throw new diagnostics_error(err_msg.str());
+            out_file.open(filename_str_map.at(it), ios::trunc);
+            if(!out_file)
+            {
+                err_msg << "Diagnostics: Could not open file" << filename_str_map.at(it) << "." << std::endl;
+                throw new diagnostics_error(err_msg.str());
+            }
         }
+        catch (diagnostics_error err)
+        {
+            std :: cerr << err.what();
+            std :: exit(1);
+        } 
         out_file << header_str_map.at(it);
         out_file.close();
-	}
+    }
 }
 
 
