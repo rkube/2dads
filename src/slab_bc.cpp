@@ -117,16 +117,16 @@ slab_bc :: slab_bc(const slab_config_js& _conf) :
 
     // Set data pointers of diagnostic data member
     // This routine should be constant as to forbid overwriting of the simulation data
-    diagnostic.init_field_ptr(twodads::field_t::f_theta, &theta);
+    diagnostic.init_field_ptr(twodads::field_t::f_theta,   &theta);
     diagnostic.init_field_ptr(twodads::field_t::f_theta_x, &theta_x);
     diagnostic.init_field_ptr(twodads::field_t::f_theta_y, &theta_y);
-    diagnostic.init_field_ptr(twodads::field_t::f_omega, &omega);
+    diagnostic.init_field_ptr(twodads::field_t::f_omega,   &omega);
     diagnostic.init_field_ptr(twodads::field_t::f_omega_x, &omega_x);
     diagnostic.init_field_ptr(twodads::field_t::f_omega_y, &omega_y);
-    diagnostic.init_field_ptr(twodads::field_t::f_tau, &tau);
-    diagnostic.init_field_ptr(twodads::field_t::f_tau_x, &tau_x);
-    diagnostic.init_field_ptr(twodads::field_t::f_tau_y, &tau_y);
-    diagnostic.init_field_ptr(twodads::field_t::f_strmf, &strmf);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau,     &tau);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau_x,   &tau_x);
+    diagnostic.init_field_ptr(twodads::field_t::f_tau_y,   &tau_y);
+    diagnostic.init_field_ptr(twodads::field_t::f_strmf,   &strmf);
     diagnostic.init_field_ptr(twodads::field_t::f_strmf_x, &strmf_x);
     diagnostic.init_field_ptr(twodads::field_t::f_strmf_y, &strmf_y);
 }

@@ -14,9 +14,170 @@
 
 using namespace std;
 
+class diag_com_t {
+    /**
+     .. cpp:namespace-push:: diag_com_t
+     
+    */
+
+    /**
+     .. cpp:class:: diag_com_t
+
+     Implements center-of-mass diagnostics
+
+    */
+
+    public:
+        /**
+         .. cpp:type com_tuple_t = tuple<twodads::real_t, twodads::real_t, twodads::real_t>
+
+         X_c, Y_c, time
+        */
+
+        using com_tuple_t = std::tuple<twodads::real_t, twodads::real_t, twodads::real_t>;
+
+
+        /**
+         .. cpp:function diag_com_t()
+
+         Initializes the private members
+        */
+
+        diag_com_t();
+
+        /**
+         .. cpp:function update_com(cuda_array_bc_nogp<T, allocator_host>&, const size_t, const twodads::real_t)
+
+         :param const cuda_array_bc_nogp<T, allocator_host>&: pointer to data field
+         :param const size_t: Time index of the data field
+         :param const twodads::real_t: Time in simulation units
+
+         Updates the center-of-mass coordinates
+        */
+
+        void update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t, const twodads::real_t); 
+
+        /**
+         .. cpp:function get_com()
+
+         Returns the current center-of-mass coordinates
+        */
+        com_tuple_t get_com() const {return (C);};
+
+        /**
+         .. cpp:function get_com()
+
+         Returns the previous center-of-mass coordinates
+        */
+
+        com_tuple_t get_com_old() const {return (C);};
+
+
+        /**
+         .. cpp:function get_vcom() const
+
+         Computes the center-of-mass velocity using a backwards-difference stencil
+        */
+
+        std::tuple<twodads::real_t, twodads::real_t> get_vcom() const;
+        
+
+    private:
+        com_tuple_t C;
+        com_tuple_t C_old;
+
+    /**
+     .. cpp:namespace-pop::
+
+    */
+
+};
+
+
+class diag_max_t 
+{
+    /**
+     .. cpp:namespace-push:: diag_max_t
+     
+    */
+
+    /**
+     .. cpp:class:: diag_max_t
+
+     Implements center-of-mass diagnostics
+
+    */
+
+    public:
+        /**
+         .. cpp:type max_tuple_t = tuple<twodads::real_t, twodads::real_t, twodads::real_t>
+
+         max_X, max_Y, time
+        */
+
+        using max_tuple_t = std::tuple<twodads::real_t, twodads::real_t, twodads::real_t>;
+
+
+        /**
+         .. cpp:function diag_max_t()
+
+         Initializes the private members
+        */
+
+        diag_max_t();
+
+        /**
+         .. cpp:function update_max(cuda_array_bc_nogp<T, allocator_host>&, const size_t, const twodads::real_t)
+
+         :param const cuda_array_bc_nogp<T, allocator_host>&: pointer to data field
+         :param const size_t: Time index of the data field
+         :param const twodads::real_t: Time in simulation units
+
+         Updates the center-of-mass coordinates
+        */
+
+        void update_max(const cuda_array_bc_nogp<twodads::real_t, allocator_host>&, const size_t, const twodads::real_t); 
+
+        /**
+         .. cpp:function get_com()
+
+         Returns the current center-of-mass coordinates
+        */
+        max_tuple_t get_max() const {return (C);};
+
+        /**
+         .. cpp:function get_max()
+
+         Returns the previous coordinates of maxima
+        */
+
+        max_tuple_t get_max_old() const {return (C);};
+
+
+        /**
+         .. cpp:function get_vcom() const
+
+         Computes the maximum velocity using a backwards-difference stencil
+        */
+
+        std::tuple<twodads::real_t, twodads::real_t> get_vmax() const;
+        
+
+    private:
+        max_tuple_t C;
+        max_tuple_t C_old;
+
+    /**
+     .. cpp:namespace-pop::
+
+    */
+};
+
+
+
 class diagnostic_t {
     /**
-     .. cpp:namspace-push:: diagnostic_c
+     .. cpp:namspace-push:: diagnostic_t
 
     */
 
@@ -82,7 +243,7 @@ class diagnostic_t {
         
         */
         inline void diag_com_theta(const twodads::real_t time) const
-        { diag_com(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_com_theta), time); }
+        { diag_com(twodads::field_t::f_theta, com_theta, filename_str_map.at(twodads::diagnostic_t::diag_com_theta), time); }
 
         /**
          .. cpp:function inline void diag_com_tau(const twodads::real_t time) const
@@ -93,7 +254,7 @@ class diagnostic_t {
         
         */
         inline void diag_com_tau(const twodads::real_t time) const
-        { diag_com(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
+        { diag_com(twodads::field_t::f_tau, com_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
 
         /**
          .. cpp:function inline void diag_max_theta(const twodads::real_t time) const
@@ -130,7 +291,7 @@ class diagnostic_t {
          .. cpp:function:
 
         */
-        void diag_com(const twodads::field_t, const std::string, const twodads::real_t) const;
+        void diag_com(const twodads::field_t, diag_com_t, const std::string, const twodads::real_t) const;
         ///@brief Write out max diagnostics
         void diag_max(const twodads::field_t, const std::string, const twodads::real_t) const;
 
@@ -170,11 +331,11 @@ class diagnostic_t {
         const arr_real *strmf_ptr, *strmf_x_ptr, *strmf_y_ptr;
         // assign data pointers to names of the fields for internal use.
         const std::map<twodads::field_t, const arr_real**> data_ptr_map;
+        const std::map<twodads::field_t, const std::string> diag_com_fname;
+        const std::map<twodads::field_t, const std::string> diag_max_fname;
 
-        //unsigned int n_probes; /// Number of probes
-		//bool use_log_theta; /// Is the density field logarithmic? If true, use exp(theta) in all routines
-        //twodads::real_t theta_bg; /// Subtract uniform background on theta
-
+        diag_com_t com_theta;
+        diag_com_t com_tau;
     /**
      .. cpp:namespace-pop::
 

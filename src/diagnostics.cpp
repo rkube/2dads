@@ -14,16 +14,73 @@
 
 using namespace std;
 
+// Constructor
+
+diag_com_t :: diag_com_t() : 
+    C(std::make_tuple(0.0, 0.0, 0.0)), 
+    C_old(std::make_tuple(0.0, 0.0, 0.0))
+{
+}
+
+
+std::tuple<twodads::real_t, twodads::real_t> diag_com_t::get_vcom() const
+{
+    const twodads::real_t dt = {(std::get<2>(get_com()) - std::get<2>(C_old))};
+    const twodads::real_t Vx{(std::get<0>(get_com()) - std::get<0>(C_old)) / dt};
+    const twodads::real_t Vy{(std::get<1>(get_com()) - std::get<1>(C_old)) / dt};
+
+    return(std::make_tuple(Vx, Vy));
+};
+
+
+void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_host>& vec, const size_t tidx, const twodads::real_t time)
+{
+        address_t<twodads::real_t>* addr{vec.get_address_ptr()};
+        twodads::real_t* data_ptr = vec.get_tlev_ptr(tidx);
+
+        twodads::real_t sum{0.0};
+        twodads::real_t sum_x{0.0};
+        twodads::real_t sum_y{0.0};
+        twodads::real_t x{0.0};
+        twodads::real_t y{0.0};
+        twodads::real_t current_val{0.0};
+
+        for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
+        {
+            x = vec.get_geom().x_left + (n - vec.get_geom().cellshift) * vec.get_geom().delta_x;
+            for(size_t m = 0; m < vec.get_geom().get_my(); m++)
+            {
+                y = vec.get_geom().y_lo + (m - vec.get_geom().cellshift) * vec.get_geom().delta_y;
+                current_val = addr -> get_elem(data_ptr, n, m);
+                sum += current_val;
+                sum_x += current_val * x;
+                sum_y += current_val * y;
+            }
+        }
+
+        sum_x /= sum;
+        sum_y /= sum;
+
+        // Update center-of-mass coordinates
+        C_old = C;
+        C = std::make_tuple(sum_x, sum_y, time);
+}
+
+
+
+
 // Maps header strings to each diagnostic type defined in 2dads_types.h
-const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: header_str_map {
-    {twodads::diagnostic_t::diag_com_theta, std::string("# 1: time \t2: theta_int\t3: theta_int_x\t4: theta_int_y\t# 5: COMvx\t6: COMvy\n")},
-    {twodads::diagnostic_t::diag_com_tau, std::string("# 1: time \t2: tau_int\t3: tau_int_x\t4: tau_int_y\t# 5: COMvx\t6: COMvy\n")},
-    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t2: theta_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")},
-    {twodads::diagnostic_t::diag_max_tau, std::string("# 1: time \t2: tau_max\t3: max_x\t4: max_y\t# 5: max_vx\t6: max_vy\n")}
+const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: header_str_map 
+{
+    {twodads::diagnostic_t::diag_com_theta, std::string("# 1: time \t# 2: int_x\t# 3: int_y\t# 4: COMvx\t# 5: COMvy\n")},
+    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t# 2: max\t# 3: max_x\t4: max_y\t# 5: max_vx\t# 6: max_vy\n")},
+    {twodads::diagnostic_t::diag_com_tau, std::string("# 1: time \t# 2: int_x\t# 3: int_y\t# 4: COMvx\t# 5: COMvy\n")},
+    {twodads::diagnostic_t::diag_max_tau, std::string("# 1: time \t# 2: max\t# 3: max_x\t4: max_y\t# 5: max_vx\t# 6: max_vy\n")}
 };
 
 // Maps filename to each diagnostic type defined in 2dads_types.h
-const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: filename_str_map{
+const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: filename_str_map
+{
     {twodads::diagnostic_t::diag_com_theta, std::string("com_theta.dat")},
     {twodads::diagnostic_t::diag_com_tau, std::string("com_tau.dat")},
     {twodads::diagnostic_t::diag_max_theta, std::string("max_theta.dat")},
@@ -65,8 +122,6 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
             {twodads::field_t::f_strmf_y, &strmf_y_ptr},
         }
     }
-    //t_probe(config.get_tdiag()),
-    //n_probes(config.get_nprobe()),
 {
     stringstream err_msg;
     ofstream out_file;
@@ -95,9 +150,9 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
 }
 
 
-/*
- ************** Logfile **************************************************
- */
+//**********************************************************************************
+//*                           Log file                                             *      
+//**********************************************************************************
 
 
 void diagnostic_t :: write_logfile() 
@@ -158,36 +213,23 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
 }
 
 
-void diagnostic_t::diag_com(const twodads::field_t fieldname, const std::string filename, const twodads::real_t time) const
+void diagnostic_t::diag_com(const twodads::field_t fieldname, diag_com_t com, const std::string filename, const twodads::real_t time) const
 {  
     std::ofstream out_file;
 
-    static twodads::real_t time_old{0.0};
-    static twodads::real_t com_x_old{0.0};
-    static twodads::real_t com_y_old{0.0};
-
     const arr_real* const* arr_ptr2{data_ptr_map.at(fieldname)};
-    
-    // Compute COM of density field
-    std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_com = utility :: com(**arr_ptr2, 1);
-    const twodads::real_t int_val{std::get<0>(res_com)};
-    const twodads::real_t com_x{std::get<1>(res_com)};
-    const twodads::real_t com_y{std::get<2>(res_com)};
 
-    // Update com velocities
-    const twodads::real_t com_vx{(com_x - com_x_old) / (time - time_old)};
-    const twodads::real_t com_vy{(com_y - com_y_old) / (time - time_old)};
-    time_old = time;
-    com_x_old = com_x;
-    com_y_old = com_y;
-
+    // Update COM coordinates for the field
+    com.update_com(**arr_ptr2, 1, time);
 	// Write to output file
 	out_file.open(filename, std::ios::app);	
 	if ( out_file.is_open() )
     {
 		out_file << time << "\t";
-		out_file << setw(12) << int_val << "\t" << setw(12) << com_x << "\t" << setw(12) << com_y << "\t";
-		out_file << setw(12) << com_vx << "\t" << setw(12) << com_vy << "\n" << std::endl;
+		out_file << setw(12) << std::get<0>(com.get_com()) << "\t";
+        out_file << setw(12) << std::get<1>(com.get_com()) << "\t";
+        out_file << setw(12) << std::get<0>(com.get_vcom()) << "\t";
+		out_file << setw(12) << std::get<1>(com.get_vcom()) << std::endl;
 		out_file.close();
 	}
 }
