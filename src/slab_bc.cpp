@@ -749,18 +749,26 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
     }
 
     // tmp <- T 
+    //tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+    //                {return(exp(rhs));}, tau, 0, 0);
+    // tmp <- log(T)
+    tmp.copy(0, tau, 0);
+    // tmp <- exp(log(T)) * log(theta)_y
     tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                    {return(exp(rhs));}, tau, 0, 0);
-    // tmp <- T * theta_y
-    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                    {return(lhs * rhs);}, theta_y, 0, 0);
+                    {return(exp(lhs) * rhs);}, theta_y, 0, 0);
     
-    // omega_rhs <- {omega, phi} - ic * T * theta_y
+    // omega_rhs <- {omega, phi} - ic * T * log(theta)_y
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, tmp, t_dst, 0);           
+                          {return (lhs - ic * rhs);}, tmp, t_dst, 0);          
+    // tmp <- log(tau)_y
+    tmp.copy(0, theta_y, 0);
+    // tmp <- T * log(tau)_y = tau_y
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {return(lhs * rhs);}, tau, 0, 0);
+   
     // omega_rhs <- {omega, phi} - ic * T * theta_y - ic * tau_y
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, tau_y, t_dst, 0);           
+                          {return (lhs - ic * rhs);}, tmp, t_dst, 0);           
 }
 
 
