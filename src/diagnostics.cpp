@@ -47,11 +47,13 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
 
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
-            x = vec.get_geom().x_left + (n - vec.get_geom().cellshift) * vec.get_geom().delta_x;
+            x = vec.get_geom().x_left + (n + vec.get_geom().cellshift) * vec.get_geom().delta_x;
             for(size_t m = 0; m < vec.get_geom().get_my(); m++)
             {
-                y = vec.get_geom().y_lo + (m - vec.get_geom().cellshift) * vec.get_geom().delta_y;
+                y = vec.get_geom().y_lo + (m + vec.get_geom().cellshift) * vec.get_geom().delta_y;
                 current_val = addr -> get_elem(data_ptr, n, m);
+
+                //std::cout << "update_com: x=" << x << ", y=" << y << ", val = " << current_val << std::endl;
                 sum += current_val;
                 sum_x += current_val * x;
                 sum_y += current_val * y;
@@ -60,6 +62,9 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
 
         sum_x /= sum;
         sum_y /= sum;
+
+
+        std::cout << "sum_x = " << sum_x << ", sum_y = " << sum_y << std::endl;
 
         // Update center-of-mass coordinates
         C_old = C;
