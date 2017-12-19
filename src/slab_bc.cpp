@@ -602,28 +602,40 @@ void slab_bc :: diagnose(const size_t t_src, const twodads::real_t time)
     assert(get_array_ptr(twodads::field_t::f_strmf_x) -> is_transformed(0) == false);
     assert(get_array_ptr(twodads::field_t::f_strmf_y) -> is_transformed(0) == false);
 
+    // Get background to subtract for logarithmic density/temperature
+    twodads::real_t theta_bg{get_config().get_initc(twodads::dyn_field_t::f_theta)[0]};
+    twodads::real_t tau_bg{get_config().get_initc(twodads::dyn_field_t::f_tau)[0]};
+
     // Treat logarithmic density and temperature fields
     if(get_config().get_log_theta())
     {
         theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
-                          {return(exp(lhs));}, 0, 0);
+                          {return(exp(lhs));}, t_src, 0);
+        theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(lhs - theta_bg);}, t_src, 0);
     }
     if(get_config().get_log_tau())
     {
         tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
-                        {return(exp(lhs));}, 0, 0);
+                        {return(exp(lhs));}, t_src, 0);
+        tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                        {return(lhs - tau_bg);}, t_src, 0);
     }
 
     diagnostic.write_diagnostics(time, get_config());
     if(get_config().get_log_theta())
     {
         theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
-                          {return(log(lhs));}, 0, 0);
+                          {return(lhs + theta_bg);}, t_src, 0);
+        theta.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(log(lhs));}, t_src, 0);
     }
     if(get_config().get_log_tau())
     {
         tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
-                          {return(log(lhs));}, 0, 0);
+                        {return(lhs + tau_bg);}, t_src, 0);
+        tau.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t dummy) -> twodads::real_t
+                          {return(log(lhs));}, t_src, 0);
     }
 
 }

@@ -25,9 +25,9 @@ diag_com_t :: diag_com_t() :
 
 std::tuple<twodads::real_t, twodads::real_t> diag_com_t::get_vcom() const
 {
-    const twodads::real_t dt = {(std::get<2>(get_com()) - std::get<2>(C_old))};
-    const twodads::real_t Vx{(std::get<0>(get_com()) - std::get<0>(C_old)) / dt};
-    const twodads::real_t Vy{(std::get<1>(get_com()) - std::get<1>(C_old)) / dt};
+    const twodads::real_t dt = {(std::get<2>(get_com()) - std::get<2>(get_com_old()))};
+    const twodads::real_t Vx{(std::get<0>(get_com()) - std::get<0>(get_com_old())) / dt};
+    const twodads::real_t Vy{(std::get<1>(get_com()) - std::get<1>(get_com_old())) / dt};
 
     return(std::make_tuple(Vx, Vy));
 };
@@ -45,6 +45,8 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
         twodads::real_t y{0.0};
         twodads::real_t current_val{0.0};
 
+        // Backup old center-of-mass coordinates
+        C_old = C;
         for(size_t n = 0; n < vec.get_geom().get_nx(); n++)
         {
             x = vec.get_geom().x_left + (n + vec.get_geom().cellshift) * vec.get_geom().delta_x;
@@ -53,7 +55,6 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
                 y = vec.get_geom().y_lo + (m + vec.get_geom().cellshift) * vec.get_geom().delta_y;
                 current_val = addr -> get_elem(data_ptr, n, m);
 
-                //std::cout << "update_com: x=" << x << ", y=" << y << ", val = " << current_val << std::endl;
                 sum += current_val;
                 sum_x += current_val * x;
                 sum_y += current_val * y;
@@ -63,11 +64,7 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
         sum_x /= sum;
         sum_y /= sum;
 
-
-        std::cout << "sum_x = " << sum_x << ", sum_y = " << sum_y << std::endl;
-
         // Update center-of-mass coordinates
-        C_old = C;
         C = std::make_tuple(sum_x, sum_y, time);
 }
 
@@ -218,14 +215,25 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
 }
 
 
-void diagnostic_t::diag_com(const twodads::field_t fieldname, diag_com_t com, const std::string filename, const twodads::real_t time) const
+void diagnostic_t::diag_com(const twodads::field_t fieldname, diag_com_t& com, const std::string filename, const twodads::real_t time) 
 {  
     std::ofstream out_file;
 
     const arr_real* const* arr_ptr2{data_ptr_map.at(fieldname)};
 
     // Update COM coordinates for the field
+    //std::cout << "diag_com. Before:" << std::endl;
+    //std::cout << std::get<0>(com.get_com_old()) << ", " << std::get<1>(com.get_com_old()) << ", " << std::get<2>(com.get_com_old()) << std::endl;
+    //std::cout << std::get<0>(com.get_com()) << ", " << std::get<1>(com.get_com()) << ", " << std::get<2>(com.get_com()) << std::endl;
+
     com.update_com(**arr_ptr2, 1, time);
+
+    //std::cout << "After:" << std::endl;
+    //std::cout << std::get<0>(com.get_com_old()) << ", " << std::get<1>(com.get_com_old()) << ", " << std::get<2>(com.get_com_old()) << std::endl;
+    //std::cout << std::get<0>(com.get_com()) << ", " << std::get<1>(com.get_com()) << ", " << std::get<2>(com.get_com()) << std::endl;
+    //std::cout << "=============================================================================" << std::endl;
+
+
 	// Write to output file
 	out_file.open(filename, std::ios::app);	
 	if ( out_file.is_open() )

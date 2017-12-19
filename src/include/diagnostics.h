@@ -70,7 +70,7 @@ class diag_com_t {
          Returns the previous center-of-mass coordinates
         */
 
-        com_tuple_t get_com_old() const {return (C);};
+        com_tuple_t get_com_old() const {return (C_old);};
 
 
         /**
@@ -189,7 +189,7 @@ class diagnostic_t {
         using value_t = twodads::real_t;
         // Pointer type to diagnostic member functions
         // All diagnostic functions are required to have the same signature
-        using dfun_ptr_t = void (diagnostic_t::*)(const twodads::real_t) const;
+        using dfun_ptr_t = void (diagnostic_t::*)(const twodads::real_t);
 
 #ifdef DEVICE
         using arr_real = cuda_array_bc_nogp<value_t, allocator_device>;
@@ -242,7 +242,7 @@ class diagnostic_t {
          Writes center-of-mass diagnostics of theta field. Forwards to diag_com.
         
         */
-        inline void diag_com_theta(const twodads::real_t time) const
+        inline void diag_com_theta(const twodads::real_t time) 
         { diag_com(twodads::field_t::f_theta, com_theta, filename_str_map.at(twodads::diagnostic_t::diag_com_theta), time); }
 
         /**
@@ -253,7 +253,7 @@ class diagnostic_t {
          Writes center-of-mass diagnostics of tau field. Forwards to diag_com.
         
         */
-        inline void diag_com_tau(const twodads::real_t time) const
+        inline void diag_com_tau(const twodads::real_t time) 
         { diag_com(twodads::field_t::f_tau, com_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
 
         /**
@@ -264,7 +264,7 @@ class diagnostic_t {
          Writes maximum diagnostics of theta field. Forwards to diag_max.
         
         */
-        inline void diag_max_theta(const twodads::real_t time) const
+        inline void diag_max_theta(const twodads::real_t time) 
         { diag_max(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_max_theta), time); }
 
         /**
@@ -275,7 +275,7 @@ class diagnostic_t {
          Writes maximum diagnostics of tau field. Forwards to diag_max.
         
         */
-        inline void diag_max_tau(const twodads::real_t time) const
+        inline void diag_max_tau(const twodads::real_t time) 
         {diag_max(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_max_tau), time); }
 
         static const std::map<twodads::diagnostic_t, std::string> header_str_map;
@@ -291,7 +291,7 @@ class diagnostic_t {
          .. cpp:function:
 
         */
-        void diag_com(const twodads::field_t, diag_com_t, const std::string, const twodads::real_t) const;
+        void diag_com(const twodads::field_t, diag_com_t&, const std::string, const twodads::real_t);
         ///@brief Write out max diagnostics
         void diag_max(const twodads::field_t, const std::string, const twodads::real_t) const;
 
