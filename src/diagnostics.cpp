@@ -252,33 +252,33 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 {  
     std::ofstream out_file;
 
-    static twodads::real_t time_old{0.0};
-    static twodads::real_t max_x_old{0.0};
-    static twodads::real_t max_y_old{0.0};
+    //static twodads::real_t time_old{0.0};
+    //static twodads::real_t max_x_old{0.0};
+    //static twodads::real_t max_y_old{0.0};
 
-    const arr_real* const * arr_ptr2{data_ptr_map.at(fname)};
+    //const arr_real* const * arr_ptr2{data_ptr_map.at(fname)};
     
     // Compute COM of density field
-    std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_max = utility :: com(**arr_ptr2, 1);
-    const twodads::real_t max_val{std::get<0>(res_max)};
-    const twodads::real_t max_x{slab_layout.x_left + (std::get<1>(res_max) - slab_layout.cellshift) * slab_layout.delta_x};
-    const twodads::real_t max_y{slab_layout.y_lo + (std::get<2>(res_max) - slab_layout.cellshift) * slab_layout.delta_y};
-    // Update com velocities
-    const twodads::real_t max_vx{(max_x - max_x_old) / (time - time_old)};
-    const twodads::real_t max_vy{(max_y - max_y_old) / (time - time_old)};
+    //std::tuple<twodads::real_t, twodads::real_t, twodads::real_t> res_max = utility :: com(**arr_ptr2, 1);
+    //const twodads::real_t max_val{std::get<0>(res_max)};
+    //const twodads::real_t max_x{slab_layout.x_left + (std::get<1>(res_max) - slab_layout.cellshift) * slab_layout.delta_x};
+    //const twodads::real_t max_y{slab_layout.y_lo + (std::get<2>(res_max) - slab_layout.cellshift) * slab_layout.delta_y};
+    //// Update com velocities
+    //const twodads::real_t max_vx{(max_x - max_x_old) / (time - time_old)};
+    //const twodads::real_t max_vy{(max_y - max_y_old) / (time - time_old)};
     
     // Store for next call
-    time_old = time;
-    max_x_old = max_x;
-    max_y_old = max_y;
+    //time_old = time;
+    //max_x_old = max_x;
+    //max_y_old = max_y;
 
 	// Write to output file
 	out_file.open(filename, std::ios::app);	
 	if ( out_file.is_open() )
     {
-		out_file << time << "\t";
-		out_file << setw(12) << max_val << "\t" << setw(12) << max_x << "\t" << setw(12) << max_y << "\t";
-		out_file << setw(12) << max_vx << "\t" << setw(12) << max_vy << "\n" << std::endl;
+		out_file << time << "\n";
+		//out_file << setw(12) << max_val << "\t" << setw(12) << max_x << "\t" << setw(12) << max_y << "\t";
+		//out_file << setw(12) << max_vx << "\t" << setw(12) << max_vy << "\n" << std::endl;
 		out_file.close();
 	}
 }

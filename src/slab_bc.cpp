@@ -759,22 +759,42 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
             break;
     }
 
-    // tmp <- log(tau)
-    tmp.copy(0, tau, 0);
-    // tmp <- exp(log(tau)) * log(theta)_y
-    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                    {return(exp(lhs) * rhs);}, theta_y, 0, 0);
-    
-    // omega_rhs <- {omega, phi} - ic * exp(log(tau)) * log(theta)_y
-    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-                          {return (lhs - ic * rhs);}, tmp, t_dst, 0);          
-    // tmp <- log(tau)
-    tmp.copy(0, tau, 0);
-    // tmp <- exp(log(tau)) * log(tau)_y = tau_y
-    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                    {return(exp(lhs) * rhs);}, tau_y, 0, 0);
+    //// tmp <- log(tau)
+    //tmp.copy(0, tau, t_src);
+    //// tmp <- exp(log(tau)) * log(theta)_y
+    //tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+    //                {return(exp(lhs) * rhs);}, theta_y, 0, 0);
+
+    //std::tuple<twodads::real_t, size_t, size_t> res;
+    //res = utility :: max_idx(tmp, 0);
+    //std::cout << "exp(log(tau) * log(theta)_y: max = " << std::get<0>(res) << ", n=" << std::get<1>(res) << ", m = " << std::get<2>(res) << std::endl;
+
+    //// omega_rhs <- {omega, phi} - ic * exp(log(tau)) * log(theta)_y
+    //omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
+    //                      {return (lhs - ic * rhs);}, tmp, t_dst, 0);          
+    //// tmp <- log(tau)
+    //tmp.copy(0, tau, 0);
+    //// tmp <- exp(log(tau)) * log(tau)_y = tau_y
+    //tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+    //                {return(exp(lhs) * rhs);}, tau_y, 0, 0);
+    //
+    //res = utility :: max_idx(tmp, 0);
+    //std::cout << "exp(log(tau) * log(tau)_y: max = " << std::get<0>(res) << ", n=" << std::get<1>(res) << ", m = " << std::get<2>(res) << std::endl;
    
     // omega_rhs <- {omega, phi} - ic * exp(log(tau)) * log(theta)_y - ic * exp(log(tau)) * log(tau)_y
+    
+    // tmp <- log(theta)_y
+    tmp.copy(0, theta_y, 0);
+
+    // tmp <- log(theta)_y + log(tau_y)
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {return(lhs + rhs);}, tau_y, 0, 0);
+
+    // tmp <- exp(log(tau)) * [log(theta)_y + log(tau)_y]
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {return(lhs * exp(rhs));}, tau, 0, t_src);
+
+    // omega_rhs <- {omega, phi} - ic * exp(log(tau)) * [log(theta)_y + * log(tau)_y]
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
                           {return (lhs - ic * rhs);}, tmp, t_dst, 0);           
 }

@@ -344,7 +344,7 @@ namespace detail
             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
             {
                 index = n * my_plus_pad + m;
-                data_ptr[index] = host_func(data_ptr[index], n, m, geom);
+                data_ptr[index    ] = host_func(data_ptr[index    ], n, m    , geom);
                 data_ptr[index + 1] = host_func(data_ptr[index + 1], n, m + 1, geom);
                 data_ptr[index + 2] = host_func(data_ptr[index + 2], n, m + 2, geom);
                 data_ptr[index + 3] = host_func(data_ptr[index + 3], n, m + 3, geom);
@@ -380,7 +380,7 @@ namespace detail
             for(m = 0; m < nelem_m - (nelem_m % 4); m += 4)
             {
                 index = n * my_plus_pad + m;
-                lhs[index] = host_func(lhs[index], rhs[index]);
+                lhs[index    ] = host_func(lhs[index    ], rhs[index    ]);
                 lhs[index + 1] = host_func(lhs[index + 1], rhs[index + 1]);
                 lhs[index + 2] = host_func(lhs[index + 2], rhs[index + 2]);
                 lhs[index + 3] = host_func(lhs[index + 3], rhs[index + 3]);
@@ -441,7 +441,7 @@ namespace detail
 */
 
 /*
-       0                        My-1 ... My - 1 + pad_y
+          0                My-1 ...       My - 1 + pad_y
    Nx - 1 |--------- ... ------|          |
           |--------- ... ------|          |
    ...
@@ -556,9 +556,7 @@ public:
     template<typename F> inline void elementwise(F myfunc, const cuda_array_bc_nogp<T, allocator>& rhs,
                                                  const size_t tidx_lhs, const size_t tidx_rhs)
     {
-
-        //std::cout << "elementwise w/ rhs, tidx_rhs = " << tidx_rhs << ", tidx_lhs = " << tidx_lhs << std::endl;
-        check_bounds(tidx_rhs + 1, 0, 0);
+        rhs.check_bounds(tidx_rhs + 1, 0, 0);
         check_bounds(tidx_lhs + 1, 0, 0);
         assert(rhs.get_geom() == get_geom());
         assert(is_transformed(tidx_lhs) == rhs.is_transformed(tidx_rhs));
