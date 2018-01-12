@@ -33,7 +33,8 @@ CUDALFLAGS	= -L/home/rku000/local/lib -lhdf5 -lhdf5_cpp -lcufft -lcublas -lcuspa
 LFLAGS_OGL = -lglfw -lGLEW -lGL
 
 PROJ_INCDIR = /home/rku000/source/2dads/src/include
-OBJ_DIR = /home/rku000/source/2dads/src/obj/
+#OBJ_DIR = /home/rku000/source/2dads/src/obj/
+OBJ_DIR = obj/
 
 # MKL: file:///home/rku000/local/intel/documentation_2016/en/mkl/common/mkl_link_line_advisor.htm
 # MKLROOT /home/rku000/local/intel

@@ -105,10 +105,7 @@ const std::map<std::string, twodads::grid_t> slab_config_js :: grid_map
 };
 
 slab_config_js :: slab_config_js(std::string fname) 
-	    //log_theta{false}, 
-        //log_tau{false}
 	    //do_dealiasing{false},
-        //do_randomize_modes{false},
         //particle_tracking{false},
         //nprobes{0}
 {

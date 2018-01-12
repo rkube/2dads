@@ -706,6 +706,9 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
     
     const twodads::real_t diff{conf.get_tint_params(twodads::dyn_field_t::f_theta).get_diff()};
 
+    // Linear damping term is at second position in model parameters
+    const twodads::real_t damp{conf.get_model_params(twodads::dyn_field_t::f_theta)[1]};
+
     switch(get_config().get_grid_type())
     {
         case twodads::grid_t::vertex_centered:
@@ -724,6 +727,18 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
             break;
     }
 
+    // tmp <- damp * tanh(x/x0)
+    tmp.apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+              {
+                  const twodads::real_t x{geom.get_x(n)};
+                  return(damp * (0.5 * (1.0 + tanh(x))));
+              }, 0);
+    // theta_rhs <- theta_rhs - damp * (1 + tanh(x)) / 2
+    theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                            {
+                                return(lhs - rhs);
+                            }, tmp, t_dst, 0);
+
     // theta_rhs <- theta_rhs - nu * (nabla_perp theta) 
     theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                           {return (lhs - diff * rhs * rhs);}, theta_x, t_dst, 0);
@@ -741,7 +756,11 @@ inline void slab_bc :: rhs_omega_null(const size_t t_dst, const size_t t_src)
 void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
 {
     const std::vector<twodads::real_t> model_params{conf.get_model_params(twodads::dyn_field_t::f_omega)};
+
+    // ic is position 2
+    // damp is at position 3
     const twodads::real_t ic{model_params[1]};
+    const twodads::real_t damp{model_params[2]};
     
     // Compute poisson bracket
     // omega_rhs <- {omega, phi}
@@ -759,30 +778,6 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
             break;
     }
 
-    //// tmp <- log(tau)
-    //tmp.copy(0, tau, t_src);
-    //// tmp <- exp(log(tau)) * log(theta)_y
-    //tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-    //                {return(exp(lhs) * rhs);}, theta_y, 0, 0);
-
-    //std::tuple<twodads::real_t, size_t, size_t> res;
-    //res = utility :: max_idx(tmp, 0);
-    //std::cout << "exp(log(tau) * log(theta)_y: max = " << std::get<0>(res) << ", n=" << std::get<1>(res) << ", m = " << std::get<2>(res) << std::endl;
-
-    //// omega_rhs <- {omega, phi} - ic * exp(log(tau)) * log(theta)_y
-    //omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 
-    //                      {return (lhs - ic * rhs);}, tmp, t_dst, 0);          
-    //// tmp <- log(tau)
-    //tmp.copy(0, tau, 0);
-    //// tmp <- exp(log(tau)) * log(tau)_y = tau_y
-    //tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-    //                {return(exp(lhs) * rhs);}, tau_y, 0, 0);
-    //
-    //res = utility :: max_idx(tmp, 0);
-    //std::cout << "exp(log(tau) * log(tau)_y: max = " << std::get<0>(res) << ", n=" << std::get<1>(res) << ", m = " << std::get<2>(res) << std::endl;
-   
-    // omega_rhs <- {omega, phi} - ic * exp(log(tau)) * log(theta)_y - ic * exp(log(tau)) * log(tau)_y
-    
     // tmp <- log(theta)_y
     tmp.copy(0, theta_y, 0);
 
@@ -793,6 +788,26 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
     // tmp <- exp(log(tau)) * [log(theta)_y + log(tau)_y]
     tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                     {return(lhs * exp(rhs));}, tau, 0, t_src);
+
+
+    // tmp <- damp * tanh(x/x0)
+    tmp.apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
+              {
+                  const twodads::real_t x{geom.get_x(n)};
+                  return(damp * (0.5 * (1.0 + tanh(x))));
+              }, 0);
+
+    // tmp <- omega * damp * tanh(x/x0)
+    tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                    {
+                        return(lhs * rhs);
+                    }, omega, 0, t_src);
+
+    // theta_rhs <- theta_rhs - damp * (1 + tanh(x)) / 2
+    omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
+                            {
+                                return(lhs - rhs);
+                            }, tmp, t_dst, 0);
 
     // omega_rhs <- {omega, phi} - ic * exp(log(tau)) * [log(theta)_y + * log(tau)_y]
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t 

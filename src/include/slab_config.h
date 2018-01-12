@@ -297,7 +297,6 @@ class slab_config_js
          Otherwise returns false.
 
         */
-        //bool get_log_tau() const {return(log_tau);};
         bool get_log_tau() const {return(pt.get<bool>("2dads.model.log_tau"));};
 
         /**
@@ -364,8 +363,6 @@ class slab_config_js
 
     private:
         boost::property_tree::ptree pt;
-	    //bool log_theta;
-        //bool log_tau;
     
         // Mappings from values in input.ini to enums in twodads.h
         static const std::map<std::string, twodads::field_t> fname_map;

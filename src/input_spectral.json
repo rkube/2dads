@@ -1,0 +1,76 @@
+{
+    "2dads":         
+        {
+            "runnr": 0,
+            "geometry": 
+            {
+                "xleft"  : -10.0,
+                "xright" : 10.0,
+                "ylow"   : -10.0,
+                "yup"    : 10.0,
+                "Nx"     : 128,
+                "padx"   : 0,
+                "My"     : 128,
+                "pady"   : 2,
+                "grid_type" : "vertex",
+
+                "theta_bc_left" : "periodic",
+                "theta_bval_left" : 0.0,
+                "theta_bc_right" : "periodic",
+                "theta_bval_right" : 0.0,
+
+                "tau_bc_left" : "periodic",
+                "tau_bval_left" : 0.0,
+                "tau_bc_right" : "periodic",
+                "tau_bval_right" : 0.0,
+
+                "omega_bc_left" : "periodic",
+                "omega_bval_left" : 0.0,
+                "omega_bc_right" : "periodic",
+                "omega_bval_right" : 0.0,
+
+                "strmf_bc_left" : "periodic",
+                "strmf_bval_left" : 0.0,
+                "strmf_bc_right" : "periodic",
+                "strmf_bval_right" : 0.0
+            },
+            "integrator":
+            {
+                "scheme"    : "karniadakis",
+                "level"     : 4,
+                "deltat"    : 0.001,
+                "tend"      : 0.1,
+                "hypervisc" : 0
+            },
+            "model":
+            {
+                "rhs_theta" : "rhs_theta_log",
+                "parameters_theta": [1e-3, 0.1],
+                "log_theta" : 1,
+                "rhs_omega" : "rhs_omega_ic",
+                "parameters_omega" : [1e-3, 1.0, 0.1],
+                "rhs_tau"  : "rhs_tau_log",
+                "parameters_tau" : [1e-3],
+                "log_tau" : 1
+            },
+            "initial":
+            {
+                "init_func_theta" : "gaussian",
+                "initc_theta" : [1.0, 1.0, 0.0, 0.0, 1.0],
+                "init_func_omega" : "constant",
+                "initc_omega" : [0.0],
+                "init_func_tau" : "gaussian",
+                "initc_tau" : [1.0, 1.0, 0.0, 0.0, 1.0] 
+            },
+            "output":
+            {
+                "tout": 0.01,
+                "fields" : ["theta", "omega", "strmf", "tau"]
+            },
+            "diagnostics":
+            {
+                "tdiag" : 0.01,
+                "routines" : ["com_tau", "com_theta", "max_theta", "max_tau"]
+            }
+        }
+}
