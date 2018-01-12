@@ -248,7 +248,7 @@ class diagnostic_t {
         /**
          .. cpp:function inline void diag_com_tau(const twodads::real_t time) const
 
-         :param const twodads::real_t time: Time for simulation output.
+         :param const twodads::real_t time: Time of diagnostic output.
 
          Writes center-of-mass diagnostics of tau field. Forwards to diag_com.
         
@@ -257,9 +257,9 @@ class diagnostic_t {
         { diag_com(twodads::field_t::f_tau, com_tau, filename_str_map.at(twodads::diagnostic_t::diag_com_tau), time); }
 
         /**
-         .. cpp:function inline void diag_max_theta(const twodads::real_t time) const
+         .. cpp:function inline void diag_max_theta(const twodads::real_t time) 
 
-         :param const twodads::real_t time: Time for simulation output.
+         :param const twodads::real_t time: Time of diagnostic output.
 
          Writes maximum diagnostics of theta field. Forwards to diag_max.
         
@@ -268,15 +268,25 @@ class diagnostic_t {
         { diag_max(twodads::field_t::f_theta, filename_str_map.at(twodads::diagnostic_t::diag_max_theta), time); }
 
         /**
-         .. cpp:function inline void diag_max_tau(const twodads::real_t time) const
+         .. cpp:function inline void diag_max_tau(const twodads::real_t time) 
 
-         :param const twodads::real_t time: Time for simulation output.
+         :param const twodads::real_t time: Time of diagnostics output.
 
          Writes maximum diagnostics of tau field. Forwards to diag_max.
         
         */
         inline void diag_max_tau(const twodads::real_t time) 
         {diag_max(twodads::field_t::f_tau, filename_str_map.at(twodads::diagnostic_t::diag_max_tau), time); }
+
+        /**
+         .. cpp:function void diag_probes(const twodads::real_t time)
+
+         :param const twodads::real_t time: Time of diagnostic output.
+
+         Writes point probes for theta, omega, strmf, and strmf_y.
+
+        */
+        void diag_probes(const twodads::real_t time);
 
         static const std::map<twodads::diagnostic_t, std::string> header_str_map;
         static const std::map<twodads::diagnostic_t, std::string> filename_str_map;

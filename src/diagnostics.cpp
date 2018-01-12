@@ -9,6 +9,7 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <vector>
 #include "diagnostics.h"
 #include "utility.h"
 
@@ -69,15 +70,14 @@ void diag_com_t::update_com(const cuda_array_bc_nogp<twodads::real_t, allocator_
 }
 
 
-
-
 // Maps header strings to each diagnostic type defined in 2dads_types.h
 const std::map<twodads::diagnostic_t, std::string> diagnostic_t :: header_str_map 
 {
-    {twodads::diagnostic_t::diag_com_theta, std::string("# 1: time \t# 2: int_x\t# 3: int_y\t# 4: COMvx\t# 5: COMvy\n")},
-    {twodads::diagnostic_t::diag_max_theta, std::string("# 1: time \t# 2: max\t# 3: max_x\t4: max_y\t# 5: max_vx\t# 6: max_vy\n")},
-    {twodads::diagnostic_t::diag_com_tau, std::string("# 1: time \t# 2: int_x\t# 3: int_y\t# 4: COMvx\t# 5: COMvy\n")},
-    {twodads::diagnostic_t::diag_max_tau, std::string("# 1: time \t# 2: max\t# 3: max_x\t4: max_y\t# 5: max_vx\t# 6: max_vy\n")}
+    {twodads::diagnostic_t::diag_com_theta, std::string("#1: time\t# 2: int_x\t#3: int_y\t#4: COMvx\t#5: COMvy\n")},
+    {twodads::diagnostic_t::diag_max_theta, std::string("#1: time\t# 2: max\t#3: max_x\t4: max_y\t#5: max_vx\t#6: max_vy\n")},
+    {twodads::diagnostic_t::diag_com_tau, std::string("#1: time\t#2: int_x\t#3: int_y\t#4: COMvx\t#5: COMvy\n")},
+    {twodads::diagnostic_t::diag_max_tau, std::string("#1: time\t#2: max\t#3: max_x\t#4: max_y\t#5: max_vx\t#6: max_vy\n")},
+    {twodads::diagnostic_t::diag_probes, std::string("#1: time\t#2: theta\t#3: oemga\t#4: strmf\t#5: strmf_y\n")}
 };
 
 // Maps filename to each diagnostic type defined in 2dads_types.h
@@ -99,7 +99,8 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
             {twodads::diagnostic_t::diag_com_theta, &diagnostic_t::diag_com_theta},
             {twodads::diagnostic_t::diag_max_theta, &diagnostic_t::diag_max_theta},
             {twodads::diagnostic_t::diag_com_tau, &diagnostic_t::diag_com_tau},
-            {twodads::diagnostic_t::diag_max_tau, &diagnostic_t::diag_max_tau}
+            {twodads::diagnostic_t::diag_max_tau, &diagnostic_t::diag_max_tau},
+            {twodads::diagnostic_t::diag_probes, &diagnostic_t::diag_probes}
         }
     },
     theta_ptr{nullptr}, theta_x_ptr{nullptr}, theta_y_ptr{nullptr},
@@ -131,6 +132,8 @@ diagnostic_t :: diagnostic_t(const slab_config_js& config) :
     // Initialize datafiles for each diagnostic routine in the config file
     for(auto it : config.get_diagnostics())
     {
+        if(it == twodads::diagnostic_t::diag_probes)
+            continue;
         out_file.exceptions(ofstream::badbit);
         try
         {
@@ -218,23 +221,12 @@ void diagnostic_t::write_diagnostics(const twodads::real_t time, const slab_conf
 void diagnostic_t::diag_com(const twodads::field_t fieldname, diag_com_t& com, const std::string filename, const twodads::real_t time) 
 {  
     std::ofstream out_file;
-
     const arr_real* const* arr_ptr2{data_ptr_map.at(fieldname)};
 
-    // Update COM coordinates for the field
-    //std::cout << "diag_com. Before:" << std::endl;
-    //std::cout << std::get<0>(com.get_com_old()) << ", " << std::get<1>(com.get_com_old()) << ", " << std::get<2>(com.get_com_old()) << std::endl;
-    //std::cout << std::get<0>(com.get_com()) << ", " << std::get<1>(com.get_com()) << ", " << std::get<2>(com.get_com()) << std::endl;
-
+    //Update center-of-mass 
     com.update_com(**arr_ptr2, 1, time);
 
-    //std::cout << "After:" << std::endl;
-    //std::cout << std::get<0>(com.get_com_old()) << ", " << std::get<1>(com.get_com_old()) << ", " << std::get<2>(com.get_com_old()) << std::endl;
-    //std::cout << std::get<0>(com.get_com()) << ", " << std::get<1>(com.get_com()) << ", " << std::get<2>(com.get_com()) << std::endl;
-    //std::cout << "=============================================================================" << std::endl;
-
-
-	// Write to output file
+	// Write to out_file file
 	out_file.open(filename, std::ios::app);	
 	if ( out_file.is_open() )
     {
@@ -272,7 +264,7 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
     //max_x_old = max_x;
     //max_y_old = max_y;
 
-	// Write to output file
+	// Write to out_file file
 	out_file.open(filename, std::ios::app);	
 	if ( out_file.is_open() )
     {
@@ -282,9 +274,100 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 		out_file.close();
 	}
 }
+
+
+void diagnostic_t::diag_probes(const twodads::real_t time)
+{
+    std::ofstream out_file;;
+    std::stringstream filename;	
+    constexpr size_t n_probes{8};
+    //const size_t delta_n{int(slab_layout.Nx) / n_probes};
+
+    // probe_type = [field type, probe values, time index]
+    using probe_type = std::tuple<twodads::field_t, size_t, std::vector<twodads::real_t>>;
+
+    // Vector of probe_types. No probe values are not initialized
+    std::vector<probe_type> probe_data{
+        {twodads::field_t::f_theta, 1, std::vector<twodads::real_t>{}},
+        {twodads::field_t::f_omega, 1, std::vector<twodads::real_t>{}},
+        {twodads::field_t::f_strmf, 0, std::vector<twodads::real_t>{}},
+        {twodads::field_t::f_strmf_y, 0, std::vector<twodads::real_t>{}},
+    };
+
+    //std::array<twodads::real_t, 4> probe_vals{{0.0, 0.0, 0.0, 0.0}};
+    size_t tlev{0};
+    address_t<twodads::real_t>* address_ptr{nullptr};
+    
+    // Spacing of probes
+    size_t delta_n{0};
+    size_t probe_my{0};
+
+    // Make the iterator a reference since we are updating the vector in probe_data :)
+    for(auto& it : probe_data)
+    {
+        // Get pointer on data array and address object
+        const arr_real* const* arr_ptr2{data_ptr_map.at(std::get<0>(it))};
+        address_ptr = (*arr_ptr2) -> get_address_ptr();
+
+        // Get the time index
+        tlev = std::get<1>(it);
+
+        // Update probe spacing
+        delta_n = (*arr_ptr2) -> get_nx() / n_probes;
+        probe_my = (*arr_ptr2) -> get_my() / 2;
+
+        // Iterate over the probe location (in index space) and put values in the respective probe vector
+        for(size_t n_pr = 0; n_pr < n_probes; n_pr++)
+        {
+            std::get<2>(it).push_back((*address_ptr).get_elem((*arr_ptr2) -> get_tlev_ptr(tlev), n_pr * delta_n, probe_my));
+        }
+
+        std::cout << "In first loop" << std::endl;
+        for(auto vec_it : std::get<2>(it))
+        {
+            std::cout << vec_it << "\t";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "In second loop" << std::endl;
+    for(auto it : probe_data)
+    {
+        for(auto vec_it : std::get<2>(it))
+        {
+            std::cout << vec_it << "\t";
+        }
+        std::cout << std::endl;
+    }
+
+    std::cout << "Writing" << std::endl;
+    // Write out this for n probes
+    // #1: time    #2: n    #3: omega   #4: phi #5: phi_y
+    for (size_t npr = 0; npr < n_probes; npr++ )
+    {
+        filename << "probe" << setw(3) << setfill('0') << npr << ".dat";
+        out_file.open(filename.str().data(), ofstream::app );
+        if ( out_file.is_open() )
+        {
+            out_file << time << "\t";                                  // time
+            for(auto it : probe_data)
+            {
+                out_file << setw(12) << std::get<2>(it)[npr];
+            }
+            //out_file << setw(12) << theta        (np, mp) << "\t";     // n
+            out_file << std::endl;
+            out_file.close();
+        }
+        filename.str(std::string());   // Delete current string member variable
+    }	
+}
+
+
+
+
 // void diagnostics::diag_energy(const twodads::real_t time)
 // {
-//     ofstream output;
+//     ofstream out_file;
 //     const double Lx = slab_layout.delta_y * double(slab_layout.My);
 //     const double Ly = slab_layout.delta_x * double(slab_layout.Nx);
 //     const double invdA = 1. / (Lx * Ly);
@@ -317,15 +400,15 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 //     const double D12{ ((theta_x.d2_dx2(Lx) * theta_x.d2_dx2(Lx)) + (theta_y.d2_dy2(Ly) * theta_y.d2_dy2(Ly))).get_mean()};
 //     const double D13{ ((strmf_x.d2_dx2(Lx) * omega_x.d2_dx2(Lx)) + (strmf_y.d2_dy2(Ly) * omega_y.d2_dy2(Ly))).get_mean()};
 
-// 	output.open("energy.dat", ios::app);
-// 	if (output.is_open()) 
+// 	out_file.open("energy.dat", ios::app);
+// 	if (out_file.is_open()) 
 //     {
-// 		output << time << "\t";
-// 		output << setw(12) << E << "\t" << setw(12) << K << "\t" << setw(12) << T << "\t" << setw(12) << U << "\t" << setw(12) << W << "\t";
-// 		output << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
-// 		output << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t" << setw(12) << D10 << "\t";
-// 		output << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n"; 
-// 		output.close();
+// 		out_file << time << "\t";
+// 		out_file << setw(12) << E << "\t" << setw(12) << K << "\t" << setw(12) << T << "\t" << setw(12) << U << "\t" << setw(12) << W << "\t";
+// 		out_file << setw(12) << D1 << "\t" << setw(12) << D2 << "\t" << setw(12) << D3 << "\t" << setw(12) << D4 << "\t" << setw(12) << D5 << "\t";
+// 		out_file << setw(12) << D6 << "\t" << setw(12) << D7 << "\t" << setw(12) << D8 << "\t" << setw(12) << D9 << "\t" << setw(12) << D10 << "\t";
+// 		out_file << setw(12) << D11 << "\t" << setw(12) << D12 << "\t" << setw(12) << D13 << "\n"; 
+// 		out_file.close();
 // 	}
 // }
 
@@ -343,7 +426,7 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 //    double theta_int_x = 0.0;
 //	unsigned int idx_xcom;
 //    const double delta_x = myslab -> slab_config -> get_deltax();
-//    ofstream output;
+//    ofstream out_file;
 //
 //    slab_array theta( myslab -> get_theta() );
 //
@@ -365,17 +448,17 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 //        cerr << "\tx_left = " <<   myslab -> slab_config -> get_xleft() << "\tdelta_x = " << delta_x << "\n";
 //    }
 //    idx_xcom = (int) (floor((theta_int_x - myslab -> slab_config -> get_xleft()) / delta_x));
-//    output.open("strmf_max.dat", ios::app);
-//    if ( output.is_open() ){
-//        output << t << " " << theta_int_x << " " << idx_xcom << " ";
+//    out_file.open("strmf_max.dat", ios::app);
+//    if ( out_file.is_open() ){
+//        out_file << t << " " << theta_int_x << " " << idx_xcom << " ";
 //        for ( int m = 0; m < My; m++ ){
 //            if ( int(idx_xcom) < myslab -> get_nx() ){
-//                output << setw(12) << myslab -> get_strmf(idx_xcom, m) << " ";
+//                out_file << setw(12) << myslab -> get_strmf(idx_xcom, m) << " ";
 //            } else {
-//                output << setw(12) <<  -999.9 << " ";
+//                out_file << setw(12) <<  -999.9 << " ";
 //           }
 //        }
-//        output << "\n";
+//        out_file << "\n";
 //    }
 //
 //
@@ -387,61 +470,19 @@ void diagnostic_t::diag_max(const twodads::field_t fname, const std::string file
 // Correct, my_slab is not used in this function. It is in the parameter list to satisft the interface 
 // for diagnostic functions
 //void diagnostics::particles_full(tracker const* my_tracker, slab const * my_slab, double const time){
-//	ofstream output;
-//    output.open("particles.dat", ios::app);
-//    if ( output.is_open() ) {
-//        output << time << "\t";
+//	ofstream out_file;
+//    out_file.open("particles.dat", ios::app);
+//    if ( out_file.is_open() ) {
+//        out_file << time << "\t";
 //        for ( vector<coordinate>::const_iterator it = my_tracker ->get_positions().begin(); it != my_tracker ->get_positions().end(); it++) {
-//            output << it ->get_x() << "," << it -> get_y() << "\t";    
+//            out_file << it ->get_x() << "," << it -> get_y() << "\t";    
 //        }
-//        output << "\n";
-//        output.close();
+//        out_file << "\n";
+//        out_file.close();
 //    }
 //}
 
-// void diagnostics::diag_probes(const twodads::real_t time)
-// {
-// 	ofstream output;
-//     stringstream filename;	
-// 	const int delta_n {int(slab_layout.Nx) / int(n_probes)};
-//     const int delta_m {int(slab_layout.My) / int(n_probes)};
-//     int np;
-//     int mp;
 
-//     diag_array<double> theta_tilde(theta.tilde());
-//     diag_array<double> strmf_tilde(strmf.tilde());
-//     diag_array<double> omega_tilde(omega.tilde());
-//     diag_array<double> strmf_y_tilde(strmf_y.tilde());
-//     diag_array<double> strmf_x_tilde(strmf_x.tilde());
-
-//     // Write out this for n probes
-//     // #1: time    #2: n_tilde    #3: n    #4: phi    #5: phi_tilde    #6: Omega    #7: Omega_tilde    #8: v_x    #9: v_y    #10: v_y_tilde    #11: Gamma_r
-//     for (int n = 0; n < (int) n_probes; n++ )
-//     {
-//         np = n * delta_n;
-//         for(int m = 0; m < (int) n_probes; m++)
-//         {
-//             mp = m * delta_m;
-//             filename << "probe" << setw(3) << setfill('0') << n * n_probes + m << ".dat";
-//             output.open(filename.str().data(), ofstream::app );
-//             if ( output.is_open() ){
-//                 output << time << "\t";                                  // time
-//                 output << setw(12) << theta_tilde  (np, mp) << "\t";     // n_tilde
-//                 output << setw(12) << theta        (np, mp) << "\t";     // n
-//                 output << setw(12) << strmf        (np, mp) << "\t";     // phi
-//                 output << setw(12) << strmf_tilde  (np, mp) << "\t";     // phi_tilde
-//                 output << setw(12) << omega        (np, mp) << "\t";     // Omega
-//                 output << setw(12) << omega_tilde  (np, mp) << "\t";     // Omega_tilde
-//                 output << setw(12) << strmf_y_tilde(np, mp) << "\t";     // -v_x
-//                 output << setw(12) << strmf_x      (np, mp) << "\t";     // v_y
-//                 output << setw(12) << strmf_x_tilde(np, mp) << "\t";     // v_y_tilde
-//                 output << "\n";
-//                 output.close();
-//             }
-//             filename.str(string());   // Delete current string member variable
-//         }	
-//     }
-// }
 
 diagnostic_t :: ~diagnostic_t() 
 {

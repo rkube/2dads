@@ -58,13 +58,13 @@ const std::map<std::string, twodads::diagnostic_t> slab_config_js::diagnostic_ma
     {"com_theta", twodads::diagnostic_t::diag_com_theta},
     {"com_tau", twodads::diagnostic_t::diag_com_tau},
     {"max_theta", twodads::diagnostic_t::diag_max_theta},
-    {"max_tau", twodads::diagnostic_t::diag_max_tau}
+    {"max_tau", twodads::diagnostic_t::diag_max_tau},
     //{"max_omega", twodads::diagnostic_t::diag_max_omega},
     //{"max_strmf", twodads::diagnostic_t::diag_max_strmf},
     //{"energy", twodads::diagnostic_t::diag_energy},
     //{"energy_ns", twodads::diagnostic_t::diag_energy_ns},
     //{"energy_local", twodads::diagnostic_t::diag_energy_local},
-    //{"probes", twodads::diagnostic_t::diag_probes},
+    {"probes", twodads::diagnostic_t::diag_probes}
     //{"consistency", twodads::diagnostic_t::diag_consistency},
 	//{"memory", twodads::diagnostic_t::diag_mem}
 };

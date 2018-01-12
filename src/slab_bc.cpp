@@ -727,7 +727,7 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
             break;
     }
 
-    // tmp <- damp * tanh(x/x0)
+    // tmp <- damp * (1 + tanh(x)) / 2
     tmp.apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
               {
                   const twodads::real_t x{geom.get_x(n)};
@@ -739,7 +739,7 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
                                 return(lhs - rhs);
                             }, tmp, t_dst, 0);
 
-    // theta_rhs <- theta_rhs - nu * (nabla_perp theta) 
+    // theta_rhs <- theta_rhs - nu * (nabla_perp theta) - damp * (1 + tanh(x)) / 2
     theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                           {return (lhs - diff * rhs * rhs);}, theta_x, t_dst, 0);
     theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
@@ -790,20 +790,20 @@ void slab_bc :: rhs_omega_ic(const size_t t_dst, const size_t t_src)
                     {return(lhs * exp(rhs));}, tau, 0, t_src);
 
 
-    // tmp <- damp * tanh(x/x0)
+    // tmp <- damp * (1 + tanh(x)) /2
     tmp.apply([=] LAMBDACALLER (twodads::real_t input, const size_t n, const size_t m, twodads::slab_layout_t geom) -> twodads::real_t
               {
                   const twodads::real_t x{geom.get_x(n)};
                   return(damp * (0.5 * (1.0 + tanh(x))));
               }, 0);
 
-    // tmp <- omega * damp * tanh(x/x0)
+    // tmp <- omega * damp * (1 + tanh(x)) / 2
     tmp.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                     {
                         return(lhs * rhs);
                     }, omega, 0, t_src);
 
-    // theta_rhs <- theta_rhs - damp * (1 + tanh(x)) / 2
+    // omega_rhs <- omega_rhs - damp * (1 + tanh(x)) / 2
     omega_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
                             {
                                 return(lhs - rhs);
