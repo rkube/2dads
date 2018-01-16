@@ -8,9 +8,9 @@
                 "xright" : 20.0,
                 "ylow"   : -20.0,
                 "yup"    : 20.0,
-                "Nx"     : 512,
+                "Nx"     : 1024,
                 "padx"   : 0,
-                "My"     : 512,
+                "My"     : 128,
                 "pady"   : 2,
                 "grid_type" : "cell",
 
@@ -44,13 +44,15 @@
             },
             "model":
             {
-                "rhs_theta" : "rhs_theta_lin",
-                "parameters_theta": [1e-3, 0.0],
+                "rhs_theta" : "rhs_theta_log",
+                "parameters_theta": [1e-3, 0.1],
+                "log_theta" : 1,
                 "rhs_omega" : "rhs_omega_ic",
-                "parameters_omega": [1e-3, 0.0],
-                "rhs_tau"  : "rhs_tau_null",
-                "parameters_tau"  : [1e-3, 0.0]
-            },
+                "parameters_omega" : [1e-3, 1.0, 0.1],
+                "rhs_tau"  : "rhs_tau_log",
+                "parameters_tau" : [1e-3],
+                "log_tau" : 1
+           },
             "initial":
             {
                 "init_func_theta" : "gaussian",

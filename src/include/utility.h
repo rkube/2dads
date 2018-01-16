@@ -188,7 +188,7 @@ namespace utility
         {
             case twodads::grid_t::cell_centered:
                 vec.apply([] (T value, const size_t n, const size_t m, twodads::slab_layout_t geom) -> T
-                          {return(value / T(geom.get_nx()));},
+                          {return(value / T(geom.get_my()));},
                           tlev);
                 break;
             case twodads::grid_t::vertex_centered:

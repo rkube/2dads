@@ -1440,6 +1440,11 @@ deriv_fd_t<T, allocator> :: deriv_fd_t(const twodads::slab_layout_t& _geom) :
 // After a fourier transformation, contiguous elements correspond to different fourier modes.
 // The tridiagonal solver however solves one linear system for one fourier mode at a time
 // Thus, the diagonals have a layout in memory where contiguous values correspond to a single fourier mode
+//
+// The same holds for the geometry.
+// In transposed geometry the index n corresponds to the y-direction and the index m corresponds to the x-direction.
+// Ly(in configuration space) is computed from the deltax and nx members of slab_layout_t
+// dx(in configuration space) is computed from the deltay of slab_layout_t
 
 template <typename T, template <typename> class allocator>
 void deriv_fd_t<T, allocator> :: init_diagonals() 
@@ -1448,8 +1453,8 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
     {
         // ky runs with index n (the kernel addressing function, see cuda::thread_idx
         // We are transposed, Lx = dx * (2 * nx - 1) as we have cut nx roughly in half
-        const T Lx{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
-        const CuCmplx<T> ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Lx * Lx);
+        const T Ly{geom.get_deltax() * 2 * (geom.get_nx() - 1)};
+        const CuCmplx<T> ky2 = twodads::TWOPI * twodads::TWOPI * static_cast<T>(n * n) / (Ly * Ly);
         const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltay() * geom.get_deltay())};
         if(m > 0 && m < geom.get_my() - 1)
         {
@@ -1472,7 +1477,7 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
         // CUBLAS requires the first element in the lower diagonal to be zero.
         // Remember to shift the pointer in the MKL implementation when passing to the
         // MKL caller routine in solver
-        const CuCmplx<T> inv_dx2 = 1.0 / (geom.get_deltax() * geom.get_deltax());
+        const CuCmplx<T> inv_dx2 = 1.0 / (geom.get_deltay() * geom.get_deltay());
         if(m > 0)
             //return(inv_dx2);
             return(inv_dx2);
@@ -1486,7 +1491,7 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
         // CUBLAS requires the last element in the upper diagonal to be zero.
         // Remember to shift the pointer in the MKL implementation when passing to the
         // MKL caller routine in solver
-        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltax() * geom.get_deltax())};
+        const CuCmplx<T> inv_dx2{1.0 / (geom.get_deltay() * geom.get_deltay())};
         if(m < geom.get_my() - 1)
             return(inv_dx2);
         else if(m == geom.get_my() - 1)
