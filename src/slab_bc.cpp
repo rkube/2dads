@@ -741,9 +741,9 @@ void slab_bc :: rhs_theta_log(const size_t t_dst, const size_t t_src)
 
     // theta_rhs <- theta_rhs - nu * (nabla_perp theta) - damp * (1 + tanh(x)) / 2
     theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                          {return (lhs - diff * rhs * rhs);}, theta_x, t_dst, 0);
+                          {return (lhs + diff * rhs * rhs);}, theta_x, t_dst, 0);
     theta_rhs.elementwise([=] LAMBDACALLER (twodads::real_t lhs, twodads::real_t rhs) -> twodads::real_t
-                          {return (lhs - diff * rhs * rhs);}, theta_y, t_dst, 0);
+                          {return (lhs + diff * rhs * rhs);}, theta_y, t_dst, 0);
 }
 
 
