@@ -212,7 +212,7 @@ void integrator_karniadakis_fd_t<T, allocator> :: init_diagonal(const size_t ord
             val_left = T(3.0);
             break;
         case twodads::bc_t::bc_neumann:
-            val_right = T(1.0);
+            val_left = T(1.0);
             break;
         case twodads::bc_t::bc_periodic:
             // Fall through
