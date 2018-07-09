@@ -14,7 +14,7 @@ CFLAGS = -DDEBUG -DMKL_ILP64 -O0 -g -stdlib=libc++ -std=c++14 -Wall -fopenmp -fn
 INCLUDES = -I/home/rku000/source/2dads/src/include -I/home/rku000/local/include -I${MKLROOT}/include 
 
 #LFLAGS = -L${MKLROOT}/lib -L/opt/local/lib -Wl,-rpath,${MKLROOT}/lib -lhdf5 -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_intel_thread -liomp5 -lpthread -lm -ldl
-LFLAGS = -L${MKLROOT}/lib/intel64 -L${IOMPDIR} -L/home/rku000/local/lib -Wl,-rpath,${MKLROOT}/lib -Wl,--no-as-needed -lhdf5 -lhdf5_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl
+LFLAGS = -L${MKLROOT}/lib/intel64 -L${IOMPDIR} -L/home/rku000/local/lib -L/home/rku000/local/lib64 -Wl,-rpath,${MKLROOT}/lib -Wl,--no-as-needed -lhdf5 -lhdf5_cpp -lfftw3  -lmkl_intel_ilp64 -lmkl_core -lmkl_gnu_thread -lpthread -lm -ldl
 
 #NVCC	= /usr/local/cuda/bin/nvcc
 CUDACC = /home/rku000/local/bin/clang++

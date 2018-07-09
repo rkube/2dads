@@ -1472,9 +1472,9 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
         return(-1.0);
     }, 0);
 
-    std::cout << "init_diagonals: " << std::endl;
-    utility :: print(diag, 0, std::cout);
-    std::cout << "===========================================================================" << std::endl;
+    //std::cout << "init_diagonals: " << std::endl;
+    //utility :: print(diag, 0, std::cout);
+    //std::cout << "===========================================================================" << std::endl;
 
     diag_l.apply([] LAMBDACALLER (CuCmplx<T> dummy, const size_t n, const size_t m, twodads::slab_layout_t geom) -> CuCmplx<T>
     {
@@ -1502,10 +1502,10 @@ void deriv_fd_t<T, allocator> :: init_diagonals()
             return(0.0);  
         return(-1.0);  
     }, 0);
-    utility :: print(diag_l, 0, std::cout);
-    std::cout << "===========================================================================" << std::endl;
-    utility :: print(diag_u, 0, std::cout);
-    std::cout << "===========================================================================" << std::endl;
+    //utility :: print(diag_l, 0, std::cout);
+    //std::cout << "===========================================================================" << std::endl;
+    //utility :: print(diag_u, 0, std::cout);
+    //std::cout << "===========================================================================" << std::endl;
 }
 
 

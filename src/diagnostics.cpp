@@ -322,7 +322,7 @@ void diagnostic_t::diag_probes(const twodads::real_t time)
             std::get<2>(it).push_back((*address_ptr).get_elem((*arr_ptr2) -> get_tlev_ptr(tlev), n_pr * delta_n, probe_my));
         }
 
-        std::cout << "In first loop" << std::endl;
+        //std::cout << "In first loop" << std::endl;
         for(auto vec_it : std::get<2>(it))
         {
             std::cout << vec_it << "\t";
@@ -330,6 +330,7 @@ void diagnostic_t::diag_probes(const twodads::real_t time)
         std::cout << std::endl;
     }
 
+    /*
     std::cout << "In second loop" << std::endl;
     for(auto it : probe_data)
     {
@@ -339,6 +340,7 @@ void diagnostic_t::diag_probes(const twodads::real_t time)
         }
         std::cout << std::endl;
     }
+    */
 
     std::cout << "Writing" << std::endl;
     // Write out this for n probes
